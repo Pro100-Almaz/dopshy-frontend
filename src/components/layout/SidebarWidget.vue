@@ -1,18 +1,18 @@
 <template>
   <div
-    class="mx-auto mb-10 w-full max-w-60 rounded-2xl bg-gray-50 px-4 py-5 text-center dark:bg-white/[0.03]"
+    class="mx-auto mb-10 w-full max-w-60 rounded-2xl bg-[#10B981]/5 px-4 py-5 text-center dark:bg-[#10B981]/[0.06]"
   >
-    <h3 class="mb-2 font-semibold text-gray-900 dark:text-white">#1 Tailwind CSS Dashboard</h3>
+    <h3 class="mb-2 font-semibold text-gray-900 dark:text-white">
+      DOPSY ARENA
+    </h3>
     <p class="mb-4 text-gray-500 text-theme-sm dark:text-gray-400">
-      Leading Tailwind CSS Admin Template with 400+ UI Component and Pages.
+      Управляйте полями, учениками и персоналом в одном месте.
     </p>
-    <a
-      href="https://tailadmin.com/pricing"
-      target="_blank"
-      rel="nofollow"
-      class="flex items-center justify-center p-3 font-medium text-white rounded-lg bg-brand-500 text-theme-sm hover:bg-brand-600"
+    <router-link
+      to="/bookings"
+      class="flex items-center justify-center rounded-lg bg-[#10B981] p-3 font-medium text-white text-theme-sm hover:bg-[#059669] transition-colors"
     >
-      Purchase Plan
-    </a>
+      Новое бронирование
+    </router-link>
   </div>
 </template>

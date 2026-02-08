@@ -2,150 +2,133 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior(_to, _from, savedPosition) {
     return savedPosition || { left: 0, top: 0 }
   },
   routes: [
+    // ── Авторизация (публичные) ────────────────
     {
-      path: '/',
-      name: 'Ecommerce',
-      component: () => import('../views/Ecommerce.vue'),
-      meta: {
-        title: 'eCommerce Dashboard',
-      },
+      path: '/login',
+      name: 'Login',
+      component: () => import('../views/Auth/LoginView.vue'),
+      meta: { title: 'Вход', public: true },
     },
     {
-      path: '/calendar',
-      name: 'Calendar',
-      component: () => import('../views/Others/Calendar.vue'),
-      meta: {
-        title: 'Calendar',
-      },
+      path: '/forgot-password',
+      name: 'ForgotPassword',
+      component: () => import('../views/Auth/ForgotPassword.vue'),
+      meta: { title: 'Забыли пароль', public: true },
+    },
+    {
+      path: '/reset-password',
+      name: 'ResetPassword',
+      component: () => import('../views/Auth/ResetPassword.vue'),
+      meta: { title: 'Сброс пароля', public: true },
+    },
+
+    // ── Панель управления ──────────────────────
+    {
+      path: '/',
+      name: 'Dashboard',
+      component: () => import('../views/Dashboard.vue'),
+      meta: { title: 'Панель управления' },
+    },
+
+    // ── Управление полями ──────────────────────
+    {
+      path: '/field-slots',
+      name: 'FieldSlots',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Слоты полей' },
+    },
+    {
+      path: '/bookings',
+      name: 'Bookings',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Бронирования' },
+    },
+
+    // ── Академия ───────────────────────────────
+    {
+      path: '/students',
+      name: 'Students',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Ученики' },
+    },
+    {
+      path: '/lessons',
+      name: 'Lessons',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Занятия' },
+    },
+
+    // ── Финансы и персонал ──────────────────────
+    {
+      path: '/payments',
+      name: 'Payments',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Платежи' },
+    },
+    {
+      path: '/workers',
+      name: 'Workers',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Сотрудники' },
+    },
+
+    // ── Прочее ─────────────────────────────────
+    {
+      path: '/boxing',
+      name: 'Boxing',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Бокс' },
+    },
+    {
+      path: '/reports',
+      name: 'Reports',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Отчёты' },
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('../views/Pages/BlankPage.vue'),
+      meta: { title: 'Настройки' },
     },
     {
       path: '/profile',
       name: 'Profile',
       component: () => import('../views/Others/UserProfile.vue'),
-      meta: {
-        title: 'Profile',
-      },
-    },
-    {
-      path: '/form-elements',
-      name: 'Form Elements',
-      component: () => import('../views/Forms/FormElements.vue'),
-      meta: {
-        title: 'Form Elements',
-      },
-    },
-    {
-      path: '/basic-tables',
-      name: 'Basic Tables',
-      component: () => import('../views/Tables/BasicTables.vue'),
-      meta: {
-        title: 'Basic Tables',
-      },
-    },
-    {
-      path: '/line-chart',
-      name: 'Line Chart',
-      component: () => import('../views/Chart/LineChart/LineChart.vue'),
-    },
-    {
-      path: '/bar-chart',
-      name: 'Bar Chart',
-      component: () => import('../views/Chart/BarChart/BarChart.vue'),
-    },
-    {
-      path: '/alerts',
-      name: 'Alerts',
-      component: () => import('../views/UiElements/Alerts.vue'),
-      meta: {
-        title: 'Alerts',
-      },
-    },
-    {
-      path: '/avatars',
-      name: 'Avatars',
-      component: () => import('../views/UiElements/Avatars.vue'),
-      meta: {
-        title: 'Avatars',
-      },
-    },
-    {
-      path: '/badge',
-      name: 'Badge',
-      component: () => import('../views/UiElements/Badges.vue'),
-      meta: {
-        title: 'Badge',
-      },
+      meta: { title: 'Профиль' },
     },
 
+    // ── Не найдено ─────────────────────────────
     {
-      path: '/buttons',
-      name: 'Buttons',
-      component: () => import('../views/UiElements/Buttons.vue'),
-      meta: {
-        title: 'Buttons',
-      },
-    },
-
-    {
-      path: '/images',
-      name: 'Images',
-      component: () => import('../views/UiElements/Images.vue'),
-      meta: {
-        title: 'Images',
-      },
-    },
-    {
-      path: '/videos',
-      name: 'Videos',
-      component: () => import('../views/UiElements/Videos.vue'),
-      meta: {
-        title: 'Videos',
-      },
-    },
-    {
-      path: '/blank',
-      name: 'Blank',
-      component: () => import('../views/Pages/BlankPage.vue'),
-      meta: {
-        title: 'Blank',
-      },
-    },
-
-    {
-      path: '/error-404',
-      name: '404 Error',
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
       component: () => import('../views/Errors/FourZeroFour.vue'),
-      meta: {
-        title: '404 Error',
-      },
-    },
-
-    {
-      path: '/signin',
-      name: 'Signin',
-      component: () => import('../views/Auth/Signin.vue'),
-      meta: {
-        title: 'Signin',
-      },
-    },
-    {
-      path: '/signup',
-      name: 'Signup',
-      component: () => import('../views/Auth/Signup.vue'),
-      meta: {
-        title: 'Signup',
-      },
+      meta: { title: '404', public: true },
     },
   ],
 })
 
-export default router
+// ── Защита маршрутов ─────────────────────────────
+router.beforeEach((to, _from, next) => {
+  document.title = `${to.meta.title || 'Страница'} | DOPSY ARENA`
 
-router.beforeEach((to, from, next) => {
-  document.title = `Vue.js ${to.meta.title} | TailAdmin - Vue.js Tailwind CSS Dashboard Template`
+  const token =
+    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const isPublic = to.meta.public === true
+
+  if (!isPublic && !token) {
+    return next('/login')
+  }
+
+  if (isPublic && token && to.path.startsWith('/login')) {
+    return next('/')
+  }
+
   next()
 })
+
+export default router

@@ -20,12 +20,14 @@
   </AdminLayout>
 </template>
 
-<script setup>
-import { ref } from "vue";
+<script setup lang="ts">
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import AdminLayout from "@/components/layout/AdminLayout.vue";
 import PageBreadcrumb from "@/components/common/PageBreadcrumb.vue";
 
-const currentPageTitle = ref("Blank Page");
+const route = useRoute();
+const currentPageTitle = computed(() => (route.meta.title as string) || "Blank Page");
 </script>
 
 <style></style>
