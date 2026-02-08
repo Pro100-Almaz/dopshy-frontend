@@ -15,7 +15,7 @@ interface LoginResponse {
 const MOCK_USERS: Record<UserRole, User> = {
   super_admin: {
     id: '1',
-    name: 'Алмаз Ержан',
+    name: 'Алтынбек Ержан',
     email: 'admin@dopsyarena.kz',
     role: 'super_admin',
   },
