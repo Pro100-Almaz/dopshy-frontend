@@ -75,6 +75,26 @@
         class="flex flex-col items-center justify-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24 bg-white"
       >
         <div class="w-full max-w-md">
+          <!-- Back button -->
+          <router-link
+            to="/"
+            class="inline-flex items-center gap-1.5 text-sm text-[#64748B] hover:text-[#0F172A] transition-colors mb-8 group"
+          >
+            <svg
+              class="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M19 12H5" />
+              <path d="m12 5-7 7 7 7" />
+            </svg>
+            Назад
+          </router-link>
+
           <!-- Mobile brand -->
           <div class="flex items-center gap-3 mb-10 lg:hidden">
             <div
@@ -337,7 +357,7 @@ async function handleSubmit() {
       role: selectedRole.value as UserRole,
       remember: stayLoggedIn.value,
     })
-    router.push('/')
+    router.push('/dashboard')
   } catch {
     // error is already set in store
   }
