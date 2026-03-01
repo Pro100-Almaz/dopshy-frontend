@@ -1,5 +1,5 @@
 <template>
-  <router-link to="/" class="flex items-center gap-2 lg:hidden">
+  <router-link to="/dashboard" class="flex items-center gap-2 lg:hidden">
     <div
       class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#10B981]"
     >

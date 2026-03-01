@@ -20,7 +20,7 @@
         !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start',
       ]"
     >
-      <router-link to="/" class="flex items-center gap-2.5">
+      <router-link to="/dashboard" class="flex items-center gap-2.5">
         <div
           class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]"
         >
@@ -235,7 +235,7 @@ const menuGroups: MenuGroup[] = [
       {
         icon: LayoutDashboard,
         name: 'Панель управления',
-        path: '/',
+        path: '/dashboard',
       },
     ],
   },

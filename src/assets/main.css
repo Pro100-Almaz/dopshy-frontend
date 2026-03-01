@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap')
 layer(base);
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap')
+layer(base);
 
 @import 'tailwindcss';
 
@@ -8,6 +10,7 @@ layer(base);
 @theme {
   --font-*: initial;
   --font-outfit: Outfit, sans-serif;
+  --font-bebas: 'Bebas Neue', sans-serif;
 
   --breakpoint-*: initial;
   --breakpoint-2xsm: 375px;

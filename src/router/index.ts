@@ -6,6 +6,14 @@ const router = createRouter({
     return savedPosition || { left: 0, top: 0 }
   },
   routes: [
+    // ── Лендинг (публичный) ────────────────────
+    {
+      path: '/',
+      name: 'Landing',
+      component: () => import('../views/Landing/landing.vue'),
+      meta: { title: 'Dopsy Arena', public: true },
+    },
+
     // ── Авторизация (публичные) ────────────────
     {
       path: '/login',
@@ -28,7 +36,7 @@ const router = createRouter({
 
     // ── Панель управления ──────────────────────
     {
-      path: '/',
+      path: '/dashboard',
       name: 'Dashboard',
       component: () => import('../views/Dashboard.vue'),
       meta: { title: 'Панель управления' },
@@ -124,8 +132,9 @@ router.beforeEach((to, _from, next) => {
     return next('/login')
   }
 
-  if (isPublic && token && to.path.startsWith('/login')) {
-    return next('/')
+  // Redirect authenticated users away from login to the dashboard
+  if (isPublic && token && to.path === '/login') {
+    return next('/dashboard')
   }
 
   next()
