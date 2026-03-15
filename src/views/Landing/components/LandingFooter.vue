@@ -103,6 +103,7 @@ const currentYear = new Date().getFullYear()
         <div class="flex items-center gap-6 text-sm text-[#999]">
           <a href="#" class="hover:text-white transition-colors">Конфиденциальность</a>
           <a href="#" class="hover:text-white transition-colors">Условия использования</a>
+          <a href="/data-deletion" class="hover:text-[#39ff14] transition-colors">Удаление данных</a>
         </div>
       </div>
     </div>

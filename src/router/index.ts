@@ -110,6 +110,14 @@ const router = createRouter({
       meta: { title: 'Профиль' },
     },
 
+    // ── Публичные страницы ─────────────────────
+    {
+      path: '/data-deletion',
+      name: 'DataDeletion',
+      component: () => import('../views/Landing/DataDeletion.vue'),
+      meta: { title: 'Удаление данных', public: true },
+    },
+
     // ── Не найдено ─────────────────────────────
     {
       path: '/:pathMatch(.*)*',
