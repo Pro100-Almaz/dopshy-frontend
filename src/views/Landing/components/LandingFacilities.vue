@@ -43,28 +43,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <section id="facilities" ref="sectionRef" class="py-24 bg-[#141414] relative">
-    <!-- Decorative elements -->
-    <div
-      class="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-[#39ff14]/5 to-transparent pointer-events-none"
-    />
-    <div
-      class="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-[#39ff14]/20 to-transparent"
-    />
-
+  <section id="facilities" ref="sectionRef" class="py-24 bg-gray-50 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
       <!-- Section header -->
       <div class="text-center mb-16">
-        <h2
-          class="text-5xl md:text-6xl font-bebas text-white mb-4 transition-all duration-700"
-          :class="isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'"
-        >
-          ЛУЧШИЕ <span class="text-[#39ff14]">ОБЪЕКТЫ</span>
+        <h2 class="text-5xl md:text-6xl font-bebas text-gray-900 mb-4">
+          ЛУЧШИЕ <span class="text-success-600">ОБЪЕКТЫ</span>
         </h2>
-        <p
-          class="text-[#999] max-w-2xl mx-auto text-lg transition-all duration-700 delay-100"
-          :class="isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'"
-        >
+        <p class="text-gray-500 max-w-2xl mx-auto text-lg">
           Всё необходимое, чтобы полностью сосредоточиться на игре. Наша арена построена
           по профессиональным стандартам для игроков любого уровня.
         </p>
@@ -75,25 +61,21 @@ onMounted(() => {
         <div
           v-for="(feat, idx) in features"
           :key="idx"
-          class="group bg-[#0a0a0a] border border-white/5 p-8 hover:border-[#39ff14]/50 transition-all duration-300 hover:-translate-y-2 relative overflow-hidden"
-          :class="isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'"
-          :style="{ transitionDuration: '500ms', transitionDelay: `${idx * 100 + 200}ms` }"
+          class="landing-reveal group rounded-2xl bg-white border border-gray-200 p-8 shadow-theme-sm hover:border-success-300 hover:shadow-theme-md transition-all duration-300 hover:-translate-y-2 relative overflow-hidden"
+          :class="{ 'is-revealed': isVisible }"
+          :style="{ '--reveal-i': idx }"
         >
           <div
-            class="absolute top-0 right-0 w-32 h-32 bg-[#39ff14]/10 rounded-full blur-3xl group-hover:bg-[#39ff14]/20 transition-colors duration-500 -mr-10 -mt-10"
-          />
-
-          <div
-            class="w-14 h-14 bg-white/5 border border-white/10 flex items-center justify-center text-[#39ff14] mb-6 group-hover:scale-110 group-hover:bg-[#39ff14] group-hover:text-black transition-all duration-300"
+            class="w-14 h-14 rounded-xl bg-success-50 border border-success-100 flex items-center justify-center text-success-600 mb-6 group-hover:scale-110 group-hover:bg-success-600 group-hover:text-white transition-all duration-300"
           >
             <component :is="feat.icon" class="w-7 h-7" />
           </div>
 
-          <h3 class="text-2xl font-bebas tracking-wider text-white mb-3">
+          <h3 class="text-2xl font-bebas tracking-wider text-gray-900 mb-3">
             {{ feat.title }}
           </h3>
 
-          <p class="text-[#999] text-sm leading-relaxed">
+          <p class="text-gray-500 text-sm leading-relaxed">
             {{ feat.desc }}
           </p>
         </div>

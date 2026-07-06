@@ -24,7 +24,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
     class="fixed top-0 w-full z-50 transition-all duration-300 border-b"
     :class="
       scrolled
-        ? 'bg-[#0a0a0a]/80 backdrop-blur-lg border-white/10 py-3'
+        ? 'bg-white/80 backdrop-blur-lg border-gray-200 py-3'
         : 'bg-transparent border-transparent py-5'
     "
   >
@@ -32,12 +32,15 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
       <!-- Logo -->
       <a href="#" class="flex items-center gap-2 group">
         <div
-          class="w-10 h-10 rounded-full bg-[#39ff14] flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300 landing-box-glow"
+          class="w-10 h-10 rounded-full bg-success-600 flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300"
         >
-          <Dribbble class="w-6 h-6 text-black" />
+          <Dribbble class="w-6 h-6 text-white" />
         </div>
-        <span class="font-bebas text-3xl tracking-wider text-white">
-          DOPSY <span class="text-[#39ff14]">ARENA</span>
+        <span
+          class="font-bebas text-3xl tracking-wider transition-colors duration-300"
+          :class="scrolled ? 'text-gray-900' : 'text-white'"
+        >
+          DOPSY <span :class="scrolled ? 'text-success-600' : 'text-success-400'">ARENA</span>
         </span>
       </a>
 
@@ -47,31 +50,48 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
           v-for="link in navLinks"
           :key="link.name"
           :href="link.href"
-          class="text-sm font-semibold uppercase tracking-wider text-[#999] hover:text-[#39ff14] transition-colors duration-200"
+          class="text-sm font-semibold uppercase tracking-wider transition-colors duration-200"
+          :class="scrolled ? 'text-gray-600 hover:text-success-600' : 'text-white/90 hover:text-white'"
         >
           {{ link.name }}
         </a>
         <router-link
+          to="/booking"
+          class="text-sm font-semibold uppercase tracking-wider transition-colors duration-200"
+          :class="scrolled ? 'text-gray-600 hover:text-success-600' : 'text-white/90 hover:text-white'"
+        >
+          Бронирование
+        </router-link>
+        <router-link
           to="/login"
-          class="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider text-white border border-white/20 hover:border-white/50 hover:bg-white/5 transition-all duration-200"
+          class="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border transition-all duration-200"
+          :class="
+            scrolled
+              ? 'border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50'
+              : 'border-white/30 text-white hover:bg-white/10'
+          "
         >
           Войти
         </router-link>
-        <a
-          href="#book"
-          class="px-6 py-2.5 bg-[#39ff14]/10 text-[#39ff14] font-bebas text-xl tracking-wider border border-[#39ff14]/50 hover:bg-[#39ff14] hover:text-black transition-all duration-300 -skew-x-[10deg]"
+        <router-link
+          to="/booking"
+          class="px-6 py-2.5 bg-success-600 text-white font-bebas text-xl tracking-wider hover:bg-success-700 transition-colors duration-300 -skew-x-[10deg]"
         >
-          <span class="block skew-x-[10deg]">ЗАПИСАТЬСЯ</span>
-        </a>
+          <span class="block skew-x-[10deg]">ЗАБРОНИРОВАТЬ</span>
+        </router-link>
       </nav>
 
       <!-- Mobile Menu Toggle -->
       <button
-        class="md:hidden text-white hover:text-[#39ff14] transition-colors"
+        class="md:hidden -m-2 p-2 transition-colors"
+        :class="scrolled ? 'text-gray-900 hover:text-success-600' : 'text-white hover:text-success-400'"
+        :aria-label="mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'"
+        :aria-expanded="mobileMenuOpen"
+        aria-controls="mobile-nav"
         @click="mobileMenuOpen = !mobileMenuOpen"
       >
-        <X v-if="mobileMenuOpen" class="w-8 h-8" />
-        <Menu v-else class="w-8 h-8" />
+        <X v-if="mobileMenuOpen" class="w-8 h-8" aria-hidden="true" />
+        <Menu v-else class="w-8 h-8" aria-hidden="true" />
       </button>
     </div>
 
@@ -86,32 +106,40 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
     >
       <div
         v-if="mobileMenuOpen"
-        class="md:hidden bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+        id="mobile-nav"
+        class="md:hidden bg-white/95 backdrop-blur-xl border-b border-gray-200 overflow-hidden"
       >
         <div class="px-4 py-6 flex flex-col gap-6">
           <a
             v-for="link in navLinks"
             :key="link.name"
             :href="link.href"
-            class="text-2xl font-bebas tracking-wider text-white hover:text-[#39ff14] transition-colors"
+            class="text-2xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
             @click="mobileMenuOpen = false"
           >
             {{ link.name }}
           </a>
           <router-link
+            to="/booking"
+            class="text-2xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
+            @click="mobileMenuOpen = false"
+          >
+            Бронирование
+          </router-link>
+          <router-link
             to="/login"
-            class="inline-block text-center px-6 py-3 border border-white/20 text-white font-semibold uppercase tracking-wider text-sm hover:bg-white/5 transition-colors"
+            class="inline-block text-center px-6 py-3 border border-gray-300 text-gray-700 font-semibold uppercase tracking-wider text-sm hover:bg-gray-50 transition-colors"
             @click="mobileMenuOpen = false"
           >
             Войти
           </router-link>
-          <a
-            href="#book"
-            class="inline-block text-center px-6 py-4 bg-[#39ff14] text-black font-bebas text-2xl tracking-wider"
+          <router-link
+            to="/booking"
+            class="inline-block text-center px-6 py-4 bg-success-600 text-white font-bebas text-2xl tracking-wider"
             @click="mobileMenuOpen = false"
           >
-            ЗАПИСАТЬСЯ
-          </a>
+            ЗАБРОНИРОВАТЬ
+          </router-link>
         </div>
       </div>
     </Transition>

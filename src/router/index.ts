@@ -14,6 +14,26 @@ const router = createRouter({
       meta: { title: 'Dopsy Arena', public: true },
     },
 
+    // ── Публичное бронирование ─────────────────
+    {
+      path: '/booking',
+      name: 'Booking',
+      component: () => import('../views/Booking/FieldsList.vue'),
+      meta: { title: 'Бронирование полей', public: true },
+    },
+    {
+      path: '/booking/checkout',
+      name: 'BookingCheckout',
+      component: () => import('../views/Booking/Checkout.vue'),
+      meta: { title: 'Оформление брони', public: true },
+    },
+    {
+      path: '/booking/:fieldId',
+      name: 'BookingField',
+      component: () => import('../views/Booking/FieldDetail.vue'),
+      meta: { title: 'Выбор времени', public: true },
+    },
+
     // ── Авторизация (публичные) ────────────────
     {
       path: '/login',

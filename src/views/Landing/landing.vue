@@ -2,19 +2,21 @@
 import LandingNavbar from './components/LandingNavbar.vue'
 import LandingHero from './components/LandingHero.vue'
 import LandingFacilities from './components/LandingFacilities.vue'
-import LandingBookingForm from './components/LandingBookingForm.vue'
 import LandingFooter from './components/LandingFooter.vue'
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0a0a0a] overflow-x-hidden" style="font-family: Outfit, sans-serif">
+  <div
+    class="landing-root min-h-screen bg-white overflow-x-hidden"
+    style="font-family: Outfit, sans-serif"
+  >
     <LandingNavbar />
 
     <main>
       <LandingHero />
 
       <!-- Banner Strip -->
-      <div class="bg-[#39ff14] py-4 overflow-hidden border-y border-white/20">
+      <div class="bg-success-600 py-4 overflow-hidden border-y border-success-700">
         <div class="landing-marquee flex whitespace-nowrap">
           <div
             v-for="i in 2"
@@ -25,14 +27,14 @@ import LandingFooter from './components/LandingFooter.vue'
             <span
               v-for="j in 8"
               :key="j"
-              class="inline-flex items-center gap-6 font-bebas text-2xl tracking-widest text-black pr-10"
+              class="inline-flex items-center gap-6 font-bebas text-2xl tracking-widest text-white pr-10"
             >
               <span>ГАЗОН СТАНДАРТА FIFA</span>
-              <span class="w-2 h-2 rounded-full bg-black inline-block shrink-0" />
+              <span class="w-2 h-2 rounded-full bg-white inline-block shrink-0" />
               <span>ОТКРЫТО 24/7</span>
-              <span class="w-2 h-2 rounded-full bg-black inline-block shrink-0" />
+              <span class="w-2 h-2 rounded-full bg-white inline-block shrink-0" />
               <span>ПРО ОСВЕЩЕНИЕ</span>
-              <span class="w-2 h-2 rounded-full bg-black inline-block shrink-0" />
+              <span class="w-2 h-2 rounded-full bg-white inline-block shrink-0" />
             </span>
           </div>
         </div>
@@ -41,34 +43,37 @@ import LandingFooter from './components/LandingFooter.vue'
       <LandingFacilities />
 
       <!-- Gallery -->
-      <section id="gallery" class="py-24 relative bg-[#141414] border-t border-white/5 overflow-hidden">
+      <section id="gallery" class="py-24 relative bg-gray-50 border-t border-gray-200 overflow-hidden">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <img
               src="https://pixabay.com/get/g5fbc6492affa2cd61e37de6919daae3fba72a84b95360606e3aa2f19b4bb9cdf736fc7904ad7e4145006517367bf49286494e090f340e046ab30bbf662431007_1280.jpg"
-              alt="Gallery 1"
+              alt="Футбольное поле Dopsy Arena с искусственным газоном"
+              loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
             />
             <img
               src="https://pixabay.com/get/g6fed6f27058e3c2d52af6cf25136e5fd3f221e11e944b4ee9992ba0907a8d8799f1f0d4e2a03a14c798f8037688130ddb6d5fc7d4ac75026e219792f40ca5df2_1280.jpg"
-              alt="Gallery 2"
+              alt="Игроки во время матча на арене"
+              loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"
             />
             <img
               src="https://images.unsplash.com/photo-1518063319789-7217e6706b04?q=80&w=600&auto=format&fit=crop"
-              alt="Gallery 3"
+              alt="Вечерний матч под профессиональным освещением"
+              loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
             />
             <img
               src="https://images.unsplash.com/photo-1508344928928-7165b67de128?q=80&w=600&auto=format&fit=crop"
-              alt="Gallery 4"
+              alt="Крупный план мяча на газоне поля"
+              loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"
             />
           </div>
         </div>
       </section>
 
-      <LandingBookingForm />
     </main>
 
     <LandingFooter />
@@ -121,16 +126,78 @@ import LandingFooter from './components/LandingFooter.vue'
   }
 }
 
-/* Glow utilities used by child components */
-.landing-text-glow {
-  filter: drop-shadow(0 0 20px rgba(57, 255, 20, 0.5));
+/* ─── Scroll reveal ───────────────────────────────────────────────────────────
+   Resting state is fully visible — motion is enhancement only. A JS-added
+   `.is-revealed` class plays the entrance; `animation-fill-mode: backwards`
+   hides the element only during its stagger delay, then releases so hover
+   transforms keep working. No JS / headless / reduced-motion → content shows. */
+.landing-reveal.is-revealed,
+.landing-reveal-left.is-revealed,
+.landing-reveal-right.is-revealed {
+  animation-duration: 0.7s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: backwards;
+}
+.landing-reveal.is-revealed {
+  animation-name: landing-reveal-up;
+  animation-delay: calc(var(--reveal-i, 0) * 90ms);
+}
+.landing-reveal-left.is-revealed {
+  animation-name: landing-reveal-left;
+}
+.landing-reveal-right.is-revealed {
+  animation-name: landing-reveal-right;
+  animation-delay: 0.12s;
 }
 
-.landing-box-glow {
-  box-shadow: 0 0 20px rgba(57, 255, 20, 0.15);
+@keyframes landing-reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes landing-reveal-left {
+  from {
+    opacity: 0;
+    transform: translateX(-2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes landing-reveal-right {
+  from {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.landing-box-glow-hover:hover {
-  box-shadow: 0 0 30px rgba(57, 255, 20, 0.3);
+/* ─── Reduced motion ──────────────────────────────────────────────────────────
+   Kill landing motion but keep everything visible. Scoped to `.landing-root`
+   so the rest of the app is untouched. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-root .landing-marquee,
+  .landing-root .landing-fade-up,
+  .landing-root .landing-reveal.is-revealed,
+  .landing-root .landing-reveal-left.is-revealed,
+  .landing-root .landing-reveal-right.is-revealed {
+    animation: none !important;
+  }
+  .landing-root *,
+  .landing-root *::before,
+  .landing-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>
