@@ -63,8 +63,8 @@ onMounted(load)
     <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
       <!-- Page head -->
       <div class="mb-8 max-w-2xl">
-        <h1 class="font-bebas text-[clamp(2.5rem,6vw,4rem)] leading-[0.9] tracking-wide text-gray-900">
-          БРОНИРОВАНИЕ <span class="text-success-600">ПОЛЕЙ</span>
+        <h1 class="text-3xl font-bold text-gray-900">
+          Бронирование <span class="text-success-600">полей</span>
         </h1>
         <p class="mt-3 text-gray-500">
           Выберите поле и удобное время. Оплата онлайн, подтверждение — сразу после брони.
@@ -154,7 +154,7 @@ onMounted(load)
         <p class="text-gray-600">Не удалось загрузить поля. Проверьте соединение.</p>
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-5 py-2.5 font-bebas text-lg tracking-wide text-white hover:bg-success-700"
+          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-success-700"
           @click="load"
         >
           <RotateCcw class="h-4 w-4" aria-hidden="true" /> Повторить
@@ -189,7 +189,7 @@ onMounted(load)
         <div class="flex items-start gap-3">
           <MapPin class="mt-0.5 h-5 w-5 shrink-0 text-success-600" aria-hidden="true" />
           <div>
-            <h2 class="font-bebas text-xl tracking-wide text-gray-900">ГДЕ МЫ НАХОДИМСЯ</h2>
+            <h2 class="text-lg font-bold text-gray-900">Где мы находимся</h2>
             <p class="text-sm text-gray-500">{{ ARENA.address }}</p>
           </div>
         </div>
@@ -197,7 +197,7 @@ onMounted(load)
           :href="directionsUrl()"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:border-success-400 hover:text-success-600"
+          class="inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:border-success-600 hover:text-success-600"
         >
           <Navigation class="h-4 w-4" aria-hidden="true" /> Проложить маршрут
         </a>

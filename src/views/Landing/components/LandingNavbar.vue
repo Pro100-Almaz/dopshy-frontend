@@ -40,7 +40,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
           class="font-bebas text-3xl tracking-wider transition-colors duration-300"
           :class="scrolled ? 'text-gray-900' : 'text-white'"
         >
-          DOPSY <span :class="scrolled ? 'text-success-600' : 'text-success-400'">ARENA</span>
+          DOPSY <span class="text-success-600">ARENA</span>
         </span>
       </a>
 
@@ -73,18 +73,12 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
         >
           Войти
         </router-link>
-        <router-link
-          to="/booking"
-          class="px-6 py-2.5 bg-success-600 text-white font-bebas text-xl tracking-wider hover:bg-success-700 transition-colors duration-300 -skew-x-[10deg]"
-        >
-          <span class="block skew-x-[10deg]">ЗАБРОНИРОВАТЬ</span>
-        </router-link>
       </nav>
 
       <!-- Mobile Menu Toggle -->
       <button
         class="md:hidden -m-2 p-2 transition-colors"
-        :class="scrolled ? 'text-gray-900 hover:text-success-600' : 'text-white hover:text-success-400'"
+        :class="scrolled ? 'text-gray-900 hover:text-success-600' : 'text-white hover:text-success-600'"
         :aria-label="mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'"
         :aria-expanded="mobileMenuOpen"
         aria-controls="mobile-nav"
@@ -132,13 +126,6 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
             @click="mobileMenuOpen = false"
           >
             Войти
-          </router-link>
-          <router-link
-            to="/booking"
-            class="inline-block text-center px-6 py-4 bg-success-600 text-white font-bebas text-2xl tracking-wider"
-            @click="mobileMenuOpen = false"
-          >
-            ЗАБРОНИРОВАТЬ
           </router-link>
         </div>
       </div>

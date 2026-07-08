@@ -161,47 +161,111 @@ export function getField(id: string): Promise<Field | undefined> {
 const OPEN_HOUR = 8
 const CLOSE_HOUR = 24 // последний старт в 23:00
 
-/**
- * Слоты на день. Доступность и цена детерминированы (hash),
- * прошедшие часы для сегодняшней даты помечаются как `past`.
- * `now` передаётся снаружи, чтобы не дёргать Date в слое данных при тестах.
- */
-export function getSlots(fieldId: string, date: string, now: Date = new Date()): Promise<Slot[]> {
-  const field = FIELDS.find((f) => f.id === fieldId)
-  if (!field) return delay([], 300)
+const pad = (n: number) => String(n).padStart(2, '0')
 
+/** Один детерминированный слот: доступность и цена стабильны между рендерами. */
+function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
+  const isPeak = hour >= 18
+  const price = isPeak ? Math.round(field.pricePerHour * 1.2) : field.pricePerHour
+  const booked = hash(`${field.id}|${date}|${hour}`) % 10 < 3 // ~30% занято
   const todayIso = toISO(now)
-  const isToday = date === todayIso
-  const currentHour = now.getHours()
+  const past = date < todayIso || (date === todayIso && hour <= now.getHours())
+  const status: SlotStatus = past ? 'past' : booked ? 'booked' : 'available'
+  return {
+    id: `${field.id}__${date}__${hour}`,
+    fieldId: field.id,
+    date,
+    start: `${pad(hour)}:00`,
+    end: `${pad(hour + 1)}:00`,
+    price,
+    status,
+  }
+}
 
-  const slots: Slot[] = []
+export interface WeekDay {
+  iso: string
+  label: { weekday: string; day: string; month: string }
+}
+
+export interface WeekSlots {
+  days: WeekDay[]
+  rows: { hour: number; label: string; cells: Slot[] }[]
+}
+
+/** 7 дат начиная с `startISO`. */
+export function getWeekDays(startISO: string): WeekDay[] {
+  const [y, m, d] = startISO.split('-').map(Number)
+  const base = new Date(y, m - 1, d)
+  return Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(base)
+    dd.setDate(base.getDate() + i)
+    const iso = toISO(dd)
+    return { iso, label: formatDayLabel(iso) }
+  })
+}
+
+/**
+ * Недельная сетка: строки — часы (вертикально), столбцы — 7 дней.
+ * Идеально для расписания в модальном окне.
+ */
+export function getWeekSlots(
+  fieldId: string,
+  startISO: string,
+  now: Date = new Date(),
+): Promise<WeekSlots> {
+  const field = FIELDS.find((f) => f.id === fieldId)
+  if (!field) return delay({ days: [], rows: [] }, 300)
+
+  const days = getWeekDays(startISO)
+  const rows: WeekSlots['rows'] = []
   for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
-    const isPeak = h >= 18
-    const price = isPeak ? Math.round(field.pricePerHour * 1.2) : field.pricePerHour
-    const booked = hash(`${fieldId}|${date}|${h}`) % 10 < 3 // ~30% занято
-    const past = isToday && h <= currentHour
-
-    const status: SlotStatus = past ? 'past' : booked ? 'booked' : 'available'
-    slots.push({
-      id: `${fieldId}-${date}-${h}`,
-      fieldId,
-      date,
-      start: `${String(h).padStart(2, '0')}:00`,
-      end: `${String(h + 1).padStart(2, '0')}:00`,
-      price,
-      status,
+    rows.push({
+      hour: h,
+      label: `${pad(h)}:00`,
+      cells: days.map((d) => makeSlot(field, d.iso, h, now)),
     })
   }
-  return delay(slots, 350)
+  return delay({ days, rows }, 350)
 }
 
 export interface BookingPayload extends BookingDraft {
   cardNumber: string
 }
 
+/** Слоты, сгруппированные по дате — для сводок и подтверждения. */
+export interface DateGroup {
+  date: string
+  label: string
+  slots: Slot[]
+  subtotal: number
+}
+
+export function dayFullLabel(iso: string): string {
+  const { day, month, weekday } = formatDayLabel(iso)
+  return `${day} ${month}, ${weekday}`
+}
+
+export function groupSlotsByDate(slots: Slot[]): DateGroup[] {
+  const sorted = [...slots].sort((a, b) =>
+    a.date === b.date ? a.start.localeCompare(b.start) : a.date.localeCompare(b.date),
+  )
+  const map = new Map<string, Slot[]>()
+  for (const s of sorted) {
+    if (!map.has(s.date)) map.set(s.date, [])
+    map.get(s.date)!.push(s)
+  }
+  return [...map.entries()].map(([date, items]) => ({
+    date,
+    label: dayFullLabel(date),
+    slots: items,
+    subtotal: items.reduce((sum, s) => sum + s.price, 0),
+  }))
+}
+
 /**
  * Симуляция оплаты + бронирования. Честная: карта, оканчивающаяся на «0000»,
  * имитирует отказ банка, остальные — успех. Готово к замене на реальный шлюз.
+ * Принимает полные слоты — бронь может охватывать несколько дней недели.
  */
 export function submitBooking(payload: BookingPayload): Promise<BookingConfirmation> {
   return new Promise((resolve, reject) => {
@@ -216,34 +280,18 @@ export function submitBooking(payload: BookingPayload): Promise<BookingConfirmat
         reject(new Error('Поле не найдено'))
         return
       }
-      // Восстанавливаем выбранные слоты из детерминированного генератора.
-      const hours = payload.slotIds
-        .map((id) => Number(id.split('-').pop()))
-        .filter((h) => !Number.isNaN(h))
-        .sort((a, b) => a - b)
-      const slots: Slot[] = hours.map((h) => {
-        const isPeak = h >= 18
-        return {
-          id: `${payload.fieldId}-${payload.date}-${h}`,
-          fieldId: payload.fieldId,
-          date: payload.date,
-          start: `${String(h).padStart(2, '0')}:00`,
-          end: `${String(h + 1).padStart(2, '0')}:00`,
-          price: isPeak ? Math.round(field.pricePerHour * 1.2) : field.pricePerHour,
-          status: 'available',
-        }
-      })
+      if (payload.slots.length === 0) {
+        reject(new Error('Не выбраны слоты'))
+        return
+      }
+      const slots = [...payload.slots].sort((a, b) =>
+        a.date === b.date ? a.start.localeCompare(b.start) : a.date.localeCompare(b.date),
+      )
       const total = slots.reduce((sum, s) => sum + s.price, 0)
-      const ref = 'DA-' + (hash(payload.slotIds.join('') + payload.phone) % 100000).toString().padStart(5, '0')
-      resolve({
-        ref,
-        field,
-        date: payload.date,
-        slots,
-        total,
-        name: payload.name,
-        phone: payload.phone,
-      })
+      const ref =
+        'DA-' +
+        (hash(slots.map((s) => s.id).join('') + payload.phone) % 100000).toString().padStart(5, '0')
+      resolve({ ref, field, slots, total, name: payload.name, phone: payload.phone })
     }, 900)
   })
 }

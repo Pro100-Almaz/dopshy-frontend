@@ -27,14 +27,14 @@ const currentYear = new Date().getFullYear()
             <a
               href="#"
               aria-label="Dopsy Arena в Instagram"
-              class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:border-success-400 hover:text-success-600 transition-all"
+              class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:border-success-600 hover:text-success-600 transition-all"
             >
               <Instagram class="w-5 h-5" aria-hidden="true" />
             </a>
             <a
               href="#"
               aria-label="Dopsy Arena в Twitter"
-              class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:border-success-400 hover:text-success-600 transition-all"
+              class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:border-success-600 hover:text-success-600 transition-all"
             >
               <Twitter class="w-5 h-5" aria-hidden="true" />
             </a>

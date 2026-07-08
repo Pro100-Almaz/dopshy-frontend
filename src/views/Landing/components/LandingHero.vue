@@ -20,9 +20,9 @@ import { ChevronRight } from 'lucide-vue-next'
     <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pt-20">
       <div class="max-w-3xl">
         <span
-          class="landing-fade-up landing-delay-0 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-success-400 font-semibold text-sm mb-6 uppercase tracking-widest"
+          class="landing-fade-up landing-delay-0 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-success-600 font-semibold text-sm mb-6 uppercase tracking-widest"
         >
-          <span class="w-2 h-2 rounded-full bg-success-400 animate-pulse inline-block" />
+          <span class="w-2 h-2 rounded-full bg-success-600 animate-pulse inline-block" />
           Профессиональные поля
         </span>
 
@@ -30,7 +30,7 @@ import { ChevronRight } from 'lucide-vue-next'
           class="landing-fade-up landing-delay-1 text-[clamp(3rem,9vw,6rem)] font-bebas text-white leading-[0.85] mb-6"
         >
           ИГРАЙ КАК <br />
-          <span class="text-success-400">ПРОФИ</span>
+          <span class="text-success-600">ПРОФИ</span>
         </h1>
 
         <p
