@@ -129,38 +129,6 @@
             </p>
           </div>
 
-          <!-- Mock credentials hint -->
-          <div
-            class="mb-6 rounded-xl border border-[#10B981]/20 bg-[#10B981]/5 px-4 py-3"
-          >
-            <p class="mb-1.5 text-xs font-semibold text-[#059669]">
-              Демо-доступ
-            </p>
-            <div class="flex flex-col gap-1 text-sm text-[#0F172A]">
-              <div class="flex items-center gap-2">
-                <span class="text-[#64748B] text-xs w-14">Email:</span>
-                <code
-                  class="rounded bg-white px-1.5 py-0.5 text-xs font-medium"
-                  >admin@dopsyarena.kz</code
-                >
-                <button
-                  type="button"
-                  @click="fillDemo"
-                  class="ml-auto text-[10px] font-semibold text-[#10B981] hover:text-[#059669] transition-colors"
-                >
-                  Заполнить
-                </button>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[#64748B] text-xs w-14">Пароль:</span>
-                <code
-                  class="rounded bg-white px-1.5 py-0.5 text-xs font-medium"
-                  >demo123</code
-                >
-              </div>
-            </div>
-          </div>
-
           <!-- Role selector pills -->
           <AuthRoleTabs v-model="selectedRole" :roles="roles" class="mb-8" />
 
@@ -308,7 +276,6 @@ import FullScreenLayout from '@/components/layout/FullScreenLayout.vue'
 import AuthRoleTabs from '@/components/auth/AuthRoleTabs.vue'
 import AuthInput from '@/components/auth/AuthInput.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { UserRole } from '@/types'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -326,11 +293,6 @@ const showPassword = ref(false)
 const stayLoggedIn = ref(false)
 
 const errors = reactive({ email: '', password: '' })
-
-function fillDemo() {
-  email.value = 'admin@dopsyarena.kz'
-  password.value = 'demo123'
-}
 
 function validate(): boolean {
   let valid = true
@@ -354,7 +316,6 @@ async function handleSubmit() {
     await authStore.login({
       email: email.value,
       password: password.value,
-      role: selectedRole.value as UserRole,
       remember: stayLoggedIn.value,
     })
     router.push('/dashboard')

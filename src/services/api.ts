@@ -1,16 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const token =
-    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
-
   const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // ngrok free tier serves an HTML interstitial for browser-looking
+      // requests unless this header is present.
+      'ngrok-skip-browser-warning': 'true',
       ...options?.headers,
     },
-    ...options,
   })
 
   if (!res.ok) {

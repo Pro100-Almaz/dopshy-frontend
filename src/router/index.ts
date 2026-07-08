@@ -152,16 +152,17 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   document.title = `${to.meta.title || 'Страница'} | DOPSY ARENA`
 
-  const token =
-    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const isAuthed = !!(
+    localStorage.getItem('dopsy_user') || sessionStorage.getItem('dopsy_user')
+  )
   const isPublic = to.meta.public === true
 
-  if (!isPublic && !token) {
+  if (!isPublic && !isAuthed) {
     return next('/login')
   }
 
   // Redirect authenticated users away from login to the dashboard
-  if (isPublic && token && to.path === '/login') {
+  if (isPublic && isAuthed && to.path === '/login') {
     return next('/dashboard')
   }
 

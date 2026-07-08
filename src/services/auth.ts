@@ -1,77 +1,73 @@
-import type { User, UserRole } from '@/types'
+import type { User } from '@/types'
+import { apiFetch } from '@/services/api'
 
 interface LoginPayload {
   email: string
   password: string
-  role: UserRole
-  remember: boolean
 }
 
-interface LoginResponse {
-  user: User
-  token: string
+/** Envelope returned by every backend endpoint. */
+interface ApiResponse<T> {
+  ok: boolean
+  data: T | null
+  message: string
 }
 
-const MOCK_USERS: Record<UserRole, User> = {
-  super_admin: {
-    id: '1',
-    name: 'Алтынбек Ержан',
-    email: 'admin@dopsyarena.kz',
-    role: 'super_admin',
-  },
-  manager: {
-    id: '2',
-    name: 'Асель Каримова',
-    email: 'manager@dopsyarena.kz',
-    role: 'manager',
-  },
-  coach: {
-    id: '3',
-    name: 'Арман Тулегенов',
-    email: 'coach@dopsyarena.kz',
-    role: 'coach',
-  },
-  accountant: {
-    id: '4',
-    name: 'Дана Омарова',
-    email: 'accountant@dopsyarena.kz',
-    role: 'accountant',
-  },
-  staff: {
-    id: '5',
-    name: 'Бауыржан Серік',
-    email: 'staff@dopsyarena.kz',
-    role: 'staff',
-  },
+/** Shape of the user object the backend returns in `data`. */
+interface ApiUser {
+  id: number | string
+  email: string
+  phone_number?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  is_active?: boolean
+  updated_at?: string
 }
 
-async function delay(ms = 400) {
-  return new Promise((r) => setTimeout(r, ms))
+function mapUser(u: ApiUser): User {
+  const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
+  return {
+    id: String(u.id),
+    name: name || u.email,
+    email: u.email,
+    phone: u.phone_number ?? undefined,
+  }
 }
 
 export const authService = {
-  /** POST /auth/login — mock */
-  async login(payload: LoginPayload): Promise<LoginResponse> {
-    await delay()
-    if (!payload.email || !payload.password) {
-      throw new Error('Email и пароль обязательны')
+  /** POST /auth/login */
+  async login(payload: LoginPayload): Promise<{ user: User }> {
+    const res = await apiFetch<ApiResponse<ApiUser>>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: payload.email, password: payload.password }),
+    })
+    if (!res.ok || !res.data) {
+      throw new Error(res.message || 'Неверный email или пароль')
     }
-    const user = MOCK_USERS[payload.role]
-    return {
-      user: { ...user, email: payload.email },
-      token: `mock-jwt-${Date.now()}`,
-    }
+    return { user: mapUser(res.data) }
   },
 
-  /** POST /auth/forgot-password — stub */
+  /** POST /auth/forgot-password */
   async forgotPassword(email: string): Promise<{ message: string }> {
-    await delay()
-    return { message: `Ссылка для сброса отправлена на ${email}` }
+    const res = await apiFetch<ApiResponse<unknown>>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+    if (!res.ok) {
+      throw new Error(res.message || 'Не удалось отправить ссылку')
+    }
+    return { message: res.message || `Ссылка для сброса отправлена на ${email}` }
   },
 
-  /** POST /auth/reset-password — stub */
-  async resetPassword(_token: string, _password: string): Promise<{ message: string }> {
-    await delay()
-    return { message: 'Пароль успешно сброшен' }
+  /** POST /auth/reset-password */
+  async resetPassword(token: string, password: string): Promise<{ message: string }> {
+    const res = await apiFetch<ApiResponse<unknown>>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    })
+    if (!res.ok) {
+      throw new Error(res.message || 'Не удалось сбросить пароль')
+    }
+    return { message: res.message || 'Пароль успешно сброшен' }
   },
 }
