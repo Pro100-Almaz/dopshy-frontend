@@ -1,10 +1,9 @@
 import type { User, UserRole } from '@/types'
+import { apiFetch } from './api'
 
 interface LoginPayload {
   email: string
   password: string
-  role: UserRole
-  remember: boolean
 }
 
 interface LoginResponse {
@@ -12,37 +11,22 @@ interface LoginResponse {
   token: string
 }
 
-const MOCK_USERS: Record<UserRole, User> = {
-  super_admin: {
-    id: '1',
-    name: 'Алтынбек Ержан',
-    email: 'admin@dopsyarena.kz',
-    role: 'super_admin',
-  },
-  manager: {
-    id: '2',
-    name: 'Асель Каримова',
-    email: 'manager@dopsyarena.kz',
-    role: 'manager',
-  },
-  coach: {
-    id: '3',
-    name: 'Арман Тулегенов',
-    email: 'coach@dopsyarena.kz',
-    role: 'coach',
-  },
-  accountant: {
-    id: '4',
-    name: 'Дана Омарова',
-    email: 'accountant@dopsyarena.kz',
-    role: 'accountant',
-  },
-  staff: {
-    id: '5',
-    name: 'Бауыржан Серік',
-    email: 'staff@dopsyarena.kz',
-    role: 'staff',
-  },
+/** Shape returned by the backend's POST /api/auth/signin (camelCase-aliased). */
+interface AuthorizedAccount {
+  token: string
+  username: string
+  email: string
+  role: string
+  isVerified: boolean
+  isActive: boolean
+  isLoggedIn: boolean
+  createdAt: string
+  updatedAt: string | null
+}
+
+interface SigninResponse {
+  id: number
+  authorizedAccount: AuthorizedAccount
 }
 
 async function delay(ms = 400) {
@@ -50,16 +34,30 @@ async function delay(ms = 400) {
 }
 
 export const authService = {
-  /** POST /auth/login — mock */
+  /** POST /auth/signin */
   async login(payload: LoginPayload): Promise<LoginResponse> {
-    await delay()
     if (!payload.email || !payload.password) {
       throw new Error('Email и пароль обязательны')
     }
-    const user = MOCK_USERS[payload.role]
+    // Only send the fields the backend expects — extra props (role, remember)
+    // are frontend-only and must not leak into the request body.
+    const data = await apiFetch<SigninResponse>('/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({ email: payload.email, password: payload.password }),
+    })
+
+    localStorage.setItem('dopsy_token', JSON.stringify(data.authorizedAccount.token))
+
+    // Backend returns { id, authorizedAccount }; adapt it to { user, token }.
+    const account = data.authorizedAccount
     return {
-      user: { ...user, email: payload.email },
-      token: `mock-jwt-${Date.now()}`,
+      token: account.token,
+      user: {
+        id: String(data.id),
+        name: account.username,
+        email: account.email,
+        role: account.role as UserRole,
+      },
     }
   },
 

@@ -15,7 +15,9 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.message || `API error ${res.status}`)
+    // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
+    const detail = typeof body.detail === 'string' ? body.detail : undefined
+    throw new Error(detail || body.message || `API error ${res.status}`)
   }
 
   return res.json()
