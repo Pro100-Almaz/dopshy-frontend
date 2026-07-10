@@ -66,13 +66,13 @@ const router = createRouter({
     {
       path: '/field-slots',
       name: 'FieldSlots',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      component: () => import('../views/Pages/BookingSchedules.vue'),
       meta: { title: 'Слоты полей' },
     },
     {
       path: '/bookings',
       name: 'Bookings',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      component: () => import('../views/Pages/BookingPage.vue'),
       meta: { title: 'Бронирования' },
     },
 
