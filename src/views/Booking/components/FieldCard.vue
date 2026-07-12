@@ -27,7 +27,7 @@ const to = { path: `/booking/${props.field.id}`, query: { date: props.date } }
       />
       <div class="absolute left-3 top-3 flex gap-2">
         <span
-          class="rounded-full bg-success-600 px-2.5 py-1 font-bebas text-sm leading-none tracking-wide text-white"
+          class="rounded-full bg-success-600 px-2.5 py-1 text-xs font-bold leading-none text-white"
           >{{ FIELD_TYPE_LABEL[field.type] }}</span
         >
         <span
@@ -42,7 +42,7 @@ const to = { path: `/booking/${props.field.id}`, query: { date: props.date } }
     <!-- Body -->
     <div class="flex flex-1 flex-col gap-3 p-5">
       <div>
-        <h3 class="font-bebas text-2xl leading-none tracking-wide text-gray-900">{{ field.name }}</h3>
+        <h3 class="text-lg font-bold text-gray-900">{{ field.name }}</h3>
         <p class="mt-1.5 text-sm text-gray-500">{{ field.surface }} · {{ field.capacity }}</p>
       </div>
 
@@ -59,13 +59,13 @@ const to = { path: `/booking/${props.field.id}`, query: { date: props.date } }
       <div class="mt-auto flex items-end justify-between pt-2">
         <div>
           <span class="text-xs text-gray-500">от</span>
-          <span class="ml-1 font-bebas text-2xl leading-none text-gray-900">{{
+          <span class="ml-1 text-xl font-bold text-gray-900">{{
             formatPrice(field.pricePerHour)
           }}</span>
           <span class="text-sm text-gray-500">/час</span>
         </div>
         <span
-          class="inline-flex items-center gap-1.5 rounded-full bg-success-600 px-4 py-2 font-bebas text-lg leading-none tracking-wide text-white transition-transform duration-200 group-hover:gap-2.5"
+          class="inline-flex items-center gap-1.5 rounded-full bg-success-600 px-4 py-2 text-sm font-semibold leading-none text-white transition-transform duration-200 group-hover:gap-2.5"
         >
           Выбрать
           <ArrowRight class="h-4 w-4" aria-hidden="true" />

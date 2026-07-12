@@ -30,7 +30,7 @@ const embedSrc = computed(() => {
         :href="directionsUrl()"
         target="_blank"
         rel="noopener noreferrer"
-        class="inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:border-success-400 hover:text-success-600"
+        class="inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:border-success-600 hover:text-success-600"
       >
         <Navigation class="h-4 w-4" aria-hidden="true" /> Проложить маршрут
       </a>

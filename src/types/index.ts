@@ -83,8 +83,7 @@ export interface Slot {
 
 export interface BookingDraft {
   fieldId: string
-  date: string
-  slotIds: string[]
+  slots: Slot[]
   name: string
   phone: string
 }
@@ -92,7 +91,6 @@ export interface BookingDraft {
 export interface BookingConfirmation {
   ref: string
   field: Field
-  date: string
   slots: Slot[]
   total: number
   name: string

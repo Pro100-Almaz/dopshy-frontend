@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import {
   User,
@@ -16,7 +16,7 @@ import type { BookingConfirmation } from '@/types'
 import {
   submitBooking,
   formatPrice,
-  formatDayLabel,
+  groupSlotsByDate,
   directionsUrl,
   FIELD_TYPE_LABEL,
 } from '@/services/booking'
@@ -30,6 +30,10 @@ type Status = 'idle' | 'processing' | 'error' | 'success'
 const status = ref<Status>('idle')
 const errorMessage = ref('')
 const confirmation = ref<BookingConfirmation | null>(null)
+
+const confirmationGroups = computed(() =>
+  confirmation.value ? groupSlotsByDate(confirmation.value.slots) : [],
+)
 
 const form = reactive({ name: '', phone: '', cardName: '', cardNumber: '', expiry: '', cvc: '' })
 const errors = reactive({ name: '', phone: '', cardName: '', cardNumber: '', expiry: '', cvc: '' })
@@ -64,8 +68,7 @@ async function submit() {
   try {
     const result = await submitBooking({
       fieldId: store.field.id,
-      date: store.date,
-      slotIds: store.selectedSlots.map((s) => s.id),
+      slots: store.selectedSlots,
       name: form.name,
       phone: form.phone,
       cardNumber: form.cardNumber,
@@ -83,11 +86,6 @@ function newBooking() {
   confirmation.value = null
   status.value = 'idle'
   router.push('/booking')
-}
-
-function dateLabel(iso: string): string {
-  const { day, month, weekday } = formatDayLabel(iso)
-  return `${day} ${month}, ${weekday}`
 }
 
 let redirectTimer: ReturnType<typeof setTimeout> | null = null
@@ -114,30 +112,34 @@ onBeforeUnmount(() => {
       class="mx-auto flex max-w-lg flex-col items-center px-4 py-16 text-center"
     >
       <div class="flex h-16 w-16 items-center justify-center rounded-full bg-success-50 ring-1 ring-success-500/30">
-        <CheckCircle2 class="h-9 w-9 text-success-500" aria-hidden="true" />
+        <CheckCircle2 class="h-9 w-9 text-success-600" aria-hidden="true" />
       </div>
-      <h1 class="mt-6 font-bebas text-4xl tracking-wide text-gray-900">БРОНЬ ПОДТВЕРЖДЕНА</h1>
+      <h1 class="mt-6 text-2xl font-bold text-gray-900">Бронь подтверждена</h1>
       <p class="mt-2 text-gray-500">
         Номер брони <span class="font-semibold text-gray-900">{{ confirmation.ref }}</span>. Мы отправили
         детали на WhatsApp — приходите за 15 минут до начала.
       </p>
 
       <div class="mt-8 w-full rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-theme-sm">
-        <p class="font-bebas text-2xl tracking-wide text-gray-900">{{ confirmation.field.name }}</p>
-        <p class="mt-1 text-sm text-gray-500">{{ dateLabel(confirmation.date) }}</p>
-        <ul class="mt-4 space-y-1.5 text-sm">
-          <li
-            v-for="s in confirmation.slots"
-            :key="s.id"
-            class="flex justify-between border-b border-gray-100 pb-1.5"
-          >
-            <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
-            <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
-          </li>
-        </ul>
+        <p class="text-lg font-bold text-gray-900">{{ confirmation.field.name }}</p>
+        <div class="mt-4 space-y-4">
+          <div v-for="g in confirmationGroups" :key="g.date">
+            <p class="text-xs font-semibold uppercase text-gray-500">{{ g.label }}</p>
+            <ul class="mt-1.5 space-y-1.5 text-sm">
+              <li
+                v-for="s in g.slots"
+                :key="s.id"
+                class="flex justify-between border-b border-gray-100 pb-1.5"
+              >
+                <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
+                <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
         <div class="mt-4 flex items-center justify-between border-t border-gray-200 pt-3">
           <span class="text-sm text-gray-500">Оплачено</span>
-          <span class="font-bebas text-2xl text-gray-900">{{ formatPrice(confirmation.total) }}</span>
+          <span class="text-2xl font-bold text-gray-900">{{ formatPrice(confirmation.total) }}</span>
         </div>
       </div>
 
@@ -146,13 +148,13 @@ onBeforeUnmount(() => {
           :href="directionsUrl()"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-700 hover:border-success-400 hover:text-success-600"
+          class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-gray-300 px-5 py-3 text-sm font-semibold text-gray-700 hover:border-success-600 hover:text-success-600"
         >
           <Navigation class="h-4 w-4" aria-hidden="true" /> Маршрут
         </a>
         <button
           type="button"
-          class="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-success-600 px-5 py-3 font-bebas text-lg tracking-wide text-white hover:bg-success-700"
+          class="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-success-600 px-5 py-3 text-base font-semibold text-white hover:bg-success-700"
           @click="newBooking"
         >
           Забронировать ещё
@@ -162,14 +164,14 @@ onBeforeUnmount(() => {
 
     <!-- Checkout form -->
     <main v-else-if="store.field && store.count > 0" class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-      <h1 class="mb-8 font-bebas text-[clamp(2rem,5vw,3rem)] leading-none tracking-wide text-gray-900">ОФОРМЛЕНИЕ</h1>
+      <h1 class="mb-8 text-3xl font-bold text-gray-900">Оформление</h1>
 
       <div class="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
         <!-- Forms -->
         <form class="space-y-8" novalidate @submit.prevent="submit">
           <!-- Contact -->
           <fieldset class="space-y-5">
-            <legend class="mb-4 font-bebas text-2xl tracking-wide text-gray-900">КОНТАКТНЫЕ ДАННЫЕ</legend>
+            <legend class="mb-4 text-lg font-bold text-gray-900">Контактные данные</legend>
             <div class="grid gap-5 sm:grid-cols-2">
               <div class="space-y-2">
                 <label for="co-name" class="flex items-center gap-2 text-sm font-semibold text-gray-700">
@@ -207,8 +209,8 @@ onBeforeUnmount(() => {
 
           <!-- Payment -->
           <fieldset class="space-y-5">
-            <legend class="mb-1 flex items-center gap-2 font-bebas text-2xl tracking-wide text-gray-900">
-              ОПЛАТА <Lock class="h-4 w-4 text-success-600" aria-hidden="true" />
+            <legend class="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900">
+              Оплата <Lock class="h-4 w-4 text-success-600" aria-hidden="true" />
             </legend>
             <p class="text-xs text-gray-500">
               Демо-оплата: карта, оканчивающаяся на 0000, имитирует отказ банка. Реальные средства не
@@ -241,7 +243,7 @@ onBeforeUnmount(() => {
                 placeholder="0000 0000 0000 0000"
                 :aria-invalid="!!errors.cardNumber"
                 :aria-describedby="errors.cardNumber ? 'co-card-err' : undefined"
-                class="w-full rounded-lg border bg-white px-4 py-3 tracking-widest text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-success-600"
+                class="w-full rounded-lg border bg-white px-4 py-3st text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-success-600"
                 :class="errors.cardNumber ? 'border-error-500' : 'border-gray-300 focus:border-success-600'"
                 @input="onCardInput"
               />
@@ -300,44 +302,48 @@ onBeforeUnmount(() => {
           <button
             type="submit"
             :disabled="status === 'processing'"
-            class="flex w-full items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-4 font-bebas text-2xl tracking-wide text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:opacity-70"
+            class="flex w-full items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <template v-if="status === 'processing'">
-              <Loader2 class="h-6 w-6 animate-spin" aria-hidden="true" /> ОБРАБОТКА…
+              <Loader2 class="h-5 w-5 animate-spin" aria-hidden="true" /> Обработка…
             </template>
             <template v-else-if="status === 'error'">
-              ПОПРОБОВАТЬ СНОВА <ArrowRight class="h-5 w-5" aria-hidden="true" />
+              Попробовать снова <ArrowRight class="h-5 w-5" aria-hidden="true" />
             </template>
-            <template v-else> ОПЛАТИТЬ {{ formatPrice(store.total) }} </template>
+            <template v-else> Оплатить {{ formatPrice(store.total) }} </template>
           </button>
         </form>
 
         <!-- Summary -->
         <aside>
           <div class="sticky top-24 rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-            <h2 class="font-bebas text-2xl tracking-wide text-gray-900">ВАША БРОНЬ</h2>
+            <h2 class="text-lg font-bold text-gray-900">Ваша бронь</h2>
             <div class="mt-4 flex items-center gap-2">
-              <span class="rounded-full bg-success-600 px-2.5 py-0.5 font-bebas text-sm leading-none text-white">
+              <span class="rounded-full bg-success-600 px-2.5 py-0.5 text-xs font-bold leading-none text-white">
                 {{ FIELD_TYPE_LABEL[store.field.type] }}
               </span>
               <p class="text-sm font-semibold text-gray-900">{{ store.field.name }}</p>
             </div>
-            <p class="mt-1 text-sm text-gray-500">{{ dateLabel(store.date) }}</p>
 
-            <ul class="mt-5 space-y-1.5 text-sm">
-              <li
-                v-for="s in store.sortedSlots"
-                :key="s.id"
-                class="flex justify-between border-b border-gray-100 pb-1.5"
-              >
-                <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
-                <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
-              </li>
-            </ul>
+            <div class="mt-5 space-y-4">
+              <div v-for="g in store.groupedByDate" :key="g.date">
+                <p class="text-xs font-semibold uppercase text-gray-500">{{ g.label }}</p>
+                <ul class="mt-1.5 space-y-1.5 text-sm">
+                  <li
+                    v-for="s in g.slots"
+                    :key="s.id"
+                    class="flex justify-between border-b border-gray-100 pb-1.5"
+                  >
+                    <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
+                    <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
 
             <div class="mt-5 flex items-center justify-between border-t border-gray-200 pt-4">
               <span class="text-sm text-gray-500">Итого</span>
-              <span class="font-bebas text-3xl leading-none text-gray-900">{{ formatPrice(store.total) }}</span>
+              <span class="text-2xl font-bold text-gray-900">{{ formatPrice(store.total) }}</span>
             </div>
           </div>
         </aside>
