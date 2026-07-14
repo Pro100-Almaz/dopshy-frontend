@@ -3,6 +3,7 @@ import LandingNavbar from './components/LandingNavbar.vue'
 import LandingHero from './components/LandingHero.vue'
 import LandingFacilities from './components/LandingFacilities.vue'
 import LandingFooter from './components/LandingFooter.vue'
+import { mediaUrl } from '@/services/api'
 </script>
 
 <template>
@@ -46,26 +47,24 @@ import LandingFooter from './components/LandingFooter.vue'
       <section id="gallery" class="py-24 relative bg-gray-50 border-t border-gray-200 overflow-hidden">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <img
-              src="https://pixabay.com/get/g5fbc6492affa2cd61e37de6919daae3fba72a84b95360606e3aa2f19b4bb9cdf736fc7904ad7e4145006517367bf49286494e090f340e046ab30bbf662431007_1280.jpg"
+            <img :src="mediaUrl('img.png')"
               alt="Футбольное поле Dopsy Arena с искусственным газоном"
               loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
             />
             <img
-              src="https://pixabay.com/get/g6fed6f27058e3c2d52af6cf25136e5fd3f221e11e944b4ee9992ba0907a8d8799f1f0d4e2a03a14c798f8037688130ddb6d5fc7d4ac75026e219792f40ca5df2_1280.jpg"
+            :src="mediaUrl('img_2.png')"
               alt="Игроки во время матча на арене"
               loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"
             />
-            <img
-              src="https://images.unsplash.com/photo-1518063319789-7217e6706b04?q=80&w=600&auto=format&fit=crop"
+            <img :src="mediaUrl('img_3.png')"
               alt="Вечерний матч под профессиональным освещением"
               loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
             />
             <img
-              src="https://images.unsplash.com/photo-1508344928928-7165b67de128?q=80&w=600&auto=format&fit=crop"
+              :src="mediaUrl('img_4.png')"
               alt="Крупный план мяча на газоне поля"
               loading="lazy"
               class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"

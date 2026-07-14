@@ -20,11 +20,13 @@ const to = { path: `/booking/${props.field.id}`, query: { date: props.date } }
     <!-- Photo -->
     <div class="relative aspect-[16/10] overflow-hidden bg-gray-100">
       <img
+        v-if="field.photos[0]"
         :src="field.photos[0]"
         :alt="`${field.name} — ${field.surface}`"
         loading="lazy"
         class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
+      <div v-else class="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200" />
       <div class="absolute left-3 top-3 flex gap-2">
         <span
           class="rounded-full bg-success-600 px-2.5 py-1 text-xs font-bold leading-none text-white"
