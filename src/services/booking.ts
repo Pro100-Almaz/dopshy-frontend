@@ -8,6 +8,7 @@ import type {
   Booking,
   BookingApi,
   BookingStatus,
+  BookingState,
   BookingPeriod,
   FieldApi,
   FieldPriceApi,
@@ -36,11 +37,8 @@ const P1 = IMG('photo-1518063319789-7217e6706b04')
 const P2 = IMG('photo-1508344928928-7165b67de128')
 const P3 = IMG('photo-1579952363873-27f3bade9f55')
 
-// Заглушки для реальных полей: бэкенд пока не отдаёт фото, поэтому берём
-// изображения из /media (backend). Раскладываем детерминированно по id поля.
 const MEDIA_PHOTOS = ['img.png', 'img_2.png', 'img_3.png', 'img_4.png'].map(mediaUrl)
 
-/** Две фотографии-заглушки для поля, стабильно выбранные по его id. */
 function mediaPhotosFor(id: string): string[] {
   const i = hash(id) % MEDIA_PHOTOS.length
   const j = (i + 1) % MEDIA_PHOTOS.length
@@ -126,7 +124,6 @@ export function listFields(): Promise<Field[]> {
 }
 
 // ── Реальные поля из бэкенда: GET /api/fields ───────────────────────
-/** Строки прайса формата → тарифная таблица по типам. */
 function toPriceTable(rows: FieldPriceApi[]): PriceTable {
   const table: PriceTable = {}
   for (const r of rows) {
@@ -167,7 +164,6 @@ export async function getManagerFields(): Promise<Field[]> {
   return fields.map((f) => mapManagerField(f, byFormat.get(f.format) ?? []))
 }
 
-/** Одно реальное поле по id (для страницы поля). */
 export async function getManagerField(id: string): Promise<Field | undefined> {
   const fields = await getManagerFields()
   return fields.find((f) => f.id === id)
@@ -187,10 +183,10 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 /** Тарифное окно для часа (будни). Выходные/праздники обрабатываются отдельно. */
 function pricingTypeForHour(hour: number): PricingType {
-  if (hour < 7) return 'after_midnight' // 00:00–06:59
-  if (hour < 19) return 'morning_day' // 07:00–18:59
-  if (hour < 22) return 'evening' // 19:00–21:59
-  return 'late_night' // 22:00–23:59
+  if (hour < 7) return 'after_midnight'
+  if (hour < 19) return 'morning_day'
+  if (hour < 22) return 'evening'
+  return 'late_night'
 }
 
 // TODO: праздники приходят с бэкенда — пока учитываем только сб/вс.
@@ -200,22 +196,18 @@ function isWeekend(dateISO: string): boolean {
   return day === 0 || day === 6
 }
 
-/** Цена слота по тарифной таблице поля: выходной → константа, иначе по часу. */
 function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): number {
   if (isWeekend(dateISO) && pricing.weekend_holiday != null) return pricing.weekend_holiday
   const type = pricingTypeForHour(hour)
   return pricing[type] ?? pricing.morning_day ?? 0
 }
 
-/** Один детерминированный слот: доступность и цена стабильны между рендерами. */
 function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
-  // Реальные поля используют тарифную таблицу; мок-поля — базовую цену с наценкой.
   const price = field.pricing
     ? resolvePrice(field.pricing, date, hour)
     : hour >= 18
       ? Math.round(field.pricePerHour * 1.2)
       : field.pricePerHour
-  // Реальные поля получают занятость из бэкенда (overlayBookings); мок — псевдослучайно.
   const booked = field.pricing ? false : hash(`${field.id}|${date}|${hour}`) % 10 < 3
   const todayIso = toISO(now)
   const past = date < todayIso || (date === todayIso && hour <= now.getHours())
@@ -231,7 +223,6 @@ function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
   }
 }
 
-/** Слоты одного поля на одну дату (по часам работы арены). */
 export function getSlots(fieldId: string, date: string, now: Date = new Date()): Promise<Slot[]> {
   const field = FIELDS.find((f) => f.id === fieldId)
   if (!field) return delay([], 300)
@@ -317,7 +308,6 @@ function toSlotBooking(api: BookingApi): SlotBooking {
   }
 }
 
-// Отменённые брони не занимают слот.
 const BLOCKING = (state: string) => state !== 'cancelled'
 
 /** Помечает ячейки сетки занятыми по пересечению [time_start, time_end) с часом слота. */
@@ -380,11 +370,10 @@ export interface BookingBatchPayload {
   phone?: string
   notes?: string
   price_total?: number
-  reserved_until?: number // минуты
+  reserved_until?: number
   updated_by?: string
 }
 
-/** Слоты из стора → элементы пакетного запроса. */
 export function slotsToBatch(slots: Slot[]): BatchSlotIn[] {
   return slots.map((s) => ({
     field: Number(s.fieldId),
@@ -487,6 +476,18 @@ export function formatDayLabel(iso: string): { weekday: string; day: string; mon
   return { weekday: WD[date.getDay()], day: String(d), month: MO[m - 1] }
 }
 
+/** ISO datetime → «13 июл 2026, 20:35» (пустая строка при некорректной дате). */
+export function formatDateTime(iso: string): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const day = date.getDate()
+  const month = MO[date.getMonth()]
+  const year = date.getFullYear()
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  return `${day} ${month} ${year}, ${time}`
+}
+
 export const FIELD_TYPE_LABEL: Record<string, string> = {
   '5x5': '5×5',
   '7x7': '7×7',
@@ -501,12 +502,15 @@ function addDays(base: Date, days: number): Date {
 }
 
 const STATE_TO_STATUS: Record<string, BookingStatus> = {
+  draft: 'pending',
   awaiting_payment: 'pending',
   pending: 'pending',
+  unpaid: 'pending',
   confirmed: 'confirmed',
   paid: 'confirmed',
   completed: 'completed',
   cancelled: 'cancelled',
+  rejected: 'cancelled',
 }
 
 function trimSeconds(time: string): string {
@@ -514,6 +518,7 @@ function trimSeconds(time: string): string {
 }
 
 function mapBooking(api: BookingApi): Booking {
+  console.log('xxxxx', api.payment_current)
   return {
     id: String(api.id),
     ref: `BK-${api.id}`,
@@ -526,7 +531,10 @@ function mapBooking(api: BookingApi): Booking {
     end: trimSeconds(api.time_end),
     total: Number(api.price_total),
     status: STATE_TO_STATUS[api.state] ?? 'pending',
+    state: api.state,
     createdAt: api.created_at,
+    source: api.source,
+    payment_current: api.payment_current
   }
 }
 
@@ -535,10 +543,35 @@ export async function listBookings(): Promise<Booking[]> {
   return rows.map(mapBooking).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-// export async function getBookingsInRange(start_date: date, end_date: date): Promise<Booking[]>{
-//   const rows = await apiFetch<BookingApi[]>('/manager/bookings/${start_date}/${end_date}')
-//   return rows
-// }
+// ── Редактирование брони: PATCH /api/bookings/{id} ──────────────────
+export interface BookingUpdatePayload {
+  field_id?: number
+  customer_name?: string
+  time_start?: string // 'HH:mm' / 'HH:mm:ss'
+  time_end?: string
+  date?: string // 'yyyy-mm-dd'
+  end_date?: string
+  status?: BookingState
+}
+
+/** Приводит 'HH:mm' к 'HH:mm:ss' — бэкенд ожидает datetime.time. */
+function withSeconds(time: string): string {
+  return time.length === 5 ? `${time}:00` : time
+}
+
+/** Частичное обновление брони. Отправляем только заполненные поля. */
+export function updateBooking(
+  id: string | number,
+  payload: BookingUpdatePayload,
+): Promise<unknown> {
+  const body: BookingUpdatePayload = { ...payload }
+  if (body.time_start) body.time_start = withSeconds(body.time_start)
+  if (body.time_end) body.time_end = withSeconds(body.time_end)
+  return apiFetch(`/bookings/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
 
 function startOfWeek(d: Date): Date {
   const x = new Date(d)
@@ -574,4 +607,14 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
   pending: 'Ожидает',
   completed: 'Завершено',
   cancelled: 'Отменено',
+}
+
+// Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
+export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
+  draft: 'Черновик',
+  awaiting_payment: 'Ожидает оплаты',
+  confirmed: 'Подтверждено',
+  cancelled: 'Отменено',
+  unpaid: 'Не оплачено',
+  rejected: 'Отклонено',
 }

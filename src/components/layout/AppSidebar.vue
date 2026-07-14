@@ -208,6 +208,7 @@ import {
   Swords,
   BarChart3,
   Settings,
+  PersonStanding,
 } from 'lucide-vue-next'
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
@@ -251,6 +252,16 @@ const menuGroups: MenuGroup[] = [
         icon: CalendarCheck,
         name: 'Бронирования',
         path: '/bookings',
+      },
+      {
+        icon: BookOpen,
+        name: 'История действий',
+        path: '/reports',
+      },
+      {
+        icon: PersonStanding,
+        name: 'Клиентская база',
+        path: '/workers',
       },
     ],
   },
