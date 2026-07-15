@@ -75,6 +75,12 @@ const router = createRouter({
       component: () => import('../views/Pages/BookingPage.vue'),
       meta: { title: 'Бронирования' },
     },
+    {
+      path: '/customers',
+      name: 'Customers',
+      component: () => import('../views/Pages/CustomersPage.vue'),
+      meta: { title: 'Клиентская база' },
+    },
 
     // ── Академия ───────────────────────────────
     {

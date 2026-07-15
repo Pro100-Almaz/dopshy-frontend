@@ -186,3 +186,25 @@ export interface BookingApi {
   created_at: string // ISO datetime
   updated_at: string // ISO datetime
 }
+
+// ── Бот-ассистент: пауза для передачи диалога менеджеру ──────────────
+// Почему пауза выставлена: вручную менеджером ('manual') или автоматически
+// системой, когда менеджер ответил клиенту напрямую в WhatsApp ('auto').
+export type PausedReason = 'manual' | 'auto' | null
+
+export interface BotStatus {
+  paused: boolean
+  paused_reason: PausedReason
+}
+
+// Карточка клиента для панели менеджера. Пока собирается из броней
+// (имя + телефон), обогащается статусом бота через /bot-status/:phone.
+export interface Customer {
+  phone: string // международный формат без «+», как ключ для /bot-status
+  displayPhone: string // как пришёл с бэкенда — для отображения
+  name: string
+  bookingsCount: number
+  lastBookingAt: string // ISO datetime, для сортировки
+  paused: boolean
+  paused_reason: PausedReason
+}
