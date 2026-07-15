@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-vue-next'
 
 import type { BotStatus, PausedReason } from '@/types'
 import { pauseBot, resumeBot } from '@/services/customer'
+import { ApiError } from '@/services/api'
 
 const props = defineProps<{
   phone: string
@@ -12,7 +13,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  // Сообщаем родителю подтверждённый бэкендом статус.
+  // Сообщаем родителю согласованный с бэкендом статус.
   change: [status: BotStatus]
   error: [message: string]
 }>()
@@ -29,6 +30,12 @@ watch(
 
 const label = computed(() => (on.value ? 'Вкл' : 'Выкл'))
 
+function errorMessage(e: unknown): string {
+  // 502 — сервис бота недоступен/не настроен; не считаем переключение успешным.
+  if (e instanceof ApiError && e.status === 502) return 'Сервис бота недоступен, попробуйте ещё раз'
+  return e instanceof Error ? e.message : 'Не удалось изменить статус бота'
+}
+
 async function toggle() {
   if (pending.value) return
   const previous = on.value
@@ -38,12 +45,14 @@ async function toggle() {
   pending.value = true
   try {
     // next === true → бот активен → resume; next === false → пауза → pause.
-    const status = next ? await resumeBot(props.phone) : await pauseBot(props.phone)
-    on.value = !status.paused
-    emit('change', status)
+    const result = next ? await resumeBot(props.phone) : await pauseBot(props.phone)
+    on.value = !result.paused
+    // Ответ pause/resume не содержит причину: пауза вручную → 'manual', иначе null.
+    const paused_reason: PausedReason = result.paused ? 'manual' : null
+    emit('change', { phone: result.phone, paused: result.paused, paused_reason })
   } catch (e) {
     on.value = previous
-    emit('error', e instanceof Error ? e.message : 'Не удалось изменить статус бота')
+    emit('error', errorMessage(e))
   } finally {
     pending.value = false
   }
@@ -74,12 +83,12 @@ async function toggle() {
       <span class="text-theme-sm font-medium text-gray-700 dark:text-gray-300">
         Бот {{ label }}
       </span>
-      <!-- Систему поставила на паузу автоматически — поясняем менеджеру. -->
+      <!-- Систему поставила на паузу автоматически — ключевой сигнал, что менеджер уже в диалоге. -->
       <span
         v-if="props.paused && props.pausedReason === 'auto'"
         class="mt-0.5 inline-flex w-fit items-center rounded-full bg-warning-50 px-2 py-0.5 text-theme-xs font-medium text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
       >
-        Авто-пауза — менеджер ответил в WhatsApp
+        Авто-пауза — менеджер ответил
       </span>
     </div>
   </div>

@@ -1,32 +1,55 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Loader2, Users, Search } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Loader2, Users, Search, MessageCircle, CalendarCheck } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BotToggle from '@/components/customers/BotToggle.vue'
 
-import type { BotStatus, Customer } from '@/types'
-import { listCustomers } from '@/services/customer'
-import { formatDateTime } from '@/services/booking'
+import type { BotStatus, Contact } from '@/types'
+import { listContacts, relativeTime } from '@/services/customer'
 
 const currentPageTitle = 'Клиентская база'
 
-const customers = ref<Customer[]>([])
+// Держим экран свежим: авто-пауза меняется на бэкенде без действий фронта.
+const POLL_MS = 25000
+
+const contacts = ref<Contact[]>([])
 const loading = ref(true)
 const error = ref('')
 const toast = ref('')
 const query = ref('')
 
+type FilterKey = 'all' | 'texted' | 'booking' | 'paused'
+const filter = ref<FilterKey>('all')
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'Все' },
+  { key: 'texted', label: 'Писали в WhatsApp' },
+  { key: 'booking', label: 'С бронью' },
+  { key: 'paused', label: 'Бот на паузе' },
+]
+
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return customers.value
-  return customers.value.filter(
-    (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q.replace(/\D/g, '')),
-  )
+  const digits = q.replace(/\D/g, '')
+  return contacts.value.filter((c) => {
+    if (filter.value === 'texted' && !c.texted) return false
+    if (filter.value === 'booking' && !c.has_booking) return false
+    if (filter.value === 'paused' && !c.paused) return false
+    if (!q) return true
+    const nameHit = c.name.toLowerCase().includes(q)
+    const phoneHit = digits.length > 0 && c.phone.includes(digits)
+    return nameHit || phoneHit
+  })
 })
 
-function initials(name: string): string {
+function displayName(c: Contact): string {
+  return c.name.trim() || c.phone
+}
+
+function initials(c: Contact): string {
+  const name = c.name.trim()
+  if (!name) return c.phone.slice(-2)
   return name
     .split(' ')
     .slice(0, 2)
@@ -35,10 +58,10 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
-// Подтверждённый бэкендом статус — синхронизируем строку клиента.
-function onChange(customer: Customer, status: BotStatus) {
-  customer.paused = status.paused
-  customer.paused_reason = status.paused_reason ?? null
+// Согласованный с бэкендом статус — синхронизируем строку контакта.
+function onChange(contact: Contact, status: BotStatus) {
+  contact.paused = status.paused
+  contact.paused_reason = status.paused_reason ?? null
 }
 
 function onError(message: string) {
@@ -46,15 +69,33 @@ function onError(message: string) {
   window.setTimeout(() => (toast.value = ''), 4000)
 }
 
-onMounted(async () => {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
-    customers.value = await listCustomers()
+    contacts.value = await listContacts()
+    error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить клиентов'
+    // Фоновое обновление не должно затирать уже показанный список ошибкой.
+    if (!silent) error.value = e instanceof Error ? e.message : 'Не удалось загрузить контакты'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
+}
+
+let pollId: number | undefined
+function refreshOnFocus() {
+  load(true)
+}
+
+onMounted(() => {
+  load()
+  pollId = window.setInterval(() => load(true), POLL_MS)
+  window.addEventListener('focus', refreshOnFocus)
+})
+
+onUnmounted(() => {
+  if (pollId !== undefined) window.clearInterval(pollId)
+  window.removeEventListener('focus', refreshOnFocus)
 })
 </script>
 
@@ -72,7 +113,7 @@ onMounted(async () => {
           <div>
             <h3 class="font-medium text-gray-800 dark:text-white/90">Клиенты</h3>
             <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
-              Управляйте ботом-ассистентом по каждому клиенту
+              Управляйте ботом-ассистентом по каждому контакту
             </p>
           </div>
           <div class="relative w-full sm:w-64">
@@ -88,6 +129,26 @@ onMounted(async () => {
           </div>
         </div>
 
+        <!-- Filters -->
+        <div
+          class="flex flex-wrap gap-2 border-b border-gray-200 px-5 py-3 dark:border-gray-800 sm:px-6"
+        >
+          <button
+            v-for="f in FILTERS"
+            :key="f.key"
+            type="button"
+            class="rounded-full px-3 py-1.5 text-theme-xs font-medium transition-colors"
+            :class="
+              filter === f.key
+                ? 'bg-success-500 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10'
+            "
+            @click="filter = f.key"
+          >
+            {{ f.label }}
+          </button>
+        </div>
+
         <!-- Loading -->
         <div v-if="loading" class="flex min-h-[240px] items-center justify-center">
           <Loader2 class="h-7 w-7 animate-spin text-success-600" aria-hidden="true" />
@@ -100,6 +161,13 @@ onMounted(async () => {
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <p class="text-error-600 dark:text-error-500">{{ error }}</p>
+          <button
+            type="button"
+            class="rounded-lg border border-gray-300 px-4 py-2 text-theme-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+            @click="load()"
+          >
+            Повторить
+          </button>
         </div>
 
         <!-- Empty -->
@@ -109,7 +177,7 @@ onMounted(async () => {
         >
           <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
           <p class="text-gray-600 dark:text-gray-400">
-            {{ query ? 'Клиенты не найдены.' : 'Клиентов пока нет.' }}
+            {{ contacts.length ? 'Контакты не найдены.' : 'Клиентов пока нет.' }}
           </p>
         </div>
 
@@ -119,14 +187,14 @@ onMounted(async () => {
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700">
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Клиент</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контакт</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Броней</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Метки</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                    Последняя бронь
+                    Активность
                   </p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
@@ -141,36 +209,50 @@ onMounted(async () => {
                 :key="c.phone"
                 class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
               >
-                <!-- Customer -->
+                <!-- Contact -->
                 <td class="px-5 py-4 sm:px-6">
                   <div class="flex items-center gap-3">
                     <div
                       class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
                     >
-                      {{ initials(c.name) }}
+                      {{ initials(c) }}
                     </div>
                     <div>
                       <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {{ c.name }}
+                        {{ displayName(c) }}
                       </span>
                       <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
-                        {{ c.displayPhone }}
+                        {{ c.phone }}
                       </span>
                     </div>
                   </div>
                 </td>
 
-                <!-- Bookings count -->
+                <!-- Badges -->
                 <td class="px-5 py-4 sm:px-6">
-                  <span class="text-gray-700 text-theme-sm dark:text-gray-300">
-                    {{ c.bookingsCount }}
-                  </span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      v-if="c.texted"
+                      class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-theme-xs font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+                    >
+                      <MessageCircle class="h-3 w-3" /> WhatsApp
+                    </span>
+                    <span
+                      v-if="c.has_booking"
+                      class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                    >
+                      <CalendarCheck class="h-3 w-3" /> Бронь
+                    </span>
+                    <span v-if="!c.texted && !c.has_booking" class="text-theme-xs text-gray-400">
+                      —
+                    </span>
+                  </div>
                 </td>
 
-                <!-- Last booking -->
+                <!-- Last activity -->
                 <td class="px-5 py-4 sm:px-6">
                   <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
-                    {{ formatDateTime(c.lastBookingAt) }}
+                    {{ relativeTime(c.last_activity) }}
                   </span>
                 </td>
 

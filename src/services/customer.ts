@@ -1,89 +1,81 @@
-import type { BookingApi, BotStatus, Customer, PausedReason } from '@/types'
+import type { BotStatus, BotToggleResult, Contact } from '@/types'
 import { apiFetch } from './api'
 
 /**
  * Приводит телефон к международному формату без «+» — только цифры.
- * Именно этот вид ожидает бэкенд в пути /bot-status/:phone.
+ * Нужно лишь для телефонов из пользовательского ввода; телефоны из
+ * /contacts уже нормализованы бэкендом — их используем как есть.
  */
 export function normalizePhone(raw: string): string {
   return (raw ?? '').replace(/\D/g, '')
 }
 
-/** Сегмент пути для телефона: нормализуем и URL-кодируем (на всякий случай). */
+/** Сегмент пути для телефона: URL-кодируем (на будущее — цифрам кодирование не нужно). */
 function phonePath(phone: string): string {
-  return encodeURIComponent(normalizePhone(phone))
+  return encodeURIComponent(phone)
 }
 
-// ── Статус бота ─────────────────────────────────────────────────────
+// ── Список контактов — источник данных для экрана ───────────────────
+interface ContactsResponse {
+  ok: boolean
+  contacts: Contact[]
+}
+
+/** Все WhatsApp-контакты со встроенным статусом бота, отсортированы по активности. */
+export async function listContacts(): Promise<Contact[]> {
+  const data = await apiFetch<ContactsResponse>('/bot-status/contacts')
+  return data.contacts ?? []
+}
+
+// ── Статус / переключение бота ──────────────────────────────────────
 export function getBotStatus(phone: string): Promise<BotStatus> {
   return apiFetch<BotStatus>(`/bot-status/${phonePath(phone)}`)
 }
 
 /** Выключить бота (пауза) — диалог берёт на себя менеджер. */
-export function pauseBot(phone: string): Promise<BotStatus> {
-  return apiFetch<BotStatus>(`/bot-status/${phonePath(phone)}/pause`, {
+export function pauseBot(phone: string): Promise<BotToggleResult> {
+  return apiFetch<BotToggleResult>(`/bot-status/${phonePath(phone)}/pause`, {
     method: 'POST',
   })
 }
 
 /** Включить бота обратно. */
-export function resumeBot(phone: string): Promise<BotStatus> {
-  return apiFetch<BotStatus>(`/bot-status/${phonePath(phone)}/resume`, {
+export function resumeBot(phone: string): Promise<BotToggleResult> {
+  return apiFetch<BotToggleResult>(`/bot-status/${phonePath(phone)}/resume`, {
     method: 'POST',
   })
 }
 
-// ── Список клиентов ─────────────────────────────────────────────────
-// Отдельного эндпоинта клиентской базы пока нет, поэтому собираем клиентов
-// из броней (уникальные по телефону) и обогащаем статусом бота.
-function foldCustomers(rows: BookingApi[]): Map<string, Customer> {
-  const byPhone = new Map<string, Customer>()
-  for (const r of rows) {
-    const key = normalizePhone(r.phone)
-    if (!key) continue
-    const existing = byPhone.get(key)
-    if (existing) {
-      existing.bookingsCount += 1
-      // Держим самое свежее имя и дату последней брони.
-      if (r.created_at > existing.lastBookingAt) {
-        existing.lastBookingAt = r.created_at
-        if (r.customer_name) existing.name = r.customer_name
-      }
-    } else {
-      byPhone.set(key, {
-        phone: key,
-        displayPhone: r.phone,
-        name: r.customer_name || key,
-        bookingsCount: 1,
-        lastBookingAt: r.created_at,
-        paused: false,
-        paused_reason: null as PausedReason,
-      })
-    }
-  }
-  return byPhone
+// ── Относительное время для колонки «активность» ────────────────────
+const RU_UNITS: [limit: number, div: number, one: string, few: string, many: string][] = [
+  [60, 1, 'секунду', 'секунды', 'секунд'],
+  [3600, 60, 'минуту', 'минуты', 'минут'],
+  [86400, 3600, 'час', 'часа', 'часов'],
+  [2592000, 86400, 'день', 'дня', 'дней'],
+  [31536000, 2592000, 'месяц', 'месяца', 'месяцев'],
+  [Infinity, 31536000, 'год', 'года', 'лет'],
+]
+
+function pluralRu(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+  return many
 }
 
-/**
- * Клиенты для панели менеджера: собраны из броней, статус бота подтянут
- * параллельно через /bot-status/:phone. Если статус недоступен — считаем,
- * что бот активен (paused: false), чтобы страница не падала.
- */
-export async function listCustomers(): Promise<Customer[]> {
-  const rows = await apiFetch<BookingApi[]>('/bookings')
-  const customers = [...foldCustomers(rows).values()]
-
-  await Promise.all(
-    customers.map(async (c) => {
-      try {
-        const status = await getBotStatus(c.phone)
-        c.paused = status.paused
-        c.paused_reason = status.paused_reason ?? null
-      } catch {
-        // Статус недоступен — оставляем дефолт (бот активен).
-      }
-    }),
-  )
-
-  return customers.sort((a, b) => b.lastBookingAt.localeCompare(a.lastBookingAt))
+/** ISO datetime → «5 минут назад» (пустая строка при некорректной дате). */
+export function relativeTime(iso: string, now: Date = new Date()): string {
+  if (!iso) return ''
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return iso
+  const seconds = Math.max(0, Math.round((now.getTime() - then) / 1000))
+  if (seconds < 45) return 'только что'
+  for (const [limit, div, one, few, many] of RU_UNITS) {
+    if (seconds < limit) {
+      const value = Math.max(1, Math.round(seconds / div))
+      return `${value} ${pluralRu(value, one, few, many)} назад`
+    }
+  }
+  return iso
 }

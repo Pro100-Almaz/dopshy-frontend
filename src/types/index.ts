@@ -192,19 +192,27 @@ export interface BookingApi {
 // системой, когда менеджер ответил клиенту напрямую в WhatsApp ('auto').
 export type PausedReason = 'manual' | 'auto' | null
 
+// Полный статус (GET /bot-status/:phone, POST /batch).
 export interface BotStatus {
+  phone?: string
   paused: boolean
   paused_reason: PausedReason
 }
 
-// Карточка клиента для панели менеджера. Пока собирается из броней
-// (имя + телефон), обогащается статусом бота через /bot-status/:phone.
-export interface Customer {
-  phone: string // международный формат без «+», как ключ для /bot-status
-  displayPhone: string // как пришёл с бэкенда — для отображения
-  name: string
-  bookingsCount: number
-  lastBookingAt: string // ISO datetime, для сортировки
+// Ответ pause/resume — только флаг паузы, без причины.
+export interface BotToggleResult {
+  phone: string
   paused: boolean
+}
+
+// WhatsApp-контакт — главная сущность списка (GET /bot-status/contacts).
+// Это любой, кто писал боту; может иметь или не иметь брони.
+export interface Contact {
+  phone: string // канонический id: международные цифры без «+»
+  name: string // имя из броней; '' у контактов только-написавших → показываем телефон
+  texted: boolean // писал боту в WhatsApp
+  has_booking: boolean // есть хотя бы одна бронь
+  paused: boolean // true = бот выключен для контакта
   paused_reason: PausedReason
+  last_activity: string // ISO datetime; список приходит отсортированным (новые сверху)
 }
