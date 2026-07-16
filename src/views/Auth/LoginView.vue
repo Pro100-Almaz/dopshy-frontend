@@ -308,7 +308,6 @@ import FullScreenLayout from '@/components/layout/FullScreenLayout.vue'
 import AuthRoleTabs from '@/components/auth/AuthRoleTabs.vue'
 import AuthInput from '@/components/auth/AuthInput.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { UserRole } from '@/types'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -354,7 +353,6 @@ async function handleSubmit() {
     await authStore.login({
       email: email.value,
       password: password.value,
-      role: selectedRole.value as UserRole,
       remember: stayLoggedIn.value,
     })
     router.push('/dashboard')

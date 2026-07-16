@@ -27,13 +27,15 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(credentials: {
     email: string
     password: string
-    role: UserRole
-    remember: boolean
+    remember?: boolean
   }) {
     loading.value = true
     error.value = ''
     try {
-      const res = await authService.login(credentials)
+      const res = await authService.login({
+        email: credentials.email,
+        password: credentials.password,
+      })
       user.value = res.user
       token.value = res.token
 
