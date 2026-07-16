@@ -55,13 +55,12 @@ export interface Worker {
 // ── Публичное бронирование полей ──────────────────
 export type FieldType = '5x5' | '6x6' | '7x7' | '8x8'
 
-// Тарифные окна прайса (см. field_prices.pricing_type на бэкенде).
 export type PricingType =
-  | 'morning_day' // 07:00–19:00
-  | 'evening' // 19:00–22:00
-  | 'late_night' // 22:00–24:00
-  | 'after_midnight' // 00:00–07:00
-  | 'weekend_holiday' // константа на выходные/праздники
+  | 'morning_day'
+  | 'evening'
+  | 'late_night'
+  | 'after_midnight'
+  | 'weekend_holiday'
 export type PriceTable = Partial<Record<PricingType, number>>
 
 export interface Field {
@@ -76,12 +75,11 @@ export interface Field {
   photos: string[]
   amenities: string[]
   description: string
-  pricing?: PriceTable // почасовые тарифы (реальные поля из бэкенда)
+  pricing?: PriceTable
 }
 
 export type SlotStatus = 'available' | 'booked' | 'past'
 
-/** Компактные данные брони, прикреплённые к занятому слоту (для тултипа). */
 export interface SlotBooking {
   id: number
   customerName: string
@@ -122,6 +120,15 @@ export interface BookingConfirmation {
 
 export type BookingStatus = 'confirmed' | 'pending' | 'completed' | 'cancelled'
 
+// Сырые статусы брони на бэкенде (значения enum) — используются при редактировании.
+export type BookingState =
+  | 'draft'
+  | 'awaiting_payment'
+  | 'confirmed'
+  | 'cancelled'
+  | 'unpaid'
+  | 'rejected'
+
 export interface Booking {
   id: string
   ref: string // human-readable reference, e.g. 'BK-1042'
@@ -135,7 +142,10 @@ export interface Booking {
   end: string // 'HH:mm'
   total: number // ₸
   status: BookingStatus
+  state: string // сырой статус с бэкенда (для редактирования)
   createdAt: string // ISO datetime
+  source?: string
+  payment_current?: string // уже оплачено, ₸ (строка с бэкенда)
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month'
