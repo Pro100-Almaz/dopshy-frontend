@@ -63,9 +63,9 @@
               />
               <KpiCard
                 :icon="Wallet"
-                label="Неоплаченные, ₸"
-                :value="dashStore.summary.unpaidPayments"
-                :trend="{ value: '6 просроч.', direction: 'alert' }"
+                label="Неоплаченные"
+                :value="dashStore.summary.unpaidBookings"
+                :trend="{ value: 'к оплате', direction: 'alert' }"
               />
               <KpiCard
                 :icon="GraduationCap"
@@ -83,19 +83,13 @@
             <!-- Row: Schedule + Quick Actions -->
             <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div class="lg:col-span-2">
-                <TodaySchedule :slots="dashStore.todaySchedule" />
+                <TodaySchedule :bookings="dashStore.todayBookings" />
               </div>
               <QuickActions />
             </div>
 
-            <!-- Row: Payments + Lessons -->
-            <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <RecentPayments :payments="dashStore.recentPayments" />
-              <UpcomingLessons :lessons="dashStore.upcomingLessons" />
-            </div>
-
-            <!-- Workers -->
-            <WorkersOnShift :workers="dashStore.workersOnShift" />
+            <!-- Payments -->
+            <RecentPayments :bookings="dashStore.recentPayments" />
           </div>
         </Transition>
       </div>
@@ -144,8 +138,6 @@ import BusinessSwitcher from '@/components/dashboard/BusinessSwitcher.vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TodaySchedule from '@/components/dashboard/TodaySchedule.vue'
 import RecentPayments from '@/components/dashboard/RecentPayments.vue'
-import UpcomingLessons from '@/components/dashboard/UpcomingLessons.vue'
-import WorkersOnShift from '@/components/dashboard/WorkersOnShift.vue'
 import QuickActions from '@/components/dashboard/QuickActions.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'

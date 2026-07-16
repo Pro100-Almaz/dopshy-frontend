@@ -177,9 +177,22 @@ export function getField(id: string): Promise<Field | undefined> {
 }
 
 const OPEN_HOUR = 0
-const CLOSE_HOUR = 24 // последний старт в 23:00
+const CLOSE_HOUR = 24
+const SLOT_MINUTES = 30 // шаг сетки — получасовые слоты
+const DAY_MINUTES = CLOSE_HOUR * 60 // 1440
 
 const pad = (n: number) => String(n).padStart(2, '0')
+
+/** 'HH:mm' из минут от полуночи. Полночь конца суток (1440) → «24:00». */
+function minToTime(min: number): string {
+  if (min >= DAY_MINUTES) return '24:00'
+  return `${pad(Math.floor(min / 60))}:${pad(min % 60)}`
+}
+
+/** Конец слота для показа: «23:59» (как хранит бэкенд) → «24:00». */
+function toDisplayEnd(time: string): string {
+  return time === '23:59' ? '24:00' : time
+}
 
 /** Тарифное окно для часа (будни). Выходные/праздники обрабатываются отдельно. */
 function pricingTypeForHour(hour: number): PricingType {
@@ -202,22 +215,26 @@ function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): numbe
   return pricing[type] ?? pricing.morning_day ?? 0
 }
 
-function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
-  const price = field.pricing
+function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
+  const hour = Math.floor(startMin / 60)
+  const perHour = field.pricing
     ? resolvePrice(field.pricing, date, hour)
     : hour >= 18
       ? Math.round(field.pricePerHour * 1.2)
       : field.pricePerHour
-  const booked = field.pricing ? false : hash(`${field.id}|${date}|${hour}`) % 10 < 3
+  // Цена слота пропорциональна его длительности (прайс задан за час).
+  const price = Math.round((perHour * SLOT_MINUTES) / 60)
+  const booked = field.pricing ? false : hash(`${field.id}|${date}|${startMin}`) % 10 < 3
   const todayIso = toISO(now)
-  const past = date < todayIso || (date === todayIso && hour <= now.getHours())
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const past = date < todayIso || (date === todayIso && startMin < nowMin)
   const status: SlotStatus = past ? 'past' : booked ? 'booked' : 'available'
   return {
-    id: `${field.id}__${date}__${hour}`,
+    id: `${field.id}__${date}__${startMin}`,
     fieldId: field.id,
     date,
-    start: `${pad(hour)}:00`,
-    end: `${pad(hour + 1)}:00`,
+    start: minToTime(startMin),
+    end: minToTime(startMin + SLOT_MINUTES),
     price,
     status,
   }
@@ -228,8 +245,8 @@ export function getSlots(fieldId: string, date: string, now: Date = new Date()):
   if (!field) return delay([], 300)
 
   const slots: Slot[] = []
-  for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
-    slots.push(makeSlot(field, date, h, now))
+  for (let m = OPEN_HOUR * 60; m < DAY_MINUTES; m += SLOT_MINUTES) {
+    slots.push(makeSlot(field, date, m, now))
   }
   return delay(slots, 350)
 }
@@ -241,7 +258,7 @@ export interface WeekDay {
 
 export interface WeekSlots {
   days: WeekDay[]
-  rows: { hour: number; label: string; cells: Slot[] }[]
+  rows: { startMin: number; label: string; cells: Slot[] }[]
 }
 
 /** 7 дат начиная с `startISO`. */
@@ -271,11 +288,11 @@ export function getWeekSlots(
 
   const days = getWeekDays(startISO)
   const rows: WeekSlots['rows'] = []
-  for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
+  for (let m = OPEN_HOUR * 60; m < DAY_MINUTES; m += SLOT_MINUTES) {
     rows.push({
-      hour: h,
-      label: `${pad(h)}:00`,
-      cells: days.map((d) => makeSlot(f, d.iso, h, now)),
+      startMin: m,
+      label: minToTime(m),
+      cells: days.map((d) => makeSlot(f, d.iso, m, now)),
     })
   }
   return delay({ days, rows }, 350)
@@ -301,7 +318,7 @@ function toSlotBooking(api: BookingApi): SlotBooking {
     customerName: api.customer_name,
     phone: api.phone,
     start: trimSeconds(api.time_start),
-    end: trimSeconds(api.time_end),
+    end: toDisplayEnd(trimSeconds(api.time_end)),
     total: Number(api.price_total),
     state: api.state,
     notes: api.notes ?? undefined,
@@ -310,14 +327,14 @@ function toSlotBooking(api: BookingApi): SlotBooking {
 
 const BLOCKING = (state: string) => state !== 'cancelled'
 
-/** Помечает ячейки сетки занятыми по пересечению [time_start, time_end) с часом слота. */
+/** Помечает ячейки сетки занятыми по пересечению [time_start, time_end) со слотом. */
 function overlayBookings(week: WeekSlots, bookings: BookingApi[]): WeekSlots {
   const active = bookings.filter((b) => BLOCKING(b.state))
   for (const row of week.rows) {
-    const cellStart = row.hour * 60
-    const cellEnd = (row.hour + 1) * 60
     for (const cell of row.cells) {
       if (cell.status === 'past') continue
+      const cellStart = toMinutes(cell.start)
+      const cellEnd = toMinutes(cell.end)
       const hit = active.find(
         (b) =>
           b.date === cell.date &&
@@ -373,6 +390,13 @@ export interface BookingBatchPayload {
   reserved_until?: number
   updated_by?: string
 }
+
+/**
+ * TTL брони, минут. Черновик создаётся со статусом «ожидает оплаты»; если оплата
+ * не пройдена за это время, бэкенд автоматически отменяет бронь. Пока платёжной
+ * логики нет — TTL держит слот занятым ограниченное время и затем освобождает.
+ */
+export const RESERVATION_TTL_MINUTES = 20
 
 export function slotsToBatch(slots: Slot[]): BatchSlotIn[] {
   return slots.map((s) => ({
@@ -533,7 +557,7 @@ function mapBooking(api: BookingApi): Booking {
     state: api.state,
     createdAt: api.created_at,
     source: api.source,
-    payment_current: api.payment_current
+    payment_current: api.payment_current,
   }
 }
 
