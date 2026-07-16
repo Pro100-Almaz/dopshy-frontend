@@ -261,7 +261,7 @@ const menuGroups: MenuGroup[] = [
       {
         icon: PersonStanding,
         name: 'Клиентская база',
-        path: '/workers',
+        path: '/customers',
       },
     ],
   },

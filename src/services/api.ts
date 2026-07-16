@@ -13,6 +13,16 @@ export function mediaUrl(name: string): string {
   return `${MEDIA_BASE}/${name.replace(/^\/+/, '')}`
 }
 
+/** Error carrying the HTTP status so callers can branch on it (e.g. 502 → сервис недоступен). */
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 /**
  * Tear down the session and send the user to login. Prefers the auth store so
  * reactive state (token/user) resets too; the dynamic import also breaks the
@@ -60,7 +70,7 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
     const body = await res.json().catch(() => ({}))
     // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
     const detail = typeof body.detail === 'string' ? body.detail : undefined
-    throw new Error(detail || body.message || `API error ${res.status}`)
+    throw new ApiError(res.status, detail || body.message || `API error ${res.status}`)
   }
 
   return res.json()

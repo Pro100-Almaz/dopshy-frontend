@@ -598,8 +598,11 @@ export function isBookingInPeriod(
     const end = addDays(start, 6)
     return date >= start && date <= end
   }
-  // month
-  return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+  if (period === 'month') {
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+  }
+  // all_time — все текущие брони, без фильтра по дате
+  return true
 }
 
 export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
