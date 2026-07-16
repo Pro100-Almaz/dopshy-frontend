@@ -1,32 +1,30 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { DashboardSummary, ScheduleSlot, Payment, Lesson, Worker } from '@/types'
+import type { DashboardSummary, Booking } from '@/types'
 import { dashboardService } from '@/services/dashboard'
+import { isBookingInPeriod } from '@/services/booking'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const activeTab = ref<'football' | 'boxing'>('football')
   const summary = ref<DashboardSummary | null>(null)
-  const todaySchedule = ref<ScheduleSlot[]>([])
-  const recentPayments = ref<Payment[]>([])
-  const upcomingLessons = ref<Lesson[]>([])
-  const workersOnShift = ref<Worker[]>([])
+  const todayBookings = ref<Booking[]>([])
+  const recentPayments = ref<Booking[]>([])
   const loading = ref(false)
 
   async function fetchDashboard() {
     loading.value = true
     try {
-      const [s, sched, pay, les, work] = await Promise.all([
-        dashboardService.getSummary(),
-        dashboardService.getTodayBookings(),
-        dashboardService.getRecentPayments(),
-        dashboardService.getUpcomingLessons(),
-        dashboardService.getWorkersOnShift(),
-      ])
-      summary.value = s
-      todaySchedule.value = sched
-      recentPayments.value = pay
-      upcomingLessons.value = les
-      workersOnShift.value = work
+      const bookings = await dashboardService.getBookings()
+      const now = new Date()
+
+      summary.value = await dashboardService.getSummary(bookings)
+
+      todayBookings.value = bookings
+        .filter((b) => isBookingInPeriod(b, 'today', now))
+        .sort((a, b) => a.start.localeCompare(b.start))
+
+      // Последние платежи — самые свежие брони (listBookings уже отсортирован по createdAt).
+      recentPayments.value = bookings.slice(0, 6)
     } finally {
       loading.value = false
     }
@@ -35,10 +33,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     activeTab,
     summary,
-    todaySchedule,
+    todayBookings,
     recentPayments,
-    upcomingLessons,
-    workersOnShift,
     loading,
     fetchDashboard,
   }

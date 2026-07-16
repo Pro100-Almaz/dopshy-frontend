@@ -24,7 +24,6 @@ function priceShort(v: number): string {
   return `${Math.round(v / 1000)}к`
 }
 
-// Свободный (или уже выбранный) слот можно переключать; занятый/прошедший — нет.
 function onCell(cell: Slot) {
   if (cell.status === 'available' || store.isSelected(cell.id)) store.toggleSlot(cell)
 }
@@ -72,7 +71,7 @@ function hideBooking() {
       </div>
 
       <!-- Hour rows -->
-      <template v-for="row in week.rows" :key="row.hour">
+      <template v-for="row in week.rows" :key="row.startMin">
         <div
           class="sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900"
         >

@@ -28,8 +28,6 @@
             label="Бронирования сегодня"
             :value="dashStore.summary.todayBookings"
             icon-bg="bg-[#10B981]/10 text-[#10B981]"
-            badge="+3"
-            :badge-up="true"
           />
           <KpiCard
             :icon="Percent"
@@ -37,17 +35,12 @@
             :value="dashStore.summary.occupancyPercent"
             suffix="%"
             icon-bg="bg-blue-50 text-blue-500 dark:bg-blue-500/10"
-            badge="+5%"
-            :badge-up="true"
           />
           <KpiCard
             :icon="Wallet"
             label="Неоплаченные"
-            :value="dashStore.summary.unpaidPayments"
-            suffix=" ₸"
+            :value="dashStore.summary.unpaidBookings"
             icon-bg="bg-red-50 text-red-500 dark:bg-red-500/10"
-            badge="6 просроч."
-            :badge-up="false"
           />
           <KpiCard
             :icon="GraduationCap"
@@ -68,19 +61,13 @@
         <!-- Row: Schedule + Quick Actions -->
         <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div class="lg:col-span-2">
-            <TodaySchedule :slots="dashStore.todaySchedule" />
+            <TodaySchedule :bookings="dashStore.todayBookings" />
           </div>
           <QuickActions />
         </div>
 
-        <!-- Row: Payments + Lessons -->
-        <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <RecentPayments :payments="dashStore.recentPayments" />
-          <UpcomingLessons :lessons="dashStore.upcomingLessons" />
-        </div>
-
-        <!-- Workers -->
-        <WorkersOnShift :workers="dashStore.workersOnShift" />
+        <!-- Payments -->
+        <RecentPayments :bookings="dashStore.recentPayments" />
       </div>
 
       <!-- Boxing placeholder -->
@@ -136,8 +123,6 @@ import BusinessSwitcher from '@/components/dashboard/BusinessSwitcher.vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TodaySchedule from '@/components/dashboard/TodaySchedule.vue'
 import RecentPayments from '@/components/dashboard/RecentPayments.vue'
-import UpcomingLessons from '@/components/dashboard/UpcomingLessons.vue'
-import WorkersOnShift from '@/components/dashboard/WorkersOnShift.vue'
 import QuickActions from '@/components/dashboard/QuickActions.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'

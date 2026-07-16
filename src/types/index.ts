@@ -12,7 +12,7 @@ export interface User {
 export interface DashboardSummary {
   todayBookings: number
   occupancyPercent: number
-  unpaidPayments: number
+  unpaidBookings: number
   activeStudents: number
   onShiftWorkers: number
 }

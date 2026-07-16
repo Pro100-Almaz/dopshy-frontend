@@ -13,6 +13,7 @@ import {
   slotsToBatch,
   formatPrice,
   FIELD_TYPE_LABEL,
+  RESERVATION_TTL_MINUTES,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
 import { useAuthStore } from '@/stores/auth'
@@ -53,17 +54,20 @@ async function createDraft() {
       customer: form.customer.trim() || undefined,
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      reserved_until: RESERVATION_TTL_MINUTES,
       updated_by: auth.user?.name || auth.user?.email || undefined,
     })
     status.value = 'idle'
     step.value = 'payment'
+    // Черновик создан — сообщаем родителю (страница перезагрузится при закрытии,
+    // чтобы сетка сразу отразила занятый слот).
+    emit('created')
   } catch (e) {
     status.value = 'error'
     errorMessage.value = e instanceof Error ? e.message : 'Не удалось создать бронь'
   }
 }
 
-// Мок оплаты — реальная логика ещё обсуждается. Сейчас нам нужен только черновик.
 function mockPay() {
   paid.value = true
 }

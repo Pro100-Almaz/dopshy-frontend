@@ -47,7 +47,8 @@ export function useSidebarProvider() {
   const openSubmenu = ref<string | null>(null)
 
   const handleResize = () => {
-    const mobile = window.innerWidth < 768
+    // 1024px = Tailwind `lg`, тот же порог, что и у классов лэйаута/сайдбара.
+    const mobile = window.innerWidth < 1024
     isMobile.value = mobile
     if (!mobile) {
       isMobileOpen.value = false

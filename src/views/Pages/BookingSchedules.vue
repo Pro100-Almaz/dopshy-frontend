@@ -67,10 +67,20 @@ async function loadWeek() {
 
 // ── Модалка создания брони ─────────────────────────
 const showBookingModal = ref(false)
+const bookingDraftCreated = ref(false)
 
-// После создания брони перезагружаем неделю, чтобы новый слот стал «занят».
+// Черновик создан внутри модалки.
 function onBookingCreated() {
-  loadWeek()
+  bookingDraftCreated.value = true
+}
+
+// При закрытии модалки после создания черновика перезагружаем страницу —
+// иначе сетка не всегда сразу отражает только что занятый слот.
+function onBookingModalClose() {
+  showBookingModal.value = false
+  if (bookingDraftCreated.value) {
+    window.location.reload()
+  }
 }
 
 function selectField(id: string) {
@@ -210,6 +220,50 @@ onMounted(async () => {
             <!-- Grid (общий компонент с клиентской стороной) -->
             <WeekGrid :week="week" :loading="slotsLoading" />
           </section>
+
+          <!-- Мобильная сводка + бронирование (на десктопе — боковая панель) -->
+          <div
+            v-if="selectedField"
+            class="sticky bottom-0 z-20 mt-8 border-t border-gray-200 bg-white/95 py-4 backdrop-blur lg:hidden dark:border-gray-800 dark:bg-gray-900/95"
+          >
+            <div
+              v-if="store.count > 0"
+              class="mb-3 max-h-32 space-y-2 overflow-y-auto pr-1"
+            >
+              <div v-for="g in grouped" :key="g.date">
+                <p class="text-[11px] font-semibold uppercase text-gray-500">{{ g.label }}</p>
+                <ul class="mt-1 space-y-1">
+                  <li
+                    v-for="s in g.slots"
+                    :key="s.id"
+                    class="flex items-center justify-between text-sm"
+                  >
+                    <span class="text-gray-700 dark:text-gray-300">{{ s.start }}–{{ s.end }}</span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ formatPrice(s.price) }}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="min-w-0">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                  {{ store.count > 0 ? `Выбрано слотов: ${store.count}` : 'Выберите слоты' }}
+                </p>
+                <p class="text-lg font-bold text-gray-900 dark:text-white/90">
+                  {{ formatPrice(store.total) }}
+                </p>
+              </div>
+              <button
+                type="button"
+                :disabled="store.count === 0"
+                class="ml-auto flex shrink-0 items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-3 font-bebas text-lg tracking-wide text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                @click="showBookingModal = true"
+              >
+                Забронировать <ArrowRight class="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </main>
       </div>
 
@@ -272,7 +326,7 @@ onMounted(async () => {
 
     <CreateBookingModal
       :open="showBookingModal"
-      @close="showBookingModal = false"
+      @close="onBookingModalClose"
       @created="onBookingCreated"
     />
   </AdminLayout>
