@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { MapPin, Navigation, SearchX, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import type { Field, FieldType } from '@/types'
-import { listFields, toISO, ARENA, directionsUrl } from '@/services/booking'
+import { getManagerFields, toISO, ARENA, directionsUrl } from '@/services/booking'
 import BookingHeader from './components/BookingHeader.vue'
 import FieldCard from './components/FieldCard.vue'
 
@@ -45,7 +45,7 @@ async function load() {
   isLoading.value = true
   loadError.value = false
   try {
-    fields.value = await listFields()
+    fields.value = await getManagerFields()
   } catch {
     loadError.value = true
   } finally {

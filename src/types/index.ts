@@ -53,7 +53,16 @@ export interface Worker {
 }
 
 // ── Публичное бронирование полей ──────────────────
-export type FieldType = '5x5' | '7x7' | '8x8'
+export type FieldType = '5x5' | '6x6' | '7x7' | '8x8'
+
+// Тарифные окна прайса (см. field_prices.pricing_type на бэкенде).
+export type PricingType =
+  | 'morning_day' // 07:00–19:00
+  | 'evening' // 19:00–22:00
+  | 'late_night' // 22:00–24:00
+  | 'after_midnight' // 00:00–07:00
+  | 'weekend_holiday' // константа на выходные/праздники
+export type PriceTable = Partial<Record<PricingType, number>>
 
 export interface Field {
   id: string
@@ -67,9 +76,22 @@ export interface Field {
   photos: string[]
   amenities: string[]
   description: string
+  pricing?: PriceTable // почасовые тарифы (реальные поля из бэкенда)
 }
 
 export type SlotStatus = 'available' | 'booked' | 'past'
+
+/** Компактные данные брони, прикреплённые к занятому слоту (для тултипа). */
+export interface SlotBooking {
+  id: number
+  customerName: string
+  phone: string
+  start: string // 'HH:mm'
+  end: string // 'HH:mm'
+  total: number
+  state: string
+  notes?: string
+}
 
 export interface Slot {
   id: string
@@ -79,6 +101,7 @@ export interface Slot {
   end: string // 'HH:mm'
   price: number
   status: SlotStatus
+  booking?: SlotBooking // присутствует, когда status === 'booked'
 }
 
 export interface BookingDraft {
@@ -99,7 +122,6 @@ export interface BookingConfirmation {
 
 export type BookingStatus = 'confirmed' | 'pending' | 'completed' | 'cancelled'
 
-/** A single booking row shown in the admin bookings list. */
 export interface Booking {
   id: string
   ref: string // human-readable reference, e.g. 'BK-1042'
@@ -118,7 +140,26 @@ export interface Booking {
 
 export type BookingPeriod = 'today' | 'week' | 'month'
 
-/** Raw booking row as returned by GET /api/bookings (snake_case, string money/times). */
+// ── Manager: GET /api/manager/fields/ → { ok, data: FieldsInfoApi } ──
+export interface FieldApi {
+  id: number
+  name: string
+  format: string // joins to FieldPriceApi.format_name, e.g. '5x5'
+  capacity: number | string | null
+  description: string | null
+}
+
+export interface FieldPriceApi {
+  format_name: string
+  pricing_type: string
+  price_per_hour: number | string
+}
+
+export interface FieldsInfoApi {
+  prices: FieldPriceApi[]
+  fields: FieldApi[]
+}
+
 export interface BookingApi {
   id: number
   field: number

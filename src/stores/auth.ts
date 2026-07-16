@@ -39,8 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = res.user
       token.value = res.token
 
-      // Clear both storages first so a stale token in the *other* storage can't
-      // shadow this one (readers check localStorage before sessionStorage).
+      // Clear both storages first so a stale token in the *other* storage can't shadow this one (readers check localStorage before sessionStorage).
       localStorage.removeItem('dopsy_token')
       localStorage.removeItem('dopsy_user')
       sessionStorage.removeItem('dopsy_token')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import {
   Loader2,
   Home,
@@ -14,14 +14,14 @@ import {
   CalendarDays,
 } from 'lucide-vue-next'
 import type { Field } from '@/types'
-import { getField, formatPrice, FIELD_TYPE_LABEL } from '@/services/booking'
+import { getManagerField, formatPrice, FIELD_TYPE_LABEL } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
 import BookingHeader from './components/BookingHeader.vue'
 import LocationMap from './components/LocationMap.vue'
 import WeekScheduleModal from './components/WeekScheduleModal.vue'
+import CreateBookingModal from './components/CreateBookingModal.vue'
 
 const route = useRoute()
-const router = useRouter()
 const store = useBookingStore()
 
 const fieldId = route.params.fieldId as string
@@ -30,17 +30,18 @@ const activePhoto = ref(0)
 const fieldLoading = ref(true)
 const notFound = ref(false)
 const showSchedule = ref(false)
+const showBookingModal = ref(false)
 
 const grouped = computed(() => store.groupedByDate)
 
-function goCheckout() {
+function openBooking() {
   if (store.count === 0) return
-  router.push('/booking/checkout')
+  showBookingModal.value = true
 }
 
 onMounted(async () => {
   fieldLoading.value = true
-  const f = await getField(fieldId)
+  const f = await getManagerField(fieldId)
   fieldLoading.value = false
   if (!f) {
     notFound.value = true
@@ -84,10 +85,12 @@ onMounted(async () => {
           <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
             <div class="relative aspect-[16/10] bg-gray-100">
               <img
+                v-if="field.photos[activePhoto]"
                 :src="field.photos[activePhoto]"
                 :alt="`${field.name} — ${field.surface}`"
                 class="h-full w-full object-cover"
               />
+              <div v-else class="h-full w-full bg-gradient-to-br from-gray-100 to-gray-200" />
               <div class="absolute left-4 top-4 flex gap-2">
                 <span
                   class="rounded-full bg-success-600 px-3 py-1 text-xs font-bold leading-none text-white"
@@ -122,7 +125,9 @@ onMounted(async () => {
             <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
               {{ field.name }}
             </h1>
-            <p class="mt-3 max-w-prose text-gray-600">{{ field.description }}</p>
+            <p v-if="field.description" class="mt-3 max-w-prose text-gray-600">
+              {{ field.description }}
+            </p>
 
             <dl class="mt-5 flex flex-wrap gap-x-8 gap-y-3 text-sm text-gray-700">
               <div class="flex items-center gap-2">
@@ -240,7 +245,7 @@ onMounted(async () => {
               type="button"
               :disabled="store.count === 0"
               class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
-              @click="goCheckout"
+              @click="openBooking"
             >
               Забронировать <ArrowRight class="h-5 w-5" aria-hidden="true" />
             </button>
@@ -262,7 +267,7 @@ onMounted(async () => {
         <button
           type="button"
           class="flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 text-sm font-semibold text-white hover:bg-success-700"
-          @click="goCheckout"
+          @click="openBooking"
         >
           Забронировать <ArrowRight class="h-5 w-5" aria-hidden="true" />
         </button>
@@ -275,6 +280,13 @@ onMounted(async () => {
       :field="field"
       :open="showSchedule"
       @close="showSchedule = false"
+    />
+
+    <!-- Create booking modal (общая с админкой) -->
+    <CreateBookingModal
+      :open="showBookingModal"
+      @close="showBookingModal = false"
+      @created="showBookingModal = false"
     />
   </div>
 </template>

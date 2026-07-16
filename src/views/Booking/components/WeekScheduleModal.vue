@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, ChevronLeft, ChevronRight, Loader2, Check } from 'lucide-vue-next'
+import { X, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import type { Field } from '@/types'
-import { getWeekSlots, toISO, formatPrice, type WeekSlots } from '@/services/booking'
+import { getManagerWeek, toISO, formatPrice, type WeekSlots } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import WeekGrid from './WeekGrid.vue'
 
 const props = defineProps<{ field: Field; open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -27,7 +28,7 @@ function startISO(offset: number): string {
 async function loadWeek() {
   loading.value = true
   try {
-    week.value = await getWeekSlots(props.field.id, startISO(weekOffset.value))
+    week.value = await getManagerWeek(props.field, startISO(weekOffset.value))
   } finally {
     loading.value = false
   }
@@ -52,12 +53,6 @@ function nextWeek() {
   if (weekOffset.value >= MAX_WEEKS) return
   weekOffset.value++
   loadWeek()
-}
-
-const gridStyle = { gridTemplateColumns: '3.5rem repeat(7, minmax(4.75rem, 1fr))' }
-
-function priceShort(v: number): string {
-  return `${Math.round(v / 1000)}к`
 }
 
 watch(
@@ -132,59 +127,9 @@ function onBackdropClick(e: MouseEvent) {
         </div>
       </div>
 
-      <!-- Body -->
-      <div class="relative flex-1 overflow-auto">
-        <div
-          v-if="loading"
-          class="absolute inset-0 z-30 flex items-center justify-center bg-white/70"
-        >
-          <Loader2 class="h-7 w-7 animate-spin text-success-600" aria-hidden="true" />
-          <span class="sr-only">Загрузка расписания…</span>
-        </div>
-
-        <div class="grid text-center" :style="gridStyle">
-          <!-- Header row -->
-          <div class="sticky left-0 top-0 z-20 border-b border-r border-gray-200 bg-white" />
-          <div
-            v-for="d in week.days"
-            :key="d.iso"
-            class="sticky top-0 z-10 border-b border-gray-200 bg-white px-1 py-2"
-          >
-            <div class="text-[11px] uppercase text-gray-500">{{ d.label.weekday }}</div>
-            <div class="text-base font-bold leading-none text-gray-900">{{ d.label.day }}</div>
-          </div>
-
-          <!-- Hour rows -->
-          <template v-for="row in week.rows" :key="row.hour">
-            <div
-              class="sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white text-xs font-medium text-gray-500"
-            >
-              {{ row.label }}
-            </div>
-            <button
-              v-for="(cell, ci) in row.cells"
-              :key="cell.id"
-              type="button"
-              :disabled="cell.status !== 'available' && !store.isSelected(cell.id)"
-              :aria-pressed="store.isSelected(cell.id)"
-              :aria-label="`${week.days[ci].label.weekday} ${week.days[ci].label.day}, ${row.label} — ${
-                cell.status === 'booked' ? 'занято' : formatPrice(cell.price)
-              }`"
-              class="h-11 border-b border-r border-gray-100 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600"
-              :class="
-                store.isSelected(cell.id)
-                  ? 'bg-success-600 font-semibold text-white'
-                  : cell.status === 'available'
-                    ? 'bg-white text-gray-600 hover:bg-success-50 hover:text-success-700'
-                    : 'cursor-not-allowed bg-gray-100 text-transparent'
-              "
-              @click="store.toggleSlot(cell)"
-            >
-              <Check v-if="store.isSelected(cell.id)" class="mx-auto h-4 w-4" aria-hidden="true" />
-              <span v-else-if="cell.status === 'available'">{{ priceShort(cell.price) }}</span>
-            </button>
-          </template>
-        </div>
+      <!-- Body (общий компонент с админской стороной) -->
+      <div class="flex-1 overflow-auto p-4">
+        <WeekGrid :week="week" :loading="loading" />
       </div>
 
       <!-- Footer -->

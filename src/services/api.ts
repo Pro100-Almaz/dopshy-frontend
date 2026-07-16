@@ -2,6 +2,17 @@ import router from '@/router'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
+// Base URL for backend-served media (Django /media/). In dev this stays a
+// relative path and the Vite proxy forwards it to the backend; in production
+// set VITE_MEDIA_BASE_URL to the backend's absolute media URL if it lives on a
+// different origin than the frontend.
+const MEDIA_BASE = import.meta.env.VITE_MEDIA_BASE_URL || '/media'
+
+/** Build a URL for a file stored in the backend media folder, e.g. mediaUrl('img.png'). */
+export function mediaUrl(name: string): string {
+  return `${MEDIA_BASE}/${name.replace(/^\/+/, '')}`
+}
+
 /**
  * Tear down the session and send the user to login. Prefers the auth store so
  * reactive state (token/user) resets too; the dynamic import also breaks the

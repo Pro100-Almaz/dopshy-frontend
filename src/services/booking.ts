@@ -1,5 +1,6 @@
 import type {
   Field,
+  FieldType,
   Slot,
   SlotStatus,
   BookingDraft,
@@ -8,8 +9,14 @@ import type {
   BookingApi,
   BookingStatus,
   BookingPeriod,
+  FieldApi,
+  FieldPriceApi,
+  FieldsInfoApi,
+  PriceTable,
+  PricingType,
+  SlotBooking,
 } from '@/types'
-import { apiFetch } from './api'
+import { apiFetch, mediaUrl } from './api'
 
 // ── Геолокация арены (для карты / маршрута) ─────────
 export const ARENA = {
@@ -29,6 +36,17 @@ const P1 = IMG('photo-1518063319789-7217e6706b04')
 const P2 = IMG('photo-1508344928928-7165b67de128')
 const P3 = IMG('photo-1579952363873-27f3bade9f55')
 
+// Заглушки для реальных полей: бэкенд пока не отдаёт фото, поэтому берём
+// изображения из /media (backend). Раскладываем детерминированно по id поля.
+const MEDIA_PHOTOS = ['img.png', 'img_2.png', 'img_3.png', 'img_4.png'].map(mediaUrl)
+
+/** Две фотографии-заглушки для поля, стабильно выбранные по его id. */
+function mediaPhotosFor(id: string): string[] {
+  const i = hash(id) % MEDIA_PHOTOS.length
+  const j = (i + 1) % MEDIA_PHOTOS.length
+  return [MEDIA_PHOTOS[i], MEDIA_PHOTOS[j]]
+}
+
 const AMENITIES = {
   locker: 'Раздевалки',
   shower: 'Душ',
@@ -41,7 +59,7 @@ const AMENITIES = {
 const FIELDS: Field[] = [
   {
     id: 'central-5',
-    name: 'Поле 5×5 «Центральное»',
+    name: 'Поле 5×5 (First)»',
     type: '5x5',
     indoor: false,
     surface: 'Искусственный газон 4G',
@@ -55,8 +73,8 @@ const FIELDS: Field[] = [
   },
   {
     id: 'arena-7',
-    name: 'Поле 7×7 «Арена»',
-    type: '7x7',
+    name: 'Поле 6×6',
+    type: '6x6',
     indoor: false,
     surface: 'Искусственный газон 4G',
     pricePerHour: 18000,
@@ -75,7 +93,7 @@ const FIELDS: Field[] = [
   },
   {
     id: 'indoor-5',
-    name: 'Крытое поле 5×5',
+    name: 'Поле 5×5 (Second)',
     type: '5x5',
     indoor: true,
     surface: 'Профессиональный паркет-мультиспорт',
@@ -86,55 +104,6 @@ const FIELDS: Field[] = [
     amenities: [AMENITIES.locker, AMENITIES.shower, AMENITIES.lighting, AMENITIES.cafe],
     description:
       'Всепогодное крытое поле с климат-контролем — играйте вне зависимости от дождя и мороза.',
-  },
-  {
-    id: 'premium-8',
-    name: 'Поле 8×8 «Премиум»',
-    type: '8x8',
-    indoor: false,
-    surface: 'Гибридный газон нового поколения',
-    pricePerHour: 22000,
-    capacity: 'до 16 игроков',
-    sizeMeters: '60 × 40 м',
-    photos: [P1, P2],
-    amenities: [
-      AMENITIES.locker,
-      AMENITIES.shower,
-      AMENITIES.parking,
-      AMENITIES.lighting,
-      AMENITIES.gear,
-      AMENITIES.cafe,
-    ],
-    description:
-      'Наше самое большое поле с премиальным покрытием и полной инфраструктурой для серьёзных матчей.',
-  },
-  {
-    id: 'junior-5',
-    name: 'Поле 5×5 «Юниор»',
-    type: '5x5',
-    indoor: false,
-    surface: 'Искусственный газон 3G',
-    pricePerHour: 10000,
-    capacity: 'до 10 игроков',
-    sizeMeters: '36 × 18 м',
-    photos: [P2, P3],
-    amenities: [AMENITIES.locker, AMENITIES.parking, AMENITIES.lighting],
-    description:
-      'Компактное поле для тренировок и детских команд. Доступная цена в дневное время.',
-  },
-  {
-    id: 'night-7',
-    name: 'Поле 7×7 «Ночное»',
-    type: '7x7',
-    indoor: false,
-    surface: 'Искусственный газон 4G',
-    pricePerHour: 16000,
-    capacity: 'до 14 игроков',
-    sizeMeters: '54 × 34 м',
-    photos: [P3, P1],
-    amenities: [AMENITIES.locker, AMENITIES.shower, AMENITIES.parking, AMENITIES.lighting],
-    description:
-      'Поле с усиленным освещением специально для поздних матчей. Открыто до 02:00.',
   },
 ]
 
@@ -156,6 +125,54 @@ export function listFields(): Promise<Field[]> {
   return delay(FIELDS.slice())
 }
 
+// ── Реальные поля из бэкенда: GET /api/fields ───────────────────────
+/** Строки прайса формата → тарифная таблица по типам. */
+function toPriceTable(rows: FieldPriceApi[]): PriceTable {
+  const table: PriceTable = {}
+  for (const r of rows) {
+    table[r.pricing_type as PricingType] = Number(r.price_per_hour)
+  }
+  return table
+}
+
+function mapManagerField(api: FieldApi, priceRows: FieldPriceApi[]): Field {
+  const pricing = toPriceTable(priceRows)
+  return {
+    id: String(api.id),
+    name: api.name,
+    type: api.format as FieldType,
+    indoor: false,
+    surface: '',
+    pricePerHour: pricing.morning_day ?? 0,
+    capacity: api.capacity == null ? '' : String(api.capacity),
+    sizeMeters: '',
+    photos: mediaPhotosFor(String(api.id)),
+    amenities: [],
+    description: api.description ?? '',
+    pricing,
+  }
+}
+
+/** Поля + прайс из панели менеджера, сведённые в тип `Field`. */
+export async function getManagerFields(): Promise<Field[]> {
+  const { fields, prices } = await apiFetch<FieldsInfoApi>('/fields')
+
+  const byFormat = new Map<string, FieldPriceApi[]>()
+  for (const p of prices) {
+    const arr = byFormat.get(p.format_name) ?? []
+    arr.push(p)
+    byFormat.set(p.format_name, arr)
+  }
+
+  return fields.map((f) => mapManagerField(f, byFormat.get(f.format) ?? []))
+}
+
+/** Одно реальное поле по id (для страницы поля). */
+export async function getManagerField(id: string): Promise<Field | undefined> {
+  const fields = await getManagerFields()
+  return fields.find((f) => f.id === id)
+}
+
 export function getField(id: string): Promise<Field | undefined> {
   return delay(
     FIELDS.find((f) => f.id === id),
@@ -163,16 +180,43 @@ export function getField(id: string): Promise<Field | undefined> {
   )
 }
 
-const OPEN_HOUR = 8
+const OPEN_HOUR = 0
 const CLOSE_HOUR = 24 // последний старт в 23:00
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+/** Тарифное окно для часа (будни). Выходные/праздники обрабатываются отдельно. */
+function pricingTypeForHour(hour: number): PricingType {
+  if (hour < 7) return 'after_midnight' // 00:00–06:59
+  if (hour < 19) return 'morning_day' // 07:00–18:59
+  if (hour < 22) return 'evening' // 19:00–21:59
+  return 'late_night' // 22:00–23:59
+}
+
+// TODO: праздники приходят с бэкенда — пока учитываем только сб/вс.
+function isWeekend(dateISO: string): boolean {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  const day = new Date(y, m - 1, d).getDay()
+  return day === 0 || day === 6
+}
+
+/** Цена слота по тарифной таблице поля: выходной → константа, иначе по часу. */
+function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): number {
+  if (isWeekend(dateISO) && pricing.weekend_holiday != null) return pricing.weekend_holiday
+  const type = pricingTypeForHour(hour)
+  return pricing[type] ?? pricing.morning_day ?? 0
+}
+
 /** Один детерминированный слот: доступность и цена стабильны между рендерами. */
 function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
-  const isPeak = hour >= 18
-  const price = isPeak ? Math.round(field.pricePerHour * 1.2) : field.pricePerHour
-  const booked = hash(`${field.id}|${date}|${hour}`) % 10 < 3 // ~30% занято
+  // Реальные поля используют тарифную таблицу; мок-поля — базовую цену с наценкой.
+  const price = field.pricing
+    ? resolvePrice(field.pricing, date, hour)
+    : hour >= 18
+      ? Math.round(field.pricePerHour * 1.2)
+      : field.pricePerHour
+  // Реальные поля получают занятость из бэкенда (overlayBookings); мок — псевдослучайно.
+  const booked = field.pricing ? false : hash(`${field.id}|${date}|${hour}`) % 10 < 3
   const todayIso = toISO(now)
   const past = date < todayIso || (date === todayIso && hour <= now.getHours())
   const status: SlotStatus = past ? 'past' : booked ? 'booked' : 'available'
@@ -185,6 +229,18 @@ function makeSlot(field: Field, date: string, hour: number, now: Date): Slot {
     price,
     status,
   }
+}
+
+/** Слоты одного поля на одну дату (по часам работы арены). */
+export function getSlots(fieldId: string, date: string, now: Date = new Date()): Promise<Slot[]> {
+  const field = FIELDS.find((f) => f.id === fieldId)
+  if (!field) return delay([], 300)
+
+  const slots: Slot[] = []
+  for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
+    slots.push(makeSlot(field, date, h, now))
+  }
+  return delay(slots, 350)
 }
 
 export interface WeekDay {
@@ -214,12 +270,13 @@ export function getWeekDays(startISO: string): WeekDay[] {
  * Идеально для расписания в модальном окне.
  */
 export function getWeekSlots(
-  fieldId: string,
+  field: string | Field,
   startISO: string,
   now: Date = new Date(),
 ): Promise<WeekSlots> {
-  const field = FIELDS.find((f) => f.id === fieldId)
-  if (!field) return delay({ days: [], rows: [] }, 300)
+  // Строка → мок-поле (публичный флоу); объект Field → реальные данные бэкенда.
+  const f = typeof field === 'string' ? FIELDS.find((x) => x.id === field) : field
+  if (!f) return delay({ days: [], rows: [] }, 300)
 
   const days = getWeekDays(startISO)
   const rows: WeekSlots['rows'] = []
@@ -227,14 +284,122 @@ export function getWeekSlots(
     rows.push({
       hour: h,
       label: `${pad(h)}:00`,
-      cells: days.map((d) => makeSlot(field, d.iso, h, now)),
+      cells: days.map((d) => makeSlot(f, d.iso, h, now)),
     })
   }
   return delay({ days, rows }, 350)
 }
 
+// ── Реальные брони: GET /api/bookings/range/{from}/{to}/{fieldId} ────
+export function getBookingsInRange(
+  fieldId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<BookingApi[]> {
+  return apiFetch<BookingApi[]>(`/bookings/range/${dateFrom}/${dateTo}/${fieldId}`)
+}
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+function toSlotBooking(api: BookingApi): SlotBooking {
+  return {
+    id: api.id,
+    customerName: api.customer_name,
+    phone: api.phone,
+    start: trimSeconds(api.time_start),
+    end: trimSeconds(api.time_end),
+    total: Number(api.price_total),
+    state: api.state,
+    notes: api.notes ?? undefined,
+  }
+}
+
+// Отменённые брони не занимают слот.
+const BLOCKING = (state: string) => state !== 'cancelled'
+
+/** Помечает ячейки сетки занятыми по пересечению [time_start, time_end) с часом слота. */
+function overlayBookings(week: WeekSlots, bookings: BookingApi[]): WeekSlots {
+  const active = bookings.filter((b) => BLOCKING(b.state))
+  for (const row of week.rows) {
+    const cellStart = row.hour * 60
+    const cellEnd = (row.hour + 1) * 60
+    for (const cell of row.cells) {
+      if (cell.status === 'past') continue
+      const hit = active.find(
+        (b) =>
+          b.date === cell.date &&
+          toMinutes(b.time_start) < cellEnd &&
+          toMinutes(b.time_end) > cellStart,
+      )
+      if (hit) {
+        cell.status = 'booked'
+        cell.booking = toSlotBooking(hit)
+      }
+    }
+  }
+  return week
+}
+
+/** Недельная сетка реального поля: цены из прайса + занятость из броней. */
+export async function getManagerWeek(
+  field: Field,
+  startISO: string,
+  now: Date = new Date(),
+): Promise<WeekSlots> {
+  const week = await getWeekSlots(field, startISO, now)
+  const days = week.days
+  if (!days.length) return week
+  try {
+    const bookings = await getBookingsInRange(field.id, days[0].iso, days[days.length - 1].iso)
+    return overlayBookings(week, bookings)
+  } catch {
+    // Занятость недоступна (напр. публичный клиент без авторизации) — показываем
+    // хотя бы реальные цены, без наложения броней.
+    return week
+  }
+}
+
 export interface BookingPayload extends BookingDraft {
   cardNumber: string
+}
+
+// ── Пакетное создание броней: POST /api/bookings/batch ──────────────
+export interface BatchSlotIn {
+  field: number
+  date: string // 'yyyy-mm-dd'
+  time_start: string // 'HH:mm'
+  time_end: string // 'HH:mm'
+}
+
+export interface BookingBatchPayload {
+  slots: BatchSlotIn[]
+  customer?: string
+  phone?: string
+  notes?: string
+  price_total?: number
+  reserved_until?: number // минуты
+  updated_by?: string
+}
+
+/** Слоты из стора → элементы пакетного запроса. */
+export function slotsToBatch(slots: Slot[]): BatchSlotIn[] {
+  return slots.map((s) => ({
+    field: Number(s.fieldId),
+    date: s.date,
+    time_start: s.start,
+    time_end: s.end,
+  }))
+}
+
+/** Создаёт черновики броней пакетом. Пустые поля не отправляем — бэкенд подставит дефолты. */
+export function createBookingsBatch(payload: BookingBatchPayload): Promise<unknown> {
+  return apiFetch('/bookings/batch', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 /** Слоты, сгруппированные по дате — для сводок и подтверждения. */
@@ -328,15 +493,13 @@ export const FIELD_TYPE_LABEL: Record<string, string> = {
   '8x8': '8×8',
 }
 
-// ── Бронирования ──────────────────────────────────
-
+// Bookingz
 function addDays(base: Date, days: number): Date {
   const d = new Date(base)
   d.setDate(d.getDate() + days)
   return d
 }
 
-// Backend booking states → the four statuses the admin table understands.
 const STATE_TO_STATUS: Record<string, BookingStatus> = {
   awaiting_payment: 'pending',
   pending: 'pending',
@@ -344,15 +507,12 @@ const STATE_TO_STATUS: Record<string, BookingStatus> = {
   paid: 'confirmed',
   completed: 'completed',
   cancelled: 'cancelled',
-  canceled: 'cancelled',
 }
 
-// 'HH:mm:ss' → 'HH:mm' (the table only shows hours and minutes).
 function trimSeconds(time: string): string {
   return time.slice(0, 5)
 }
 
-/** Adapt a raw GET /bookings row to the Booking shape the page renders. */
 function mapBooking(api: BookingApi): Booking {
   return {
     id: String(api.id),
@@ -370,11 +530,15 @@ function mapBooking(api: BookingApi): Booking {
   }
 }
 
-/** GET /bookings — all bookings from the backend, newest first. */
 export async function listBookings(): Promise<Booking[]> {
   const rows = await apiFetch<BookingApi[]>('/bookings')
   return rows.map(mapBooking).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
+
+// export async function getBookingsInRange(start_date: date, end_date: date): Promise<Booking[]>{
+//   const rows = await apiFetch<BookingApi[]>('/manager/bookings/${start_date}/${end_date}')
+//   return rows
+// }
 
 function startOfWeek(d: Date): Date {
   const x = new Date(d)
@@ -384,7 +548,6 @@ function startOfWeek(d: Date): Date {
   return x
 }
 
-/** True if the booking's date falls within the given period relative to `now`. */
 export function isBookingInPeriod(
   booking: Booking,
   period: BookingPeriod,
