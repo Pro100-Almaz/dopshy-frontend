@@ -1,4 +1,28 @@
+import router from '@/router'
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+/**
+ * Tear down the session and send the user to login. Prefers the auth store so
+ * reactive state (token/user) resets too; the dynamic import also breaks the
+ * api → store → auth-service → api import cycle. Falls back to clearing storage
+ * directly (and redirecting) if the store isn't available.
+ */
+async function handleSessionExpired(): Promise<void> {
+  try {
+    const { useAuthStore } = await import('@/stores/auth')
+    useAuthStore().logout() // clears storage + redirects to /login
+    return
+  } catch {
+    localStorage.removeItem('dopsy_token')
+    localStorage.removeItem('dopsy_user')
+    sessionStorage.removeItem('dopsy_token')
+    sessionStorage.removeItem('dopsy_user')
+    if (router.currentRoute.value.path !== '/login') {
+      router.push('/login')
+    }
+  }
+}
 
 export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const token =
@@ -12,6 +36,14 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit): Prom
     },
     ...options,
   })
+
+  // An authenticated request rejected with 401 means the token expired or was
+  // revoked — end the session and bounce to login. (A 401 with no token, e.g. a
+  // failed signin, falls through to normal error handling below.)
+  if (res.status === 401 && token) {
+    await handleSessionExpired()
+    throw new Error('Сессия истекла. Войдите снова.')
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

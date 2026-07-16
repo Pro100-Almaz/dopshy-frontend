@@ -96,3 +96,42 @@ export interface BookingConfirmation {
   name: string
   phone: string
 }
+
+export type BookingStatus = 'confirmed' | 'pending' | 'completed' | 'cancelled'
+
+/** A single booking row shown in the admin bookings list. */
+export interface Booking {
+  id: string
+  ref: string // human-readable reference, e.g. 'BK-1042'
+  customerName: string
+  customerPhone: string
+  fieldId: string
+  fieldName: string
+  fieldType?: FieldType // unknown for backend rows that only carry a numeric field id
+  date: string // ISO yyyy-mm-dd
+  start: string // 'HH:mm'
+  end: string // 'HH:mm'
+  total: number // ₸
+  status: BookingStatus
+  createdAt: string // ISO datetime
+}
+
+export type BookingPeriod = 'today' | 'week' | 'month'
+
+/** Raw booking row as returned by GET /api/bookings (snake_case, string money/times). */
+export interface BookingApi {
+  id: number
+  field: number
+  customer_name: string
+  phone: string
+  time_start: string // 'HH:mm:ss'
+  time_end: string // 'HH:mm:ss'
+  payment_current: string
+  price_total: string
+  state: string
+  source: string
+  notes: string | null
+  date: string // ISO yyyy-mm-dd
+  created_at: string // ISO datetime
+  updated_at: string // ISO datetime
+}

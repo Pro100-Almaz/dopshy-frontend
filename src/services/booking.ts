@@ -4,7 +4,12 @@ import type {
   SlotStatus,
   BookingDraft,
   BookingConfirmation,
+  Booking,
+  BookingApi,
+  BookingStatus,
+  BookingPeriod,
 } from '@/types'
+import { apiFetch } from './api'
 
 // ── Геолокация арены (для карты / маршрута) ─────────
 export const ARENA = {
@@ -321,4 +326,89 @@ export const FIELD_TYPE_LABEL: Record<string, string> = {
   '5x5': '5×5',
   '7x7': '7×7',
   '8x8': '8×8',
+}
+
+// ── Бронирования ──────────────────────────────────
+
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+// Backend booking states → the four statuses the admin table understands.
+const STATE_TO_STATUS: Record<string, BookingStatus> = {
+  awaiting_payment: 'pending',
+  pending: 'pending',
+  confirmed: 'confirmed',
+  paid: 'confirmed',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  canceled: 'cancelled',
+}
+
+// 'HH:mm:ss' → 'HH:mm' (the table only shows hours and minutes).
+function trimSeconds(time: string): string {
+  return time.slice(0, 5)
+}
+
+/** Adapt a raw GET /bookings row to the Booking shape the page renders. */
+function mapBooking(api: BookingApi): Booking {
+  return {
+    id: String(api.id),
+    ref: `BK-${api.id}`,
+    customerName: api.customer_name,
+    customerPhone: api.phone,
+    fieldId: String(api.field),
+    fieldName: `Поле №${api.field}`,
+    date: api.date,
+    start: trimSeconds(api.time_start),
+    end: trimSeconds(api.time_end),
+    total: Number(api.price_total),
+    status: STATE_TO_STATUS[api.state] ?? 'pending',
+    createdAt: api.created_at,
+  }
+}
+
+/** GET /bookings — all bookings from the backend, newest first. */
+export async function listBookings(): Promise<Booking[]> {
+  const rows = await apiFetch<BookingApi[]>('/bookings')
+  return rows.map(mapBooking).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function startOfWeek(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  const mondayIndex = (x.getDay() + 6) % 7 // Mon = 0 … Sun = 6
+  x.setDate(x.getDate() - mondayIndex)
+  return x
+}
+
+/** True if the booking's date falls within the given period relative to `now`. */
+export function isBookingInPeriod(
+  booking: Booking,
+  period: BookingPeriod,
+  now: Date = new Date(),
+): boolean {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const date = new Date(`${booking.date}T00:00:00`)
+
+  if (period === 'today') {
+    return booking.date === toISO(today)
+  }
+  if (period === 'week') {
+    const start = startOfWeek(today)
+    const end = addDays(start, 6)
+    return date >= start && date <= end
+  }
+  // month
+  return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()
+}
+
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  confirmed: 'Подтверждено',
+  pending: 'Ожидает',
+  completed: 'Завершено',
+  cancelled: 'Отменено',
 }

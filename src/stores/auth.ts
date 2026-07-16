@@ -39,11 +39,18 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = res.user
       token.value = res.token
 
+      // Clear both storages first so a stale token in the *other* storage can't
+      // shadow this one (readers check localStorage before sessionStorage).
+      localStorage.removeItem('dopsy_token')
+      localStorage.removeItem('dopsy_user')
+      sessionStorage.removeItem('dopsy_token')
+      sessionStorage.removeItem('dopsy_user')
+
       const storage = credentials.remember ? localStorage : sessionStorage
       storage.setItem('dopsy_token', res.token)
       storage.setItem('dopsy_user', JSON.stringify(res.user))
-    } catch (e: any) {
-      error.value = e.message || 'Login failed'
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Login failed'
       throw e
     } finally {
       loading.value = false

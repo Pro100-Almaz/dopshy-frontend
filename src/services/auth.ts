@@ -46,7 +46,9 @@ export const authService = {
       body: JSON.stringify({ email: payload.email, password: payload.password }),
     })
 
-    localStorage.setItem('dopsy_token', JSON.stringify(data.authorizedAccount.token))
+    // NB: token persistence is owned by the auth store (raw string, honouring
+    // "remember me"). Do not write dopsy_token here — a JSON.stringify'd copy in
+    // localStorage would shadow the store's value and send `Bearer "<token>"`.
 
     // Backend returns { id, authorizedAccount }; adapt it to { user, token }.
     const account = data.authorizedAccount
