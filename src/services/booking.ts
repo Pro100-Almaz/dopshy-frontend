@@ -518,7 +518,6 @@ function trimSeconds(time: string): string {
 }
 
 function mapBooking(api: BookingApi): Booking {
-  console.log('xxxxx', api.payment_current)
   return {
     id: String(api.id),
     ref: `BK-${api.id}`,

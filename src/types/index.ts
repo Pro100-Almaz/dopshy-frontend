@@ -148,7 +148,7 @@ export interface Booking {
   payment_current?: string // уже оплачено, ₸ (строка с бэкенда)
 }
 
-export type BookingPeriod = 'today' | 'week' | 'month'
+export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
 
 // ── Manager: GET /api/manager/fields/ → { ok, data: FieldsInfoApi } ──
 export interface FieldApi {
