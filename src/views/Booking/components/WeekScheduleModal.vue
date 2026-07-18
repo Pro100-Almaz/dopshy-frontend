@@ -4,6 +4,7 @@ import { X, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import type { Field } from '@/types'
 import { getManagerWeek, toISO, formatPrice, type WeekSlots } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import WeekGrid from './WeekGrid.vue'
 
 const props = defineProps<{ field: Field; open: boolean }>()
@@ -14,21 +15,32 @@ const store = useBookingStore()
 const dialog = ref<HTMLDialogElement | null>(null)
 const week = ref<WeekSlots>({ days: [], rows: [] })
 const loading = ref(false)
-const weekOffset = ref(0) // 0 = текущая неделя
+const pageOffset = ref(0) // 0 = текущая страница
 
-const MAX_WEEKS = 4
+// Десктоп (lg+) — неделя целиком; мобильный — 4 дня, чтобы сетка влезала в экран.
+const isDesktop = useMediaQuery('(min-width: 1024px)')
+const dayCount = computed(() => (isDesktop.value ? 7 : 4))
+
+// Горизонт бронирования — ~4 недели вперёд, независимо от размера страницы.
+const HORIZON_DAYS = 28
+const maxOffset = computed(() => Math.floor(HORIZON_DAYS / dayCount.value))
 
 function startISO(offset: number): string {
   const base = new Date()
   base.setHours(0, 0, 0, 0)
-  base.setDate(base.getDate() + offset * 7)
+  base.setDate(base.getDate() + offset * dayCount.value)
   return toISO(base)
 }
 
 async function loadWeek() {
   loading.value = true
   try {
-    week.value = await getManagerWeek(props.field, startISO(weekOffset.value))
+    week.value = await getManagerWeek(
+      props.field,
+      startISO(pageOffset.value),
+      new Date(),
+      dayCount.value,
+    )
   } finally {
     loading.value = false
   }
@@ -36,22 +48,22 @@ async function loadWeek() {
 
 const rangeLabel = computed(() => {
   const d = week.value.days
-  if (d.length < 7) return ''
+  if (!d.length) return ''
   const a = d[0].label
-  const b = d[6].label
+  const b = d[d.length - 1].label
   return a.month === b.month
     ? `${a.day}–${b.day} ${a.month}`
     : `${a.day} ${a.month} – ${b.day} ${b.month}`
 })
 
 function prevWeek() {
-  if (weekOffset.value <= 0) return
-  weekOffset.value--
+  if (pageOffset.value <= 0) return
+  pageOffset.value--
   loadWeek()
 }
 function nextWeek() {
-  if (weekOffset.value >= MAX_WEEKS) return
-  weekOffset.value++
+  if (pageOffset.value >= maxOffset.value) return
+  pageOffset.value++
   loadWeek()
 }
 
@@ -59,7 +71,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      weekOffset.value = 0
+      pageOffset.value = 0
       loadWeek()
       dialog.value?.showModal()
     } else {
@@ -67,6 +79,13 @@ watch(
     }
   },
 )
+
+// Переход десктоп ↔ мобильный меняет размер страницы — перезагружаем с начала.
+watch(dayCount, () => {
+  if (!props.open) return
+  pageOffset.value = 0
+  loadWeek()
+})
 
 // Esc / backdrop close → keep parent state in sync
 function onDialogClose() {
@@ -87,30 +106,35 @@ function onBackdropClick(e: MouseEvent) {
   >
     <div class="flex max-h-[90vh] flex-col">
       <!-- Header -->
-      <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-        <div class="min-w-0">
-          <h2 id="week-title" class="text-lg font-bold text-gray-900">
-            Расписание на неделю
+      <div
+        class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4"
+      >
+        <div class="min-w-0 flex-1">
+          <h2 id="week-title" class="text-base font-bold text-gray-900 sm:text-lg">
+            Расписание
           </h2>
-          <p class="mt-1 truncate text-sm text-gray-500">{{ field.name }}</p>
+          <p class="mt-0.5 truncate text-sm text-gray-500">{{ field.name }}</p>
         </div>
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1 rounded-full border border-gray-200 p-0.5">
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <div class="flex items-center gap-0.5 rounded-full border border-gray-200 p-0.5 sm:gap-1">
             <button
               type="button"
-              class="grid h-8 w-8 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
-              :disabled="weekOffset <= 0"
-              aria-label="Предыдущая неделя"
+              class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+              :disabled="pageOffset <= 0"
+              aria-label="Раньше"
               @click="prevWeek"
             >
               <ChevronLeft class="h-4 w-4" aria-hidden="true" />
             </button>
-            <span class="min-w-[6.5rem] text-center text-sm font-semibold text-gray-700">{{ rangeLabel }}</span>
+            <span
+              class="min-w-[5rem] text-center text-xs font-semibold text-gray-700 sm:min-w-[6.5rem] sm:text-sm"
+              >{{ rangeLabel }}</span
+            >
             <button
               type="button"
-              class="grid h-8 w-8 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
-              :disabled="weekOffset >= MAX_WEEKS"
-              aria-label="Следующая неделя"
+              class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+              :disabled="pageOffset >= maxOffset"
+              aria-label="Позже"
               @click="nextWeek"
             >
               <ChevronRight class="h-4 w-4" aria-hidden="true" />
@@ -118,7 +142,7 @@ function onBackdropClick(e: MouseEvent) {
           </div>
           <button
             type="button"
-            class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900"
             aria-label="Закрыть"
             @click="emit('close')"
           >
@@ -127,13 +151,17 @@ function onBackdropClick(e: MouseEvent) {
         </div>
       </div>
 
-      <!-- Body (общий компонент с админской стороной) -->
-      <div class="flex-1 overflow-auto p-4">
-        <WeekGrid :week="week" :loading="loading" />
+      <!-- Body (общий компонент с админской стороной).
+           min-h-0 позволяет сетке занять оставшуюся высоту и прокручиваться
+           внутри себя — строка с датами остаётся закреплённой сверху. -->
+      <div class="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+        <WeekGrid :week="week" :loading="loading" fill />
       </div>
 
       <!-- Footer -->
-      <div class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
+      <div
+        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-gray-200 px-4 py-3 sm:px-5 sm:py-4"
+      >
         <div class="flex items-center gap-4">
           <div>
             <p class="text-xs text-gray-500">Выбрано {{ store.count }} · итого</p>

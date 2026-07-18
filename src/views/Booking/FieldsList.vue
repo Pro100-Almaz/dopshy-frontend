@@ -18,8 +18,7 @@ const coverFilter = ref<'all' | 'indoor' | 'outdoor'>('all')
 const typeOptions: { value: 'all' | FieldType; label: string }[] = [
   { value: 'all', label: 'Все' },
   { value: '5x5', label: '5×5' },
-  { value: '7x7', label: '7×7' },
-  { value: '8x8', label: '8×8' },
+  { value: '6x6', label: '6×6' },
 ]
 const coverOptions: { value: 'all' | 'indoor' | 'outdoor'; label: string }[] = [
   { value: 'all', label: 'Все' },

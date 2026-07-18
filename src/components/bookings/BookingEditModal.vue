@@ -27,6 +27,9 @@ const form = reactive({
   start: '',
   end: '',
   status: 'draft' as string,
+  paidKaspiQr: 0,
+  paidCash: 0,
+  paidAvans: 0,
 })
 
 function fillFrom(b: Booking) {
@@ -35,7 +38,10 @@ function fillFrom(b: Booking) {
   form.date = b.date
   form.start = b.start
   form.end = b.end
-  form.status = b.state
+  form.status = b.status
+  form.paidKaspiQr = b.paidKaspiQr
+  form.paidCash = b.paidCash
+  form.paidAvans = b.paidAvans
 }
 
 watch(() => props.booking, fillFrom, { immediate: true })
@@ -69,6 +75,9 @@ async function save() {
       date: form.date,
       end_date: form.date,
       status: form.status as BookingState,
+      paid_kaspi_qr: Number(form.paidKaspiQr) || 0,
+      paid_cash: Number(form.paidCash) || 0,
+      paid_avans: Number(form.paidAvans) || 0,
     })
     emit('saved')
   } catch (e) {
@@ -165,6 +174,49 @@ const inputClass =
                 {{ BOOKING_STATE_LABEL[s] }}
               </option>
             </select>
+          </div>
+
+          <!-- Payments -->
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Kaspi QR
+              </label>
+              <input
+                v-model.number="form.paidKaspiQr"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                :class="inputClass"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Наличные
+              </label>
+              <input
+                v-model.number="form.paidCash"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                :class="inputClass"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Аванс
+              </label>
+              <input
+                v-model.number="form.paidAvans"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                :class="inputClass"
+              />
+            </div>
           </div>
 
           <p v-if="error" class="text-sm text-error-600 dark:text-error-500">{{ error }}</p>

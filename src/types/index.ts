@@ -145,7 +145,12 @@ export interface Booking {
   state: string // сырой статус с бэкенда (для редактирования)
   createdAt: string // ISO datetime
   source?: string
-  payment_current?: string // уже оплачено, ₸ (строка с бэкенда)
+  // Оплаты, ₸. С бэкенда приходят строками (см. BookingApi) — здесь уже числа.
+  paidBot: number
+  paidKaspiQr: number
+  paidCash: number
+  paidAvans: number
+  paidTotal: number // сумма всех paid_* — вычисляется при маппинге
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
@@ -177,12 +182,16 @@ export interface BookingApi {
   phone: string
   time_start: string // 'HH:mm:ss'
   time_end: string // 'HH:mm:ss'
-  payment_current: string
-  price_total: string
+  price_total: string | null // decimal-строка, напр. "10000.00"
   state: string
   source: string
   notes: string | null
   date: string // ISO yyyy-mm-dd
+  // Оплаты — decimal-строки ("0" / "10000.00"), могут быть null. Приводить через Number().
+  paid_bot: string | null
+  paid_kaspi_qr: string | null
+  paid_cash: string | null
+  paid_avans: string | null // предоплата / аванс
   created_at: string // ISO datetime
   updated_at: string // ISO datetime
 }

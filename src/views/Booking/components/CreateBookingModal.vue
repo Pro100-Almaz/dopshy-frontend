@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import {
   X,
   Loader2,
@@ -24,6 +24,10 @@ const emit = defineEmits<{ close: []; created: [] }>()
 const store = useBookingStore()
 const auth = useAuthStore()
 
+const isManager = computed(() =>
+  ['manager', 'super_admin', 'admin'].includes(auth.user?.role ?? ''),
+)
+
 const dialog = ref<HTMLDialogElement | null>(null)
 
 type Step = 'review' | 'payment'
@@ -32,7 +36,7 @@ const status = ref<'idle' | 'processing' | 'error'>('idle')
 const errorMessage = ref('')
 const paid = ref(false)
 
-const form = reactive({ customer: '', phone: '', notes: '' })
+const form = reactive({ customer: '', phone: '', notes: '', prepayment: '' })
 
 function resetState() {
   step.value = 'review'
@@ -42,6 +46,7 @@ function resetState() {
   form.customer = ''
   form.phone = ''
   form.notes = ''
+  form.prepayment = ''
 }
 
 async function createDraft() {
@@ -54,6 +59,11 @@ async function createDraft() {
       customer: form.customer.trim() || undefined,
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      // `type="number"` input → Vue v-model даёт number (или '' когда поле пустое).
+      prepayment:
+        isManager.value && form.prepayment !== '' && !Number.isNaN(Number(form.prepayment))
+          ? Number(form.prepayment)
+          : undefined,
       reserved_until: RESERVATION_TTL_MINUTES,
       updated_by: auth.user?.name || auth.user?.email || undefined,
     })
@@ -172,6 +182,23 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Заметка (необязательно)"
               class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
+            <div v-if="isManager">
+              <label
+                for="booking-prepayment"
+                class="mb-1 block text-xs font-semibold uppercase text-gray-500"
+                >Сумма предоплаты</label
+              >
+              <input
+                id="booking-prepayment"
+                v-model="form.prepayment"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                placeholder="0"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
+              />
+            </div>
           </div>
 
           <div

@@ -261,11 +261,11 @@ export interface WeekSlots {
   rows: { startMin: number; label: string; cells: Slot[] }[]
 }
 
-/** 7 дат начиная с `startISO`. */
-export function getWeekDays(startISO: string): WeekDay[] {
+/** `dayCount` дат начиная с `startISO` (по умолчанию 7 — полная неделя). */
+export function getWeekDays(startISO: string, dayCount = 7): WeekDay[] {
   const [y, m, d] = startISO.split('-').map(Number)
   const base = new Date(y, m - 1, d)
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: dayCount }, (_, i) => {
     const dd = new Date(base)
     dd.setDate(base.getDate() + i)
     const iso = toISO(dd)
@@ -274,19 +274,20 @@ export function getWeekDays(startISO: string): WeekDay[] {
 }
 
 /**
- * Недельная сетка: строки — часы (вертикально), столбцы — 7 дней.
- * Идеально для расписания в модальном окне.
+ * Недельная сетка: строки — часы (вертикально), столбцы — дни (`dayCount`).
+ * По умолчанию 7 (десктоп); на мобильных передаём 4, чтобы сетка влезала в экран.
  */
 export function getWeekSlots(
   field: string | Field,
   startISO: string,
   now: Date = new Date(),
+  dayCount = 7,
 ): Promise<WeekSlots> {
   // Строка → мок-поле (публичный флоу); объект Field → реальные данные бэкенда.
   const f = typeof field === 'string' ? FIELDS.find((x) => x.id === field) : field
   if (!f) return delay({ days: [], rows: [] }, 300)
 
-  const days = getWeekDays(startISO)
+  const days = getWeekDays(startISO, dayCount)
   const rows: WeekSlots['rows'] = []
   for (let m = OPEN_HOUR * 60; m < DAY_MINUTES; m += SLOT_MINUTES) {
     rows.push({
@@ -319,7 +320,7 @@ function toSlotBooking(api: BookingApi): SlotBooking {
     phone: api.phone,
     start: trimSeconds(api.time_start),
     end: toDisplayEnd(trimSeconds(api.time_end)),
-    total: Number(api.price_total),
+    total: toMoney(api.price_total),
     state: api.state,
     notes: api.notes ?? undefined,
   }
@@ -355,8 +356,9 @@ export async function getManagerWeek(
   field: Field,
   startISO: string,
   now: Date = new Date(),
+  dayCount = 7,
 ): Promise<WeekSlots> {
-  const week = await getWeekSlots(field, startISO, now)
+  const week = await getWeekSlots(field, startISO, now, dayCount)
   const days = week.days
   if (!days.length) return week
   try {
@@ -387,6 +389,7 @@ export interface BookingBatchPayload {
   phone?: string
   notes?: string
   price_total?: number
+  prepayment?: number
   reserved_until?: number
   updated_by?: string
 }
@@ -541,7 +544,18 @@ function trimSeconds(time: string): string {
   return time.slice(0, 5)
 }
 
+/** Денежные поля бэкенда — строки ("0" / "10000.00") или null. Приводим к числу; мусор → 0. */
+function toMoney(v: string | null | undefined): number {
+  if (v == null) return 0
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 function mapBooking(api: BookingApi): Booking {
+  const paidBot = toMoney(api.paid_bot)
+  const paidKaspiQr = toMoney(api.paid_kaspi_qr)
+  const paidCash = toMoney(api.paid_cash)
+  const paidAvans = toMoney(api.paid_avans)
   return {
     id: String(api.id),
     ref: `BK-${api.id}`,
@@ -552,12 +566,16 @@ function mapBooking(api: BookingApi): Booking {
     date: api.date,
     start: trimSeconds(api.time_start),
     end: trimSeconds(api.time_end),
-    total: Number(api.price_total),
+    total: toMoney(api.price_total),
     status: STATE_TO_STATUS[api.state] ?? 'pending',
     state: api.state,
     createdAt: api.created_at,
     source: api.source,
-    payment_current: api.payment_current,
+    paidBot,
+    paidKaspiQr,
+    paidCash,
+    paidAvans,
+    paidTotal: paidBot + paidKaspiQr + paidCash + paidAvans,
   }
 }
 
@@ -575,6 +593,10 @@ export interface BookingUpdatePayload {
   date?: string // 'yyyy-mm-dd'
   end_date?: string
   status?: BookingState
+  // Оплаты, ₸ — редактируются менеджером. Бэкенд ожидает числа.
+  paid_kaspi_qr?: number
+  paid_cash?: number
+  paid_avans?: number
 }
 
 /** Приводит 'HH:mm' к 'HH:mm:ss' — бэкенд ожидает datetime.time. */
