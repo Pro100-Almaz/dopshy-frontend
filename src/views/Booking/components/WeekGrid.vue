@@ -1,13 +1,65 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Loader2, Check } from 'lucide-vue-next'
-import type { Slot, SlotBooking } from '@/types'
+import { Loader2, Check, Repeat } from 'lucide-vue-next'
+import type { Slot, SlotBooking, SlotInterval } from '@/types'
 import { formatPrice, type WeekSlots } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import RepeatModal from './RepeatModal.vue'
 
-const props = defineProps<{ week: WeekSlots; loading?: boolean; fill?: boolean }>()
+const props = defineProps<{
+  week: WeekSlots
+  loading?: boolean
+  fill?: boolean
+  allowRepeat?: boolean
+}>()
 
 const store = useBookingStore()
+
+function toMin(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+// Роль каждой видимой ячейки в повторе — считаем один раз на неделю.
+const repeatStates = computed(() => {
+  const m: Record<string, 'source' | 'occurrence' | null> = {}
+  if (!props.allowRepeat) return m
+  for (const row of props.week.rows) {
+    for (const cell of row.cells) {
+      m[cell.id] = store.cellRepeatState(cell.fieldId, cell.date, cell.start, cell.end)
+    }
+  }
+  return m
+})
+
+// ── Повтор: sticky-модалка по правому клику на интервале ──
+const repeatOpen = ref(false)
+const repeatInterval = ref<SlotInterval | null>(null)
+const repeatAnchor = ref({ x: 0, y: 0 })
+
+function intervalAt(cell: Slot): SlotInterval | null {
+  const cs = toMin(cell.start)
+  const ce = toMin(cell.end)
+  return (
+    store.intervals.find(
+      (iv) =>
+        iv.fieldId === cell.fieldId &&
+        iv.date === cell.date &&
+        toMin(iv.start) <= cs &&
+        toMin(iv.end) >= ce,
+    ) ?? null
+  )
+}
+
+function onContext(cell: Slot, e: MouseEvent) {
+  if (!props.allowRepeat) return
+  e.preventDefault()
+  const iv = intervalAt(cell)
+  if (!iv) return // правый клик не по выбранному интервалу — игнорируем
+  repeatInterval.value = iv
+  repeatAnchor.value = { x: e.clientX, y: e.clientY }
+  repeatOpen.value = true
+}
 
 // Колонки тянутся под контейнер (minmax(0,1fr)) — сетка не выходит за экран
 // ни на 7 днях (десктоп), ни на 4 (мобильный). Первая колонка — шкала часов.
@@ -29,6 +81,8 @@ function priceShort(v: number): string {
 }
 
 function onCell(cell: Slot) {
+  // Производные вхождения повтора неизменяемы — клик игнорируем.
+  if (repeatStates.value[cell.id] === 'occurrence' && !store.isSelected(cell.id)) return
   if (cell.status === 'available' || store.isSelected(cell.id)) store.toggleSlot(cell)
 }
 
@@ -91,29 +145,47 @@ function hideBooking() {
           v-for="(cell, ci) in row.cells"
           :key="cell.id"
           type="button"
-          :aria-disabled="cell.status !== 'available' && !store.isSelected(cell.id)"
+          :aria-disabled="
+            (cell.status !== 'available' && !store.isSelected(cell.id)) ||
+            repeatStates[cell.id] === 'occurrence'
+          "
           :aria-pressed="store.isSelected(cell.id)"
           :aria-label="`${week.days[ci].label.weekday} ${week.days[ci].label.day}, ${row.label} — ${
             cell.status === 'booked'
               ? `занято${cell.booking ? `, ${cell.booking.customerName}` : ''}`
-              : formatPrice(cell.price)
+              : repeatStates[cell.id] === 'occurrence'
+                ? 'повтор'
+                : formatPrice(cell.price)
           }`"
           class="h-11 border-b border-r border-gray-100 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
           :class="
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
-              : cell.status === 'available'
-                ? 'bg-white text-gray-600 hover:bg-success-50 hover:text-success-700 dark:bg-transparent dark:text-gray-400 dark:hover:bg-success-600/10'
-                : cell.status === 'booked'
-                  ? 'cursor-help bg-gray-100 font-medium text-gray-400 dark:bg-gray-800 dark:text-gray-500'
-                  : 'cursor-not-allowed bg-gray-50 text-transparent dark:bg-gray-900/50'
+              : cell.status === 'booked'
+                ? 'cursor-help bg-gray-100 font-medium text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                : repeatStates[cell.id] === 'occurrence'
+                  ? 'repeat-occ cursor-not-allowed font-semibold text-success-700 dark:text-success-300'
+                  : cell.status === 'available'
+                    ? 'bg-white text-gray-600 hover:bg-success-50 hover:text-success-700 dark:bg-transparent dark:text-gray-400 dark:hover:bg-success-600/10'
+                    : 'cursor-not-allowed bg-gray-50 text-transparent dark:bg-gray-900/50'
           "
           @click="onCell(cell)"
+          @contextmenu="onContext(cell, $event)"
           @mouseenter="cell.booking && showBooking(cell.booking, $event)"
           @mousemove="cell.booking && moveTip($event)"
           @mouseleave="hideBooking"
         >
-          <Check v-if="store.isSelected(cell.id)" class="mx-auto h-4 w-4" aria-hidden="true" />
+          <Repeat
+            v-if="repeatStates[cell.id] === 'source' && store.isSelected(cell.id)"
+            class="mx-auto h-4 w-4"
+            aria-hidden="true"
+          />
+          <Check v-else-if="store.isSelected(cell.id)" class="mx-auto h-4 w-4" aria-hidden="true" />
+          <Repeat
+            v-else-if="repeatStates[cell.id] === 'occurrence'"
+            class="mx-auto h-3.5 w-3.5 opacity-80"
+            aria-hidden="true"
+          />
           <span v-else-if="cell.status === 'available'">{{ priceShort(cell.price) }}</span>
           <span v-else-if="cell.status === 'booked'" class="text-[10px] uppercase tracking-wide"
             >занято</span
@@ -162,4 +234,25 @@ function hideBooking() {
       </p>
     </div>
   </Teleport>
+
+  <RepeatModal
+    v-if="allowRepeat"
+    :open="repeatOpen"
+    :interval="repeatInterval"
+    :anchor="repeatAnchor"
+    @close="repeatOpen = false"
+  />
 </template>
+
+<style scoped>
+/* Неизменяемое производное вхождение повтора — диагональная зелёная штриховка. */
+.repeat-occ {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--color-success-500) 24%, transparent),
+    color-mix(in srgb, var(--color-success-500) 24%, transparent) 6px,
+    color-mix(in srgb, var(--color-success-500) 9%, transparent) 6px,
+    color-mix(in srgb, var(--color-success-500) 9%, transparent) 12px
+  );
+}
+</style>

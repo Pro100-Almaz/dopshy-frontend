@@ -16,6 +16,9 @@ import type {
   PriceTable,
   PricingType,
   SlotBooking,
+  RepeatMode,
+  RepeatRule,
+  SlotInterval,
 } from '@/types'
 import { apiFetch, mediaUrl } from './api'
 
@@ -299,13 +302,15 @@ export function getWeekSlots(
   return delay({ days, rows }, 350)
 }
 
-// ── Реальные брони: GET /api/bookings/range/{from}/{to}/{fieldId} ────
+// ── Реальные брони: GET /api/bookings/range/{from}/{to}?field=&page= ──
+// `field` и `page` — необязательные query-параметры. Страница полей (field-slots)
+// всегда передаёт конкретное поле и грузит всю неделю без пагинации.
 export function getBookingsInRange(
   fieldId: string,
   dateFrom: string,
   dateTo: string,
 ): Promise<BookingApi[]> {
-  return apiFetch<BookingApi[]>(`/bookings/range/${dateFrom}/${dateTo}/${fieldId}`)
+  return apiFetch<BookingApi[]>(`/bookings/range/${dateFrom}/${dateTo}?field=${fieldId}`)
 }
 
 function toMinutes(time: string): number {
@@ -378,9 +383,12 @@ export interface BookingPayload extends BookingDraft {
 // ── Пакетное создание броней: POST /api/bookings/batch ──────────────
 export interface BatchSlotIn {
   field: number
-  date: string // 'yyyy-mm-dd'
+  date: string // 'yyyy-mm-dd' — дата первого вхождения (старт повтора)
   time_start: string // 'HH:mm'
   time_end: string // 'HH:mm'
+  // Повтор интервала. Бэкенд разворачивает вхождения сам (daily/weekly/monthly).
+  repeat_mode?: RepeatMode // по умолчанию 'none'
+  repeat_until?: string // 'yyyy-mm-dd', обязателен при repeat_mode !== 'none'
 }
 
 export interface BookingBatchPayload {
@@ -401,21 +409,193 @@ export interface BookingBatchPayload {
  */
 export const RESERVATION_TTL_MINUTES = 20
 
-export function slotsToBatch(slots: Slot[]): BatchSlotIn[] {
-  return slots.map((s) => ({
-    field: Number(s.fieldId),
-    date: s.date,
-    time_start: s.start,
-    time_end: s.end,
-  }))
-}
-
 /** Создаёт черновики броней пакетом. Пустые поля не отправляем — бэкенд подставит дефолты. */
 export function createBookingsBatch(payload: BookingBatchPayload): Promise<unknown> {
   return apiFetch('/bookings/batch', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+// ── Слитные интервалы и повтор ──────────────────────────────────────
+
+/**
+ * Список ISO-дат вхождений повтора от `startISO` до `untilISO` включительно.
+ * `daily` — каждый день, `weekly` — раз в 7 дней (тот же день недели),
+ * `monthly` — то же число месяца (короткие месяцы без нужного числа пропускаются),
+ * `none` — единственная дата старта. Ограничено GUARD от зацикливания.
+ */
+export function computeOccurrences(
+  startISO: string,
+  untilISO: string,
+  mode: RepeatMode,
+): string[] {
+  if (mode === 'none') return [startISO]
+  const [sy, sm, sd] = startISO.split('-').map(Number)
+  const [uy, um, ud] = untilISO.split('-').map(Number)
+  const start = new Date(sy, sm - 1, sd)
+  const until = new Date(uy, um - 1, ud)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(until.getTime()) || until < start) {
+    return [startISO]
+  }
+  const out: string[] = []
+  const GUARD = 1000
+
+  if (mode === 'monthly') {
+    for (let i = 0; i < GUARD; i++) {
+      const firstOfMonth = new Date(sy, sm - 1 + i, 1)
+      if (firstOfMonth > until) break
+      const d = new Date(sy, sm - 1 + i, sd)
+      if (d.getDate() !== sd) continue // в этом месяце нет такого числа
+      if (d > until) continue
+      out.push(toISO(d))
+    }
+    return out
+  }
+
+  const step = mode === 'weekly' ? 7 : 1
+  const d = new Date(start)
+  for (let i = 0; i < GUARD && d <= until; i++) {
+    out.push(toISO(d))
+    d.setDate(d.getDate() + step)
+  }
+  return out
+}
+
+/**
+ * Сливает смежные 30-мин слоты одного поля/даты в интервалы. Разрывает слияние
+ * на границах из `cutSet` (минуты от полуночи) — так «залоченные» повтором
+ * интервалы остаются отдельными и не поглощают соседние слоты.
+ */
+export function mergeContiguousSlots(
+  slots: Slot[],
+  cutSet: Set<number> = new Set(),
+): SlotInterval[] {
+  const byKey = new Map<string, Slot[]>()
+  for (const s of slots) {
+    const k = `${s.fieldId}|${s.date}`
+    const arr = byKey.get(k) ?? []
+    arr.push(s)
+    byKey.set(k, arr)
+  }
+
+  const out: SlotInterval[] = []
+  for (const group of byKey.values()) {
+    const sorted = [...group].sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+    let cur:
+      | { fieldId: string; date: string; start: string; end: string; price: number; endMin: number }
+      | null = null
+
+    const flush = () => {
+      if (!cur) return
+      out.push({
+        id: `${cur.fieldId}|${cur.date}|${cur.start}|${cur.end}`,
+        fieldId: cur.fieldId,
+        date: cur.date,
+        start: cur.start,
+        end: cur.end,
+        price: cur.price,
+      })
+      cur = null
+    }
+
+    for (const s of sorted) {
+      const sMin = toMinutes(s.start)
+      const eMin = toMinutes(s.end)
+      // Пропускаем случайные дубли одной ячейки.
+      if (cur && sMin < cur.endMin) continue
+      const contiguous = cur && cur.endMin === sMin && !cutSet.has(sMin)
+      if (contiguous && cur) {
+        cur.end = s.end
+        cur.endMin = eMin
+        cur.price += s.price
+      } else {
+        flush()
+        cur = {
+          fieldId: s.fieldId,
+          date: s.date,
+          start: s.start,
+          end: s.end,
+          price: s.price,
+          endMin: eMin,
+        }
+      }
+    }
+    flush()
+  }
+  return out
+}
+
+export interface RepeatConflict {
+  date: string
+  booking: SlotBooking
+}
+
+/**
+ * Проверяет интервал правила против уже существующих броней на всех датах повтора.
+ * Возвращает конкретные даты-пересечения (для предупреждения менеджеру). Переиспользует
+ * тот же тест пересечения, что и `overlayBookings`.
+ */
+export async function findRepeatConflicts(
+  fieldId: string,
+  rule: RepeatRule,
+): Promise<RepeatConflict[]> {
+  const dates = computeOccurrences(rule.date, rule.until, rule.mode)
+  if (!dates.length) return []
+  const from = dates[0]
+  const to = dates[dates.length - 1]
+
+  let bookings: BookingApi[]
+  try {
+    bookings = await getBookingsInRange(fieldId, from, to)
+  } catch {
+    // Не удалось получить брони — не блокируем менеджера (бэкенд проверит при создании).
+    return []
+  }
+
+  const dateSet = new Set(dates)
+  const rs = toMinutes(rule.start)
+  const re = toMinutes(rule.end)
+  const conflicts: RepeatConflict[] = []
+  for (const b of bookings) {
+    if (!BLOCKING(b.state)) continue
+    if (!dateSet.has(b.date)) continue
+    if (toMinutes(b.time_start) < re && toMinutes(b.time_end) > rs) {
+      conflicts.push({ date: b.date, booking: toSlotBooking(b) })
+    }
+  }
+  conflicts.sort((a, b) => a.date.localeCompare(b.date))
+  return conflicts
+}
+
+/**
+ * Строит строки для `/bookings/batch` из слитных интервалов. К интервалу с правилом
+ * повтора добавляет `repeat_mode`/`repeat_until`; вхождения не разворачивает — это делает бэкенд.
+ */
+export function buildBatchSlots(
+  intervals: SlotInterval[],
+  rules: RepeatRule[],
+): BatchSlotIn[] {
+  const ruleById = new Map(rules.map((r) => [r.id, r]))
+  return intervals.map((iv) => {
+    const rule = ruleById.get(iv.id)
+    const row: BatchSlotIn = {
+      field: Number(iv.fieldId),
+      date: iv.date,
+      time_start: iv.start,
+      time_end: iv.end,
+      repeat_mode: rule ? rule.mode : 'none',
+    }
+    if (rule) row.repeat_until = rule.until
+    return row
+  })
+}
+
+export const REPEAT_MODE_LABEL: Record<RepeatMode, string> = {
+  none: 'Без повтора',
+  daily: 'Ежедневно',
+  weekly: 'Еженедельно',
+  monthly: 'Ежемесячно',
 }
 
 /** Слоты, сгруппированные по дате — для сводок и подтверждения. */
@@ -579,9 +759,17 @@ function mapBooking(api: BookingApi): Booking {
   }
 }
 
-export async function listBookings(): Promise<Booking[]> {
-  const rows = await apiFetch<BookingApi[]>('/bookings')
-  return rows.map(mapBooking).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+/**
+ * Все брони через GET /bookings. `page` — необязательный номер страницы пагинатора
+ * бэкенда (1..N); опущен → полный список (для сводок). null-элементы отбрасываем.
+ */
+export async function listBookings(page?: number): Promise<Booking[]> {
+  const qs = page != null ? `?page=${page}` : ''
+  const rows = await apiFetch<(BookingApi | null)[]>(`/bookings${qs}`)
+  return rows
+    .filter((r): r is BookingApi => r != null)
+    .map(mapBooking)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 // ── Редактирование брони: PATCH /api/bookings/{id} ──────────────────
@@ -648,6 +836,47 @@ export function isBookingInPeriod(
   }
   // all_time — все текущие брони, без фильтра по дате
   return true
+}
+
+/**
+ * Диапазон дат для запроса range-эндпоинта по периоду. `all_time` → null
+ * (полный список грузится через listBookings, без ограничения по датам).
+ */
+export function periodRange(
+  period: BookingPeriod,
+  now: Date = new Date(),
+): { from: string; to: string } | null {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  if (period === 'today') {
+    const iso = toISO(today)
+    return { from: iso, to: iso }
+  }
+  if (period === 'week') {
+    const start = startOfWeek(today)
+    return { from: toISO(start), to: toISO(addDays(start, 6)) }
+  }
+  if (period === 'month') {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1)
+    const last = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    return { from: toISO(first), to: toISO(last) }
+  }
+  return null // all_time
+}
+
+/**
+ * Брони в диапазоне дат через GET /bookings/range (все поля, с пагинацией).
+ * `page` — номер страницы пагинатора бэкенда (1..N); опущен → без пагинации.
+ * Порядок бэкенда (date, time_start, field) сохраняется. null-элементы отбрасываем.
+ */
+export async function listBookingsInRange(
+  dateFrom: string,
+  dateTo: string,
+  page?: number,
+): Promise<Booking[]> {
+  const qs = page != null ? `?page=${page}` : ''
+  const rows = await apiFetch<(BookingApi | null)[]>(`/bookings/range/${dateFrom}/${dateTo}${qs}`)
+  return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
 
 export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {

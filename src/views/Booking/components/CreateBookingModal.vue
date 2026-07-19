@@ -10,9 +10,9 @@ import {
 } from 'lucide-vue-next'
 import {
   createBookingsBatch,
-  slotsToBatch,
   formatPrice,
   FIELD_TYPE_LABEL,
+  REPEAT_MODE_LABEL,
   RESERVATION_TTL_MINUTES,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
@@ -55,7 +55,7 @@ async function createDraft() {
   errorMessage.value = ''
   try {
     await createBookingsBatch({
-      slots: slotsToBatch(store.selectedSlots),
+      slots: store.batchSlots,
       customer: form.customer.trim() || undefined,
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
@@ -146,19 +146,33 @@ function onBackdropClick(e: MouseEvent) {
         <!-- Step 1: review + contact -->
         <template v-if="step === 'review'">
           <div class="space-y-4">
-            <div v-for="g in store.groupedByDate" :key="g.date">
+            <div v-for="g in store.intervalGroups" :key="g.date">
               <div class="mb-1.5 flex items-baseline justify-between">
                 <p class="text-xs font-semibold uppercase text-gray-500">{{ g.label }}</p>
                 <p class="text-xs text-gray-500">{{ formatPrice(g.subtotal) }}</p>
               </div>
               <ul class="space-y-1.5">
                 <li
-                  v-for="s in g.slots"
-                  :key="s.id"
-                  class="flex justify-between border-b border-gray-100 pb-1.5 text-sm"
+                  v-for="iv in g.intervals"
+                  :key="iv.id"
+                  class="flex items-center justify-between gap-2 border-b border-gray-100 pb-1.5 text-sm"
                 >
-                  <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
-                  <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
+                  <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-gray-700">
+                    {{ iv.start }}–{{ iv.end }}
+                    <span
+                      v-if="store.ruleFor(iv.id)"
+                      class="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold text-success-700"
+                    >
+                      {{ REPEAT_MODE_LABEL[store.ruleFor(iv.id)!.mode] }} · до
+                      {{ store.ruleFor(iv.id)!.until }} · ×{{ iv.count }}
+                    </span>
+                  </span>
+                  <span class="shrink-0 text-right text-gray-600">
+                    {{ formatPrice(iv.lineTotal) }}
+                    <span v-if="iv.count > 1" class="block text-[10px] text-gray-400">
+                      {{ formatPrice(iv.price) }} × {{ iv.count }}
+                    </span>
+                  </span>
                 </li>
               </ul>
             </div>
@@ -241,7 +255,7 @@ function onBackdropClick(e: MouseEvent) {
       <div class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
         <div>
           <p class="text-xs text-gray-500">Итого</p>
-          <p class="text-xl font-bold text-gray-900">{{ formatPrice(store.total) }}</p>
+          <p class="text-xl font-bold text-gray-900">{{ formatPrice(store.projectedTotal) }}</p>
         </div>
 
         <button
