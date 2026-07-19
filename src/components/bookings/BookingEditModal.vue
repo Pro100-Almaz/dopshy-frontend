@@ -38,7 +38,7 @@ function fillFrom(b: Booking) {
   form.date = b.date
   form.start = b.start
   form.end = b.end
-  form.status = b.status
+  form.status = b.state
   form.paidKaspiQr = b.paidKaspiQr
   form.paidCash = b.paidCash
   form.paidAvans = b.paidAvans
