@@ -6,6 +6,7 @@ import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BookingStats from '@/components/bookings/BookingStats.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
+import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.vue'
 
 import type { Booking, BookingPeriod, BookingStatus } from '@/types'
 import {
@@ -46,6 +47,7 @@ const STATUS_CLASS: Record<BookingStatus, string> = {
 }
 
 const editing = ref<Booking | null>(null)
+const paymentDetail = ref<Booking | null>(null)
 
 async function refresh() {
   bookings.value = await listBookings()
@@ -243,15 +245,20 @@ onMounted(async () => {
 
                 <!-- Paid -->
                 <td class="px-5 py-4 sm:px-6">
-                  <button class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-success-200 rounded-full px-2 py-0.5 hover:bg-success-400 dark:bg-success-500/15 dark:hover:bg-success-500/20">
-                    {{ formatPrice(Number(b.payment_current))}}
+                  <button
+                    type="button"
+                    class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-success-200 rounded-full px-2 py-0.5 hover:bg-success-400 dark:bg-success-500/15 dark:hover:bg-success-500/20"
+                    :aria-label="`Показать оплаты брони ${b.ref}`"
+                    @click="paymentDetail = b"
+                  >
+                    {{ formatPrice(b.paidTotal) }}
                   </button>
                 </td>
 
                 <!-- Rest -->
                 <td class="px-5 py-4 sm:px-6">
                   <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15 dark:hover:bg-warning-500/20">
-                    {{ formatPrice(b.total - Number(b.payment_current)) }}
+                    {{ formatPrice(b.total - b.paidTotal) }}
                   </span>
                 </td>
 
@@ -295,6 +302,12 @@ onMounted(async () => {
       :booking="editing"
       @close="editing = null"
       @saved="onSaved"
+    />
+
+    <PaymentBreakdownModal
+      v-if="paymentDetail"
+      :booking="paymentDetail"
+      @close="paymentDetail = null"
     />
   </AdminLayout>
 </template>

@@ -19,9 +19,9 @@ function isActive(b: Booking): boolean {
   return b.state !== 'cancelled' && b.state !== 'rejected'
 }
 
-/** Предоплата не внесена — payment_current пустой или 0. */
+/** Предоплата не внесена — сумма всех оплат 0. */
 function isUnpaid(b: Booking): boolean {
-  return Number(b.payment_current ?? 0) <= 0
+  return b.paidTotal <= 0
 }
 
 export const dashboardService = {

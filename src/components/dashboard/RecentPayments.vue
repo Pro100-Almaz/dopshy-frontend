@@ -62,7 +62,7 @@ defineProps<{ bookings: Booking[] }>()
 type PayStatus = 'paid' | 'partial' | 'unpaid'
 
 function paid(b: Booking): number {
-  return Number(b.payment_current ?? 0)
+  return b.paidTotal
 }
 
 function payStatus(b: Booking): PayStatus {

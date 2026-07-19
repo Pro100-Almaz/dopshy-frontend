@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Loader2, Check } from 'lucide-vue-next'
 import type { Slot, SlotBooking } from '@/types'
 import { formatPrice, type WeekSlots } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
 
-defineProps<{ week: WeekSlots; loading?: boolean }>()
+const props = defineProps<{ week: WeekSlots; loading?: boolean; fill?: boolean }>()
 
 const store = useBookingStore()
 
-const gridStyle = { gridTemplateColumns: '3.5rem repeat(7, minmax(4.75rem, 1fr))' }
+// Колонки тянутся под контейнер (minmax(0,1fr)) — сетка не выходит за экран
+// ни на 7 днях (десктоп), ни на 4 (мобильный). Первая колонка — шкала часов.
+const gridStyle = computed(() => ({
+  gridTemplateColumns: `3rem repeat(${props.week.days.length || 7}, minmax(0, 1fr))`,
+}))
 
 const BOOKING_STATE_LABEL: Record<string, string> = {
   awaiting_payment: 'Ожидает оплаты',
@@ -45,7 +49,13 @@ function hideBooking() {
 </script>
 
 <template>
-  <div class="relative overflow-auto rounded-2xl border border-gray-200 dark:border-gray-800">
+  <!-- Ограниченная по высоте прокручиваемая область — строка с датами `sticky top-0`
+       остаётся видимой при вертикальном скролле таблицы. `fill` растягивает сетку
+       под родителя (модалка), иначе ограничиваем высоту вьюпортом (страница). -->
+  <div
+    class="relative overflow-auto rounded-2xl border border-gray-200 dark:border-gray-800"
+    :class="fill ? 'h-full' : 'max-h-[70vh]'"
+  >
     <div
       v-if="loading"
       class="absolute inset-0 z-30 flex items-center justify-center bg-white/70 dark:bg-gray-900/70"

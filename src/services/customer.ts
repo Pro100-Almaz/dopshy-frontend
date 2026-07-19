@@ -23,8 +23,8 @@ interface ContactsResponse {
 
 /** Все WhatsApp-контакты со встроенным статусом бота, отсортированы по активности. */
 export async function listContacts(): Promise<Contact[]> {
-  const data = await apiFetch<ContactsResponse>('/bot-status/contacts')
-  return data.contacts ?? []
+  const data = await apiFetch<Contact[]>('/bot-status/contacts')
+  return data
 }
 
 // ── Статус / переключение бота ──────────────────────────────────────

@@ -17,6 +17,7 @@ import {
   type WeekSlots,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 
 const currentPageTitle = 'Слоты полей'
 
@@ -27,9 +28,15 @@ const store = useBookingStore()
 
 const fieldsLoading = ref(true)
 const slotsLoading = ref(false)
-const weekOffset = ref(0) // 0 = текущая неделя
+const pageOffset = ref(0) // 0 = текущая страница
 
-const MAX_WEEKS = 4
+// Десктоп (lg+) — неделя целиком; мобильный — 4 дня, чтобы сетка влезала в экран.
+const isDesktop = useMediaQuery('(min-width: 1024px)')
+const dayCount = computed(() => (isDesktop.value ? 7 : 4))
+
+// Горизонт бронирования — ~4 недели вперёд, независимо от размера страницы.
+const HORIZON_DAYS = 28
+const maxOffset = computed(() => Math.floor(HORIZON_DAYS / dayCount.value))
 
 const selectedField = computed(
   () => fields.value.find((f) => f.id === selectedFieldId.value) ?? null,
@@ -39,15 +46,15 @@ const grouped = computed(() => store.groupedByDate)
 function startISO(offset: number): string {
   const base = new Date()
   base.setHours(0, 0, 0, 0)
-  base.setDate(base.getDate() + offset * 7)
+  base.setDate(base.getDate() + offset * dayCount.value)
   return toISO(base)
 }
 
 const rangeLabel = computed(() => {
   const d = week.value.days
-  if (d.length < 7) return ''
+  if (!d.length) return ''
   const a = d[0].label
-  const b = d[6].label
+  const b = d[d.length - 1].label
   return a.month === b.month
     ? `${a.day}–${b.day} ${a.month}`
     : `${a.day} ${a.month} – ${b.day} ${b.month}`
@@ -59,7 +66,7 @@ async function loadWeek() {
   slotsLoading.value = true
   store.setField(field)
   try {
-    week.value = await getManagerWeek(field, startISO(weekOffset.value))
+    week.value = await getManagerWeek(field, startISO(pageOffset.value), new Date(), dayCount.value)
   } finally {
     slotsLoading.value = false
   }
@@ -86,19 +93,25 @@ function onBookingModalClose() {
 function selectField(id: string) {
   if (id === selectedFieldId.value) return
   selectedFieldId.value = id
-  weekOffset.value = 0
+  pageOffset.value = 0
 }
 
 function prevWeek() {
-  if (weekOffset.value <= 0) return
-  weekOffset.value--
+  if (pageOffset.value <= 0) return
+  pageOffset.value--
 }
 function nextWeek() {
-  if (weekOffset.value >= MAX_WEEKS) return
-  weekOffset.value++
+  if (pageOffset.value >= maxOffset.value) return
+  pageOffset.value++
 }
 
-watch([selectedFieldId, weekOffset], loadWeek)
+watch([selectedFieldId, pageOffset], loadWeek)
+
+// Переход десктоп ↔ мобильный меняет размер страницы — перезагружаем с начала.
+watch(dayCount, () => {
+  pageOffset.value = 0
+  loadWeek()
+})
 
 onMounted(async () => {
   fieldsLoading.value = true
@@ -156,12 +169,12 @@ onMounted(async () => {
               ПОЛЕ
             </h2>
 
-            <div class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+            <div class="flex flex-wrap gap-2">
               <button
                 v-for="f in fields"
                 :key="f.id"
                 type="button"
-                class="flex shrink-0 flex-col items-start rounded-lg border px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success-600"
+                class="flex flex-col items-start rounded-lg border px-3 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success-600 sm:px-4 sm:py-2.5"
                 :class="
                   f.id === selectedFieldId
                     ? 'border-success-600 bg-success-600 text-white'
@@ -170,9 +183,9 @@ onMounted(async () => {
                 :aria-pressed="f.id === selectedFieldId"
                 @click="selectField(f.id)"
               >
-                <span class="font-bebas text-lg leading-none tracking-wide">{{ f.name }}</span>
+                <span class="font-bebas text-base leading-none tracking-wide sm:text-lg">{{ f.name }}</span>
                 <span
-                  class="mt-1 text-[11px] uppercase"
+                  class="mt-0.5 text-[10px] uppercase sm:mt-1 sm:text-[11px]"
                   :class="f.id === selectedFieldId ? 'text-white/70' : 'text-gray-400'"
                 >
                   {{ FIELD_TYPE_LABEL[f.type] }}
@@ -195,8 +208,8 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="grid h-8 w-8 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-                  :disabled="weekOffset <= 0"
-                  aria-label="Предыдущая неделя"
+                  :disabled="pageOffset <= 0"
+                  aria-label="Раньше"
                   @click="prevWeek"
                 >
                   <ChevronLeft class="h-4 w-4" aria-hidden="true" />
@@ -208,8 +221,8 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="grid h-8 w-8 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-                  :disabled="weekOffset >= MAX_WEEKS"
-                  aria-label="Следующая неделя"
+                  :disabled="pageOffset >= maxOffset"
+                  aria-label="Позже"
                   @click="nextWeek"
                 >
                   <ChevronRight class="h-4 w-4" aria-hidden="true" />

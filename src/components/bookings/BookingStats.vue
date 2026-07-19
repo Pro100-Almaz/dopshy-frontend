@@ -37,7 +37,7 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
     <button
       v-for="p in PERIODS"
       :key="p.key"
