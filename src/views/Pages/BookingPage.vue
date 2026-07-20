@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Loader2, CalendarX, Pencil } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -12,8 +12,8 @@ import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.v
 import type { Booking, BookingPeriod, BookingStatus } from '@/types'
 import {
   listBookings,
-  isBookingInPeriod,
-  isVisibleBookingState,
+  listBookingsInRange,
+  periodRange,
   formatPrice,
   formatDayLabel,
   formatDateTime,
@@ -23,19 +23,30 @@ import {
 
 const currentPageTitle = 'Бронирования'
 
-const bookings = ref<Booking[]>([])
-const loading = ref(false)
-const listLoaded = ref(false)
 const period = ref<BookingPeriod>('today')
 
+// Календарь / список — переключатель наверху страницы.
 type ViewMode = 'calendar' | 'list'
 const viewMode = ref<ViewMode>('calendar')
 
-const visibleBookings = computed(() => bookings.value.filter((b) => isVisibleBookingState(b.state)))
+// Полный список — питает карточки-сводки и таблицу за всё время (GET /bookings).
+const allBookings = ref<Booking[]>([])
+// Текущая страница таблицы (range-эндпоинт для today/week/month, GET /bookings для all_time).
+const tableBookings = ref<Booking[]>([])
 
-const filteredBookings = computed(() =>
-  visibleBookings.value.filter((b) => isBookingInPeriod(b, period.value)),
-)
+const statsLoading = ref(true)
+const tableLoading = ref(true)
+
+// Пагинация — для всех периодов. Бэкенд отдаёт по PAGE_SIZE броней на страницу;
+// неполная страница = последняя.
+const PAGE_SIZE = 20
+const page = ref(1)
+const atEnd = ref(false) // достигнута последняя страница (следующая вернула пусто)
+
+const hasPrev = computed(() => page.value > 1)
+// Следующая страница есть только когда текущая заполнена целиком (== PAGE_SIZE).
+// `atEnd` страхует случай, когда всего броней ровно кратно PAGE_SIZE.
+const hasNext = computed(() => tableBookings.value.length >= PAGE_SIZE && !atEnd.value)
 
 function initials(name: string): string {
   return name
@@ -56,29 +67,73 @@ const STATUS_CLASS: Record<BookingStatus, string> = {
 const editing = ref<Booking | null>(null)
 const paymentDetail = ref<Booking | null>(null)
 
-async function loadList() {
-  loading.value = true
+// Полный список для сводок и вкладки «За всё время».
+async function loadAll() {
+  statsLoading.value = true
   try {
-    bookings.value = await listBookings()
-    listLoaded.value = true
+    allBookings.value = await listBookings()
   } finally {
-    loading.value = false
+    statsLoading.value = false
   }
+}
+
+// Загружает страницу `target` для текущего периода: range-эндпоинт для today/week/month,
+// полный список (GET /bookings) для all_time. Пустая страница за пределами первой —
+// конец пагинации, на неё не переключаемся.
+async function goToPage(target: number) {
+  if (target < 1) return
+  tableLoading.value = true
+  try {
+    const range = periodRange(period.value)
+    const rows = range
+      ? await listBookingsInRange(range.from, range.to, target)
+      : await listBookings(target)
+    if (rows.length === 0 && target > 1) {
+      atEnd.value = true
+      return
+    }
+    tableBookings.value = rows
+    page.value = target
+    atEnd.value = false
+  } finally {
+    tableLoading.value = false
+  }
+}
+
+function changePeriod(next: BookingPeriod) {
+  if (next === period.value) return
+  period.value = next
+  page.value = 1
+  atEnd.value = false
+  goToPage(1)
+}
+
+function prevPage() {
+  if (hasPrev.value) goToPage(page.value - 1)
+}
+function nextPage() {
+  if (hasNext.value) goToPage(page.value + 1)
 }
 
 function showList() {
   viewMode.value = 'list'
-  if (!listLoaded.value) loadList()
 }
 
 function openEdit(booking: Booking) {
   editing.value = booking
 }
 
+// После сохранения обновляем сводки и текущее представление таблицы.
 async function onSaved() {
   editing.value = null
-  await loadList()
+  await loadAll()
+  await goToPage(page.value)
 }
+
+onMounted(() => {
+  loadAll()
+  goToPage(1) // первая страница текущего периода (по умолчанию — сегодня)
+})
 </script>
 
 <template>
@@ -125,7 +180,11 @@ async function onSaved() {
     <!-- Список -->
     <div v-else class="space-y-6">
       <!-- Day / week / month summary -->
-      <BookingStats v-model="period" :bookings="visibleBookings" />
+      <BookingStats
+        :model-value="period"
+        :bookings="allBookings"
+        @update:model-value="changePeriod"
+      />
 
       <!-- Bookings table -->
       <div
@@ -140,23 +199,25 @@ async function onSaved() {
                 ? 'Брони на сегодня'
                 : period === 'week'
                   ? 'Брони на этой неделе'
-                  : 'Брони в этом месяце'
+                  : period === 'month'
+                    ? 'Брони в этом месяце'
+                    : 'Все брони'
             }}
           </h3>
           <span class="text-sm text-gray-500 dark:text-gray-400">
-            {{ filteredBookings.length }}
+            {{ tableBookings.length }}
           </span>
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="flex min-h-[240px] items-center justify-center">
+        <div v-if="tableLoading" class="flex min-h-[240px] items-center justify-center">
           <Loader2 class="h-7 w-7 animate-spin text-success-600" aria-hidden="true" />
           <span class="sr-only">Загрузка…</span>
         </div>
 
         <!-- Empty -->
         <div
-          v-else-if="!filteredBookings.length"
+          v-else-if="!tableBookings.length"
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <CalendarX class="h-7 w-7 text-gray-400" aria-hidden="true" />
@@ -212,7 +273,7 @@ async function onSaved() {
 
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <tr
-                v-for="b in filteredBookings"
+                v-for="b in tableBookings"
                 :key="b.id"
                 class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
               >
@@ -340,6 +401,37 @@ async function onSaved() {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination (today / week / month) -->
+        <div
+          v-if="!tableLoading && (hasPrev || hasNext)"
+          class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6"
+        >
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Страница
+            <span class="font-semibold text-gray-700 dark:text-gray-300">{{ page }}</span>
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
+              :disabled="!hasPrev"
+              @click="prevPage"
+            >
+              <ChevronLeft class="h-4 w-4" aria-hidden="true" />
+              Назад
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
+              :disabled="!hasNext"
+              @click="nextPage"
+            >
+              Вперёд
+              <ChevronRight class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

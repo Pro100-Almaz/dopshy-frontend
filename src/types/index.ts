@@ -80,6 +80,34 @@ export interface Field {
 
 export type SlotStatus = 'available' | 'booked' | 'past'
 
+// Режим повтора интервала (как в календаре): без повтора / ежедневно / еженедельно / ежемесячно.
+export type RepeatMode = 'none' | 'daily' | 'weekly' | 'monthly'
+
+/**
+ * Правило повтора, привязанное к исходному интервалу выбора. Живёт в сторе и
+ * переживает переключение недель — производные ячейки на будущих неделях
+ * перерисовываются из него. `mode` здесь всегда ≠ 'none' (иначе правило удаляется).
+ */
+export interface RepeatRule {
+  id: string // `${fieldId}|${date}|${start}|${end}` исходного интервала
+  fieldId: string
+  date: string // дата исходного интервала = дата старта повтора, 'yyyy-mm-dd'
+  start: string // 'HH:mm'
+  end: string // 'HH:mm'
+  mode: Exclude<RepeatMode, 'none'>
+  until: string // 'yyyy-mm-dd' — включительно
+}
+
+/** Слитный интервал из смежных 30-мин слотов (то, что уходит на бэкенд). */
+export interface SlotInterval {
+  id: string // совпадает с RepeatRule.id для того же интервала
+  fieldId: string
+  date: string
+  start: string // 'HH:mm'
+  end: string // 'HH:mm'
+  price: number // сумма цен вошедших слотов
+}
+
 export interface SlotBooking {
   id: number
   customerName: string

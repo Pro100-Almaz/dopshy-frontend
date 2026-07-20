@@ -8,7 +8,7 @@ import {
   formatDayLabel,
   formatPrice,
   getManagerFields,
-  listBookingsInRange,
+  listFieldBookingsInRange,
   isVisibleBookingState,
   FIELD_TYPE_LABEL,
   BOOKING_STATE_LABEL,
@@ -420,7 +420,7 @@ async function loadRange(from: string, to: string, fieldId: string) {
   const req = ++rangeReq
   loading.value = true
   try {
-    const rows = await listBookingsInRange(fieldId, from, to)
+    const rows = await listFieldBookingsInRange(fieldId, from, to)
     if (req === rangeReq) bookings.value = rows
   } catch {
     if (req === rangeReq) bookings.value = []

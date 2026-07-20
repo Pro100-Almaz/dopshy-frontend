@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { Loader2, AlertTriangle, Ruler, Users, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-vue-next'
+import { Loader2, AlertTriangle, Ruler, Users, ChevronLeft, ChevronRight, ArrowRight, Repeat } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -14,6 +14,7 @@ import {
   toISO,
   formatPrice,
   FIELD_TYPE_LABEL,
+  REPEAT_MODE_LABEL,
   type WeekSlots,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
@@ -41,7 +42,7 @@ const maxOffset = computed(() => Math.floor(HORIZON_DAYS / dayCount.value))
 const selectedField = computed(
   () => fields.value.find((f) => f.id === selectedFieldId.value) ?? null,
 )
-const grouped = computed(() => store.groupedByDate)
+const grouped = computed(() => store.intervalGroups)
 
 function startISO(offset: number): string {
   const base = new Date()
@@ -230,8 +231,12 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- Grid (общий компонент с клиентской стороной) -->
-            <WeekGrid :week="week" :loading="slotsLoading" />
+            <!-- Grid (общий компонент с клиентской стороной). allowRepeat включает
+                 правый клик по интервалу → модалка повтора (только для менеджера). -->
+            <WeekGrid :week="week" :loading="slotsLoading" allow-repeat />
+            <p class="mt-2 text-xs text-gray-400">
+              Совет: выделите слоты, затем кликните правой кнопкой по интервалу, чтобы задать повтор.
+            </p>
           </section>
 
           <!-- Мобильная сводка + бронирование (на десктопе — боковая панель) -->
@@ -247,12 +252,19 @@ onMounted(async () => {
                 <p class="text-[11px] font-semibold uppercase text-gray-500">{{ g.label }}</p>
                 <ul class="mt-1 space-y-1">
                   <li
-                    v-for="s in g.slots"
-                    :key="s.id"
-                    class="flex items-center justify-between text-sm"
+                    v-for="iv in g.intervals"
+                    :key="iv.id"
+                    class="flex items-center justify-between gap-2 text-sm"
                   >
-                    <span class="text-gray-700 dark:text-gray-300">{{ s.start }}–{{ s.end }}</span>
-                    <span class="text-gray-500 dark:text-gray-400">{{ formatPrice(s.price) }}</span>
+                    <span class="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                      {{ iv.start }}–{{ iv.end }}
+                      <Repeat
+                        v-if="store.ruleFor(iv.id)"
+                        class="h-3 w-3 text-success-600"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ formatPrice(iv.lineTotal) }}</span>
                   </li>
                 </ul>
               </div>
@@ -264,7 +276,7 @@ onMounted(async () => {
                   {{ store.count > 0 ? `Выбрано слотов: ${store.count}` : 'Выберите слоты' }}
                 </p>
                 <p class="text-lg font-bold text-gray-900 dark:text-white/90">
-                  {{ formatPrice(store.total) }}
+                  {{ formatPrice(store.projectedTotal) }}
                 </p>
               </div>
               <button
@@ -309,12 +321,33 @@ onMounted(async () => {
               <p class="text-xs font-semibold uppercase text-gray-500">{{ g.label }}</p>
               <ul class="mt-1.5 space-y-1.5">
                 <li
-                  v-for="s in g.slots"
-                  :key="s.id"
-                  class="flex items-center justify-between text-sm"
+                  v-for="iv in g.intervals"
+                  :key="iv.id"
+                  class="flex items-center justify-between gap-2 text-sm"
                 >
-                  <span class="text-gray-700">{{ s.start }}–{{ s.end }}</span>
-                  <span class="text-gray-600">{{ formatPrice(s.price) }}</span>
+                  <span class="flex min-w-0 flex-col text-gray-700">
+                    <span class="flex items-center gap-1.5">
+                      {{ iv.start }}–{{ iv.end }}
+                      <Repeat
+                        v-if="store.ruleFor(iv.id)"
+                        class="h-3 w-3 text-success-600"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span
+                      v-if="store.ruleFor(iv.id)"
+                      class="text-[10px] text-success-700"
+                    >
+                      {{ REPEAT_MODE_LABEL[store.ruleFor(iv.id)!.mode] }} · до
+                      {{ store.ruleFor(iv.id)!.until }} · ×{{ iv.count }}
+                    </span>
+                  </span>
+                  <span class="shrink-0 text-right text-gray-600">
+                    {{ formatPrice(iv.lineTotal) }}
+                    <span v-if="iv.count > 1" class="block text-[10px] text-gray-400">
+                      {{ formatPrice(iv.price) }} × {{ iv.count }}
+                    </span>
+                  </span>
                 </li>
               </ul>
             </div>
@@ -322,7 +355,7 @@ onMounted(async () => {
 
           <div class="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
             <span class="text-sm text-gray-500">Итого</span>
-            <span class="text-2xl font-bold text-gray-900">{{ formatPrice(store.total) }}</span>
+            <span class="text-2xl font-bold text-gray-900">{{ formatPrice(store.projectedTotal) }}</span>
           </div>
 
           <button
