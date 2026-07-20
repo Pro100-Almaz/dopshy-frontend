@@ -785,7 +785,8 @@ export async function listBookings(page?: number): Promise<Booking[]> {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-export async function listBookingsInRange(
+/** Брони одного поля в диапазоне дат (GET /bookings/range/{from}/{to}?field=). */
+export async function listFieldBookingsInRange(
   fieldId: string,
   from: string,
   to: string,

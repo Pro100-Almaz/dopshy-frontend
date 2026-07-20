@@ -25,6 +25,10 @@ const currentPageTitle = 'Бронирования'
 
 const period = ref<BookingPeriod>('today')
 
+// Календарь / список — переключатель наверху страницы.
+type ViewMode = 'calendar' | 'list'
+const viewMode = ref<ViewMode>('calendar')
+
 // Полный список — питает карточки-сводки и таблицу за всё время (GET /bookings).
 const allBookings = ref<Booking[]>([])
 // Текущая страница таблицы (range-эндпоинт для today/week/month, GET /bookings для all_time).
@@ -109,6 +113,10 @@ function prevPage() {
 }
 function nextPage() {
   if (hasNext.value) goToPage(page.value + 1)
+}
+
+function showList() {
+  viewMode.value = 'list'
 }
 
 function openEdit(booking: Booking) {
