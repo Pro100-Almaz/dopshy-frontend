@@ -246,12 +246,12 @@ const menuGroups: MenuGroup[] = [
     items: [
       {
         icon: LayoutGrid,
-        name: 'Слоты полей',
+        name: 'Создать бронь',
         path: '/field-slots',
       },
       {
         icon: CalendarCheck,
-        name: 'Бронирования',
+        name: 'Список броней',
         path: '/bookings',
       },
       {

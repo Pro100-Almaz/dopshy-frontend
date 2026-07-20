@@ -387,6 +387,8 @@ export interface BatchSlotIn {
   date: string // 'yyyy-mm-dd' — дата первого вхождения (старт повтора)
   time_start: string // 'HH:mm'
   time_end: string // 'HH:mm'
+  // Ручная цена брони (менеджер переопределяет расчётную). Опущено → бэкенд считает сам.
+  price_total?: number
   // Повтор интервала. Бэкенд разворачивает вхождения сам (daily/weekly/monthly).
   repeat_mode?: RepeatMode // по умолчанию 'none'
   repeat_until?: string // 'yyyy-mm-dd', обязателен при repeat_mode !== 'none'
