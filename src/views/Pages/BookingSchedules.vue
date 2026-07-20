@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Loader2, AlertTriangle, Ruler, Users, ChevronLeft, ChevronRight, ArrowRight, Repeat } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
@@ -114,6 +114,45 @@ watch(dayCount, () => {
   loadWeek()
 })
 
+// ── Живое обновление сетки ──────────────────────────
+// Реального времени пока нет — тихо опрашиваем бэкенд каждые 5 секунд и обновляем
+// сетку только при реальном изменении данных. Без скелетона (slotsLoading не трогаем)
+// и без потери выбора (слоты в сторе ключуются стабильными id), поэтому незаметно.
+const POLL_MS = 5000
+let pollId: ReturnType<typeof setInterval> | null = null
+let silentInFlight = false
+
+async function pollWeek() {
+  if (document.hidden) return
+  if (!selectedField.value) return
+  // Не мешаем первичной/навигационной загрузке и активному бронированию.
+  if (fieldsLoading.value || slotsLoading.value || showBookingModal.value) return
+  if (silentInFlight) return
+
+  silentInFlight = true
+  try {
+    const next = await getManagerWeek(
+      selectedField.value,
+      startISO(pageOffset.value),
+      new Date(),
+      dayCount.value,
+    )
+    // Присваиваем только при изменении — иначе лишний ре-рендер и мигание.
+    if (JSON.stringify(week.value) !== JSON.stringify(next)) {
+      week.value = next
+    }
+  } catch {
+    /* временный сбой сети — оставляем текущую сетку, следующий тик повторит */
+  } finally {
+    silentInFlight = false
+  }
+}
+
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) pollWeek()
+}
+
 onMounted(async () => {
   fieldsLoading.value = true
   fields.value = await getManagerFields()
@@ -123,6 +162,14 @@ onMounted(async () => {
     selectedFieldId.value = fields.value[0].id
     await loadWeek()
   }
+
+  pollId = setInterval(pollWeek, POLL_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+onUnmounted(() => {
+  if (pollId) clearInterval(pollId)
+  document.removeEventListener('visibilitychange', onVisibility)
 })
 </script>
 

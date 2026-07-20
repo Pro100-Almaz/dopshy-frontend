@@ -7,6 +7,7 @@ import type {
   BookingConfirmation,
   Booking,
   BookingApi,
+  BookingDetailApi,
   BookingStatus,
   BookingState,
   BookingPeriod,
@@ -737,8 +738,8 @@ function trimSeconds(time: string): string {
   return time.slice(0, 5)
 }
 
-/** Денежные поля бэкенда — строки ("0" / "10000.00") или null. Приводим к числу; мусор → 0. */
-function toMoney(v: string | null | undefined): number {
+/** Денежные поля бэкенда — строки ("0" / "10000.00"), числа или null. Приводим к числу; мусор → 0. */
+function toMoney(v: string | number | null | undefined): number {
   if (v == null) return 0
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
@@ -793,6 +794,11 @@ export async function listFieldBookingsInRange(
 ): Promise<Booking[]> {
   const rows = await getBookingsInRange(fieldId, from, to)
   return rows.map(mapBooking)
+}
+
+/** Детальная карточка одной брони (GET /api/bookings/{id}). 404 → ApiError. */
+export function getBookingDetail(id: string | number): Promise<BookingDetailApi> {
+  return apiFetch<BookingDetailApi>(`/bookings/${id}`)
 }
 
 // ── Редактирование брони: PATCH /api/bookings/{id} ──────────────────

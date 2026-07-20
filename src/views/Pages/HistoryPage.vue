@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Loader2,
   History as HistoryIcon,
@@ -9,8 +9,13 @@ import {
   ChevronRight,
 } from 'lucide-vue-next'
 
+import flatPickr from 'vue-flatpickr-component'
+import 'flatpickr/dist/flatpickr.css'
+import { Russian } from 'flatpickr/dist/l10n/ru.js'
+
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
+import BookingDetailModal from '@/components/bookings/BookingDetailModal.vue'
 
 import type { HistoryChannel, HistoryEntry } from '@/types'
 import { listHistory, channelOf, sourceLabel, formatDateTime } from '@/services/history'
@@ -27,17 +32,94 @@ const page = ref(1)
 const total = ref(0)
 const totalPages = ref(1)
 
+// Открытая карточка брони (клик по строке журнала). null — модалка закрыта.
+const selectedBookingId = ref<number | null>(null)
+
 // ── Фильтры ─────────────────────────────────────────
 type ChannelFilter = 'all' | HistoryChannel
 const channel = ref<ChannelFilter>('all')
 const startDate = ref('')
 const endDate = ref('')
 
-const CHANNELS: { key: ChannelFilter; label: string }[] = [
-  { key: 'all', label: 'Все' },
-  { key: 'whatsapp', label: 'Бот' },
-  { key: 'manager', label: 'Менеджер' },
-]
+// TODO: вернуть вместе с фильтром по источнику (кнопки скрыты в шаблоне).
+// const CHANNELS: { key: ChannelFilter; label: string }[] = [
+//   { key: 'all', label: 'Все' },
+//   { key: 'whatsapp', label: 'Бот' },
+//   { key: 'manager', label: 'Менеджер' },
+// ]
+
+// Минимальная форма инстанса flatpickr, которая нам нужна.
+interface FpInstance {
+  input: HTMLElement
+  altInput?: HTMLElement
+  calendarContainer?: HTMLElement
+  close: () => void
+}
+
+// Пока открыт календарь, блокируем прокрутку контейнера контента:
+// он приклеен к body (position: absolute), и скролл «отклеивал» бы его от поля.
+let lockedScrollEl: HTMLElement | null = null
+let openFp: FpInstance | null = null
+
+function scrollableAncestor(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null
+  while (node) {
+    const oy = getComputedStyle(node).overflowY
+    if (/(auto|scroll)/.test(oy) && node.scrollHeight > node.clientHeight) return node
+    node = node.parentElement
+  }
+  return null
+}
+
+// Клик вне календаря и вне его поля — закрываем (надёжнее дефолта flatpickr,
+// т.к. календарь вынесен в body).
+function onDocPointerDown(e: PointerEvent) {
+  if (!openFp) return
+  const t = e.target as Node
+  if (openFp.calendarContainer?.contains(t)) return
+  if (openFp.input.contains(t) || openFp.altInput?.contains(t)) return
+  openFp.close()
+}
+
+function lockScroll(_dates: Date[], _str: string, fp: FpInstance) {
+  openFp = fp
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+  lockedScrollEl = scrollableAncestor(fp.input)
+  if (lockedScrollEl) lockedScrollEl.style.overflowY = 'hidden'
+}
+
+function unlockScroll() {
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
+  openFp = null
+  if (lockedScrollEl) {
+    lockedScrollEl.style.overflowY = ''
+    lockedScrollEl = null
+  }
+}
+
+// Конфиги flatpickr: значение в формате Y-m-d (как ждёт бэкенд),
+// отображение — d.m.Y на русском. Диапазон ограничивает второе поле.
+const startConfig = computed(() => ({
+  dateFormat: 'Y-m-d',
+  altInput: true,
+  altFormat: 'd.m.Y',
+  locale: Russian,
+  disableMobile: true,
+  maxDate: endDate.value || undefined,
+  onOpen: lockScroll,
+  onClose: unlockScroll,
+}))
+
+const endConfig = computed(() => ({
+  dateFormat: 'Y-m-d',
+  altInput: true,
+  altFormat: 'd.m.Y',
+  locale: Russian,
+  disableMobile: true,
+  minDate: startDate.value || undefined,
+  onOpen: lockScroll,
+  onClose: unlockScroll,
+}))
 
 async function load() {
   loading.value = true
@@ -104,7 +186,58 @@ const rangeLabel = computed(() => {
   return `${start}–${end} из ${total.value}`
 })
 
-onMounted(load)
+// ── Живое обновление журнала ────────────────────────
+// Реального времени пока нет — тихо опрашиваем бэкенд каждые 5 секунд. Обновляем
+// список только при реальном изменении данных и не трогаем индикатор загрузки,
+// поэтому для пользователя незаметно. Живёт, пока открыта страница.
+const POLL_MS = 5000
+let pollId: ReturnType<typeof setInterval> | null = null
+let silentInFlight = false
+
+async function pollHistory() {
+  if (document.hidden) return
+  if (selectedBookingId.value !== null) return // открыта карточка брони
+  if (loading.value || silentInFlight) return
+
+  silentInFlight = true
+  try {
+    const res = await listHistory({
+      page: page.value,
+      page_size: PAGE_SIZE,
+      channel: channel.value === 'all' ? undefined : channel.value,
+      start_date: startDate.value || undefined,
+      end_date: endDate.value || undefined,
+    })
+    // Присваиваем массив только при изменении — иначе лишний ре-рендер и мигание.
+    if (JSON.stringify(entries.value) !== JSON.stringify(res.data)) {
+      entries.value = res.data
+    }
+    total.value = res.total
+    totalPages.value = res.total_pages || 1
+    if (error.value) error.value = '' // тихо восстановились после сбоя
+  } catch {
+    /* временный сбой сети — оставляем текущие данные, следующий тик повторит */
+  } finally {
+    silentInFlight = false
+  }
+}
+
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) pollHistory()
+}
+
+onMounted(() => {
+  load()
+  pollId = setInterval(pollHistory, POLL_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+onUnmounted(() => {
+  unlockScroll()
+  if (pollId) clearInterval(pollId)
+  document.removeEventListener('visibilitychange', onVisibility)
+})
 </script>
 
 <template>
@@ -129,6 +262,8 @@ onMounted(load)
         <div
           class="flex flex-col gap-3 border-b border-gray-200 px-5 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
         >
+          <!-- TODO: фильтр по источнику (Бот/Менеджер) — включить, когда бэкенд
+               будет отдавать канал стабильно. Пока скрыт, чтобы не путать.
           <div class="flex flex-wrap gap-2">
             <button
               v-for="c in CHANNELS"
@@ -145,24 +280,25 @@ onMounted(load)
               {{ c.label }}
             </button>
           </div>
+          -->
 
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="flex items-center gap-1.5">
+          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div class="flex flex-1 items-center gap-1.5 sm:flex-none">
               <label class="text-theme-xs text-gray-500 dark:text-gray-400">с</label>
-              <input
+              <flat-pickr
                 v-model="startDate"
-                type="date"
-                :max="endDate || undefined"
-                class="h-9 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 [color-scheme:light] dark:[color-scheme:dark]"
+                :config="startConfig"
+                placeholder="дд.мм.гггг"
+                class="h-9 w-full min-w-0 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 sm:w-32"
               />
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex flex-1 items-center gap-1.5 sm:flex-none">
               <label class="text-theme-xs text-gray-500 dark:text-gray-400">по</label>
-              <input
+              <flat-pickr
                 v-model="endDate"
-                type="date"
-                :min="startDate || undefined"
-                class="h-9 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 [color-scheme:light] dark:[color-scheme:dark]"
+                :config="endConfig"
+                placeholder="дд.мм.гггг"
+                class="h-9 w-full min-w-0 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 sm:w-32"
               />
             </div>
             <button
@@ -238,7 +374,13 @@ onMounted(load)
               <tr
                 v-for="e in entries"
                 :key="e.id"
-                class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                class="cursor-pointer transition-colors hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 dark:hover:bg-white/[0.02]"
+                role="button"
+                tabindex="0"
+                :aria-label="`Открыть бронь №${e.booking_id}`"
+                @click="selectedBookingId = e.booking_id"
+                @keydown.enter.prevent="selectedBookingId = e.booking_id"
+                @keydown.space.prevent="selectedBookingId = e.booking_id"
               >
                 <!-- Date -->
                 <td class="whitespace-nowrap px-5 py-4 sm:px-6">
@@ -335,5 +477,11 @@ onMounted(load)
         </div>
       </div>
     </div>
+
+    <BookingDetailModal
+      v-if="selectedBookingId !== null"
+      :id="selectedBookingId"
+      @close="selectedBookingId = null"
+    />
   </AdminLayout>
 </template>
