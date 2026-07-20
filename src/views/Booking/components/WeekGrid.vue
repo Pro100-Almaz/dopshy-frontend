@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { Loader2, Check, Repeat } from 'lucide-vue-next'
 import type { Slot, SlotBooking, SlotInterval } from '@/types'
 import { formatPrice, type WeekSlots } from '@/services/booking'
@@ -51,15 +51,69 @@ function intervalAt(cell: Slot): SlotInterval | null {
   )
 }
 
+// Открыть модалку повтора для интервала под ячейкой у точки (x, y).
+function openRepeat(cell: Slot, x: number, y: number) {
+  if (!props.allowRepeat) return
+  const iv = intervalAt(cell)
+  if (!iv) return // не по выбранному интервалу — игнорируем
+  repeatInterval.value = iv
+  repeatAnchor.value = { x, y }
+  repeatOpen.value = true
+}
+
+// Десктоп: правый клик по интервалу.
 function onContext(cell: Slot, e: MouseEvent) {
   if (!props.allowRepeat) return
   e.preventDefault()
-  const iv = intervalAt(cell)
-  if (!iv) return // правый клик не по выбранному интервалу — игнорируем
-  repeatInterval.value = iv
-  repeatAnchor.value = { x: e.clientX, y: e.clientY }
-  repeatOpen.value = true
+  openRepeat(cell, e.clientX, e.clientY)
 }
+
+// ── Мобильные: долгое нажатие (press-and-hold) = аналог правого клика ──
+const LONG_PRESS_MS = 500
+const MOVE_TOLERANCE = 10 // px — сдвиг больше = это скролл, отменяем удержание
+let pressTimer: ReturnType<typeof setTimeout> | null = null
+let pressStart = { x: 0, y: 0 }
+// Долгое нажатие открыло модалку — гасим последующий «фантомный» click.
+let longPressFired = false
+
+function clearPress() {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
+function onTouchStart(cell: Slot, e: TouchEvent) {
+  if (!props.allowRepeat) return
+  if (!intervalAt(cell)) return // удержание имеет смысл только на выбранном интервале
+  const t = e.touches[0]
+  if (!t) return
+  pressStart = { x: t.clientX, y: t.clientY }
+  longPressFired = false
+  clearPress()
+  pressTimer = setTimeout(() => {
+    longPressFired = true
+    openRepeat(cell, pressStart.x, pressStart.y)
+  }, LONG_PRESS_MS)
+}
+
+function onTouchMove(e: TouchEvent) {
+  if (!pressTimer) return
+  const t = e.touches[0]
+  if (!t) return
+  if (
+    Math.abs(t.clientX - pressStart.x) > MOVE_TOLERANCE ||
+    Math.abs(t.clientY - pressStart.y) > MOVE_TOLERANCE
+  ) {
+    clearPress() // палец поехал — это скролл, а не удержание
+  }
+}
+
+function onTouchEnd() {
+  clearPress()
+}
+
+onUnmounted(clearPress)
 
 // Колонки тянутся под контейнер (minmax(0,1fr)) — сетка не выходит за экран
 // ни на 7 днях (десктоп), ни на 4 (мобильный). Первая колонка — шкала часов.
@@ -81,6 +135,11 @@ function priceShort(v: number): string {
 }
 
 function onCell(cell: Slot) {
+  // После долгого нажатия браузер шлёт click — гасим его, чтобы не переключить слот.
+  if (longPressFired) {
+    longPressFired = false
+    return
+  }
   // Производные вхождения повтора неизменяемы — клик игнорируем.
   if (repeatStates.value[cell.id] === 'occurrence' && !store.isSelected(cell.id)) return
   if (cell.status === 'available' || store.isSelected(cell.id)) store.toggleSlot(cell)
@@ -157,7 +216,7 @@ function hideBooking() {
                 ? 'повтор'
                 : formatPrice(cell.price)
           }`"
-          class="h-11 border-b border-r border-gray-100 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
+          class="sched-cell h-11 select-none border-b border-r border-gray-100 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
           :class="
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
@@ -171,6 +230,10 @@ function hideBooking() {
           "
           @click="onCell(cell)"
           @contextmenu="onContext(cell, $event)"
+          @touchstart="onTouchStart(cell, $event)"
+          @touchmove="onTouchMove($event)"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchEnd"
           @mouseenter="cell.booking && showBooking(cell.booking, $event)"
           @mousemove="cell.booking && moveTip($event)"
           @mouseleave="hideBooking"
@@ -245,6 +308,11 @@ function hideBooking() {
 </template>
 
 <style scoped>
+/* Долгое нажатие на мобильных не должно вызывать системное меню/выделение текста. */
+.sched-cell {
+  -webkit-touch-callout: none;
+}
+
 /* Неизменяемое производное вхождение повтора — диагональная зелёная штриховка. */
 .repeat-occ {
   background-image: repeating-linear-gradient(
