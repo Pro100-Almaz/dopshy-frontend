@@ -23,13 +23,13 @@ const PERIODS: { key: BookingPeriod; label: string; icon: Component; iconBg: str
 const stats = computed(() => {
   const result = {} as Record<BookingPeriod, { count: number; revenue: number }>
   for (const p of PERIODS) {
-    const items = props.bookings.filter((b) => isBookingInPeriod(b, p.key))
+    // Карточки-сводки учитывают только подтверждённые брони — и в счётчике, и в сумме.
+    const items = props.bookings.filter(
+      (b) => isBookingInPeriod(b, p.key) && b.status === 'confirmed',
+    )
     result[p.key] = {
       count: items.length,
-      // revenue excludes cancelled bookings
-      revenue: items
-        .filter((b) => b.status !== 'cancelled')
-        .reduce((sum, b) => sum + b.total, 0),
+      revenue: items.reduce((sum, b) => sum + b.total, 0),
     }
   }
   return result
@@ -64,7 +64,7 @@ const stats = computed(() => {
         <h4 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ stats[p.key].count }}
         </h4>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ p.label }}</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ p.label }} подтверждено</p>
       </div>
     </button>
   </div>

@@ -35,9 +35,9 @@ const pageOffset = ref(0) // 0 = текущая страница
 const isDesktop = useMediaQuery('(min-width: 1024px)')
 const dayCount = computed(() => (isDesktop.value ? 7 : 4))
 
-// Горизонт бронирования — ~4 недели вперёд, независимо от размера страницы.
-const HORIZON_DAYS = 28
-const maxOffset = computed(() => Math.floor(HORIZON_DAYS / dayCount.value))
+// У сотрудников (админ / супер-админ / менеджер) горизонт бронирования не ограничен —
+// они могут листать сетку сколь угодно далеко вперёд. Лимит остаётся только на
+// клиентской стороне (см. WeekScheduleModal.vue, HORIZON_DAYS).
 
 const selectedField = computed(
   () => fields.value.find((f) => f.id === selectedFieldId.value) ?? null,
@@ -102,7 +102,6 @@ function prevWeek() {
   pageOffset.value--
 }
 function nextWeek() {
-  if (pageOffset.value >= maxOffset.value) return
   pageOffset.value++
 }
 
@@ -222,7 +221,6 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="grid h-8 w-8 place-items-center rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-                  :disabled="pageOffset >= maxOffset"
                   aria-label="Позже"
                   @click="nextWeek"
                 >
