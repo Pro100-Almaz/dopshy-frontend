@@ -155,7 +155,6 @@ export type BookingState =
   | 'confirmed'
   | 'cancelled'
   | 'unpaid'
-  | 'rejected'
 
 export interface Booking {
   id: string

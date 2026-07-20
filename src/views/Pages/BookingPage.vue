@@ -5,6 +5,7 @@ import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight } from 'lucide-vu
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BookingStats from '@/components/bookings/BookingStats.vue'
+import BookingCalendar from '@/components/bookings/BookingCalendar.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
 import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.vue'
 
@@ -131,7 +132,45 @@ onMounted(() => {
   <AdminLayout>
     <PageBreadcrumb :pageTitle="currentPageTitle" />
 
-    <div class="space-y-6">
+    <!-- Переключатель: календарь / список -->
+    <div class="mb-6 flex">
+      <div
+        class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-white/[0.03]"
+      >
+        <button
+          type="button"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="
+            viewMode === 'calendar'
+              ? 'bg-success-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+          "
+          :aria-pressed="viewMode === 'calendar'"
+          @click="viewMode = 'calendar'"
+        >
+          Посмотреть через календарь
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="
+            viewMode === 'list'
+              ? 'bg-success-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+          "
+          :aria-pressed="viewMode === 'list'"
+          @click="showList"
+        >
+          Показать списком
+        </button>
+      </div>
+    </div>
+
+    <!-- Календарь (грузит брони видимого периода самостоятельно) -->
+    <BookingCalendar v-if="viewMode === 'calendar'" />
+
+    <!-- Список -->
+    <div v-else class="space-y-6">
       <!-- Day / week / month summary -->
       <BookingStats
         :model-value="period"
