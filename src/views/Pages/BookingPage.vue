@@ -180,9 +180,66 @@ async function onSaved() {
   await goToPage(page.value)
 }
 
+// ── Живое обновление таблицы ────────────────────────
+// Реального времени пока нет — тихо опрашиваем бэкенд каждые 5 секунд. Обновляем
+// сводки и текущую страницу таблицы только при реальном изменении данных, не трогая
+// индикаторы загрузки — поэтому для пользователя незаметно. Живёт, пока открыта страница.
+const POLL_MS = 5000
+let pollId: ReturnType<typeof setInterval> | null = null
+let silentInFlight = false
+
+// Дешёвое структурное сравнение — списки детерминированы (отсортированы бэкендом/маппером).
+function changed(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+async function pollBookings() {
+  if (document.hidden) return
+  if (viewMode.value !== 'list') return // календарь грузит данные сам
+  // Не двигаем строки под пользователем во время редактирования/просмотра оплат
+  // и не мешаем первичной/навигационной загрузке.
+  if (editing.value || paymentDetail.value) return
+  if (statsLoading.value || tableLoading.value) return
+  if (silentInFlight) return
+
+  silentInFlight = true
+  try {
+    // Сводки (полный список).
+    const nextAll = await listBookings()
+    if (changed(allBookings.value, nextAll)) allBookings.value = nextAll
+
+    // Текущая страница таблицы — тем же запросом, что и goToPage.
+    const range = periodRange(period.value)
+    const rows = range
+      ? await listBookingsInRange(range.from, range.to, page.value)
+      : await listBookings(page.value)
+    // Пустую страницу за пределами первой игнорируем, чтобы не сбить пагинацию.
+    if (!(rows.length === 0 && page.value > 1) && changed(tableBookings.value, rows)) {
+      tableBookings.value = rows
+    }
+  } catch {
+    /* временный сбой сети — оставляем текущие данные, следующий тик повторит */
+  } finally {
+    silentInFlight = false
+  }
+}
+
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) pollBookings()
+}
+
 onMounted(() => {
   loadAll()
   goToPage(1) // первая страница текущего периода (по умолчанию — сегодня)
+
+  pollId = setInterval(pollBookings, POLL_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+onUnmounted(() => {
+  if (pollId) clearInterval(pollId)
+  document.removeEventListener('visibilitychange', onVisibility)
 })
 </script>
 

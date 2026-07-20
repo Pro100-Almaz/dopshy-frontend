@@ -812,6 +812,10 @@ watch(
 
       <dl class="mt-2 space-y-1 text-xs">
         <div class="flex justify-between gap-4">
+          <dt class="text-gray-500">Бронь</dt>
+          <dd class="text-gray-700 dark:text-gray-300">№{{ hover.id }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
           <dt class="text-gray-500">Поле</dt>
           <dd class="text-gray-700 dark:text-gray-300">{{ hover.fieldName }}</dd>
         </div>

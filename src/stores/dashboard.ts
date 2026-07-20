@@ -11,23 +11,47 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentPayments = ref<Booking[]>([])
   const loading = ref(false)
 
-  async function fetchDashboard() {
-    loading.value = true
-    try {
-      const bookings = await dashboardService.getBookings()
-      const now = new Date()
+  // Одновременно держим только один запрос: тихий поллинг не должен наслаиваться
+  // на первичную загрузку (или на предыдущий незавершённый тик).
+  let inFlight: Promise<void> | null = null
 
-      summary.value = await dashboardService.getSummary(bookings)
+  // Дешёвое структурное сравнение — данные детерминированы (отсортированы),
+  // поэтому сериализация даёт стабильный ключ. Присваиваем ref только при
+  // реальном изменении, чтобы не дёргать ре-рендер/анимации без нужды.
+  function changed(a: unknown, b: unknown): boolean {
+    return JSON.stringify(a) !== JSON.stringify(b)
+  }
 
-      todayBookings.value = bookings
-        .filter((b) => isBookingInPeriod(b, 'today', now))
-        .sort((a, b) => a.start.localeCompare(b.start))
+  /**
+   * Загружает данные панели. `silent` — фоновое обновление (поллинг): не трогает
+   * `loading` (без скелетона) и обновляет refs только при изменении данных.
+   */
+  async function fetchDashboard({ silent = false }: { silent?: boolean } = {}) {
+    if (inFlight) return inFlight
+    if (!silent) loading.value = true
 
-      // Последние платежи — самые свежие брони (listBookings уже отсортирован по createdAt).
-      recentPayments.value = bookings.slice(0, 6)
-    } finally {
-      loading.value = false
-    }
+    inFlight = (async () => {
+      try {
+        const bookings = await dashboardService.getBookings()
+        const now = new Date()
+
+        const nextSummary = await dashboardService.getSummary(bookings)
+        const nextToday = bookings
+          .filter((b) => isBookingInPeriod(b, 'today', now))
+          .sort((a, b) => a.start.localeCompare(b.start))
+        // Последние платежи — самые свежие брони (listBookings отсортирован по createdAt).
+        const nextRecent = bookings.slice(0, 6)
+
+        if (changed(summary.value, nextSummary)) summary.value = nextSummary
+        if (changed(todayBookings.value, nextToday)) todayBookings.value = nextToday
+        if (changed(recentPayments.value, nextRecent)) recentPayments.value = nextRecent
+      } finally {
+        if (!silent) loading.value = false
+        inFlight = null
+      }
+    })()
+
+    return inFlight
   }
 
   return {

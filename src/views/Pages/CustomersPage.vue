@@ -11,8 +11,9 @@ import { listContacts, relativeTime } from '@/services/customer'
 
 const currentPageTitle = 'Клиентская база'
 
-// Держим экран свежим: авто-пауза меняется на бэкенде без действий фронта.
-const POLL_MS = 25000
+// Держим экран свежим: авто-пауза и новые контакты появляются на бэкенде без
+// действий фронта. Реального времени пока нет — тихо опрашиваем каждые 5 секунд.
+const POLL_MS = 5000
 
 const contacts = ref<Contact[]>([])
 const loading = ref(true)
@@ -69,33 +70,50 @@ function onError(message: string) {
   window.setTimeout(() => (toast.value = ''), 4000)
 }
 
+let silentInFlight = false
+
+// Дешёвое структурное сравнение — список детерминирован (бэкенд отдаёт его
+// отсортированным). Присваиваем ref только при реальном изменении.
+function changed(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
 async function load(silent = false) {
-  if (!silent) loading.value = true
+  if (silent) {
+    if (document.hidden || silentInFlight) return
+    silentInFlight = true
+  } else {
+    loading.value = true
+  }
   try {
-    contacts.value = await listContacts()
+    const next = await listContacts()
+    // Фоновое обновление применяем только при изменении — без мигания списка.
+    if (!silent || changed(contacts.value, next)) contacts.value = next
     error.value = ''
   } catch (e) {
     // Фоновое обновление не должно затирать уже показанный список ошибкой.
     if (!silent) error.value = e instanceof Error ? e.message : 'Не удалось загрузить контакты'
   } finally {
-    if (!silent) loading.value = false
+    if (silent) silentInFlight = false
+    else loading.value = false
   }
 }
 
 let pollId: number | undefined
-function refreshOnFocus() {
-  load(true)
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) load(true)
 }
 
 onMounted(() => {
   load()
   pollId = window.setInterval(() => load(true), POLL_MS)
-  window.addEventListener('focus', refreshOnFocus)
+  document.addEventListener('visibilitychange', onVisibility)
 })
 
 onUnmounted(() => {
   if (pollId !== undefined) window.clearInterval(pollId)
-  window.removeEventListener('focus', refreshOnFocus)
+  document.removeEventListener('visibilitychange', onVisibility)
 })
 </script>
 
