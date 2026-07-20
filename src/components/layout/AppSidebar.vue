@@ -203,6 +203,7 @@ import {
   CalendarCheck,
   GraduationCap,
   BookOpen,
+  History,
   Wallet,
   HardHat,
   Swords,
@@ -254,9 +255,9 @@ const menuGroups: MenuGroup[] = [
         path: '/bookings',
       },
       {
-        icon: BookOpen,
+        icon: History,
         name: 'История действий',
-        path: '/reports',
+        path: '/history',
       },
       {
         icon: PersonStanding,

@@ -225,3 +225,27 @@ export interface Contact {
   paused_reason: PausedReason
   last_activity: string // ISO datetime; список приходит отсортированным (новые сверху)
 }
+
+// ── История действий (GET /manager/history) ─────────
+// Запись журнала: изменение статуса брони, оплата и т.п.,
+// совершённое ботом (whatsapp) или менеджером (manager:<id>).
+export interface HistoryEntry {
+  id: number
+  booking_id: number
+  source: string // 'whatsapp' | 'manager:<id>'
+  description: string
+  created_at: string // ISO datetime
+}
+
+// Канал действия — производное от source, для фильтра и бейджа.
+export type HistoryChannel = 'whatsapp' | 'manager'
+
+// Стандартный конверт постраничного ответа бэкенда.
+export interface HistoryPage {
+  ok: boolean
+  data: HistoryEntry[]
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}

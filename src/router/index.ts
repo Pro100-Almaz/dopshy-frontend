@@ -76,6 +76,12 @@ const router = createRouter({
       meta: { title: 'Бронирования' },
     },
     {
+      path: '/history',
+      name: 'History',
+      component: () => import('../views/Pages/HistoryPage.vue'),
+      meta: { title: 'История действий' },
+    },
+    {
       path: '/customers',
       name: 'Customers',
       component: () => import('../views/Pages/CustomersPage.vue'),
