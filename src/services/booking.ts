@@ -537,7 +537,20 @@ const STATE_TO_STATUS: Record<string, BookingStatus> = {
   paid: 'confirmed',
   completed: 'completed',
   cancelled: 'cancelled',
-  rejected: 'cancelled',
+}
+
+export const TO_STATE: Record<string, BookingState> = {
+  draft: 'draft',
+  awaiting_payment: 'awaiting_payment',
+  unpaid: 'unpaid',
+  confirmed: 'confirmed',
+  cancelled: 'cancelled',
+}
+
+const HIDDEN_BOOKING_STATES: ReadonlySet<string> = new Set(['cancelled', 'rejected', 'unpaid'])
+
+export function isVisibleBookingState(state: string): boolean {
+  return !HIDDEN_BOOKING_STATES.has(state)
 }
 
 function trimSeconds(time: string): string {
@@ -582,6 +595,15 @@ function mapBooking(api: BookingApi): Booking {
 export async function listBookings(): Promise<Booking[]> {
   const rows = await apiFetch<BookingApi[]>('/bookings')
   return rows.map(mapBooking).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export async function listBookingsInRange(
+  fieldId: string,
+  from: string,
+  to: string,
+): Promise<Booking[]> {
+  const rows = await getBookingsInRange(fieldId, from, to)
+  return rows.map(mapBooking)
 }
 
 // ── Редактирование брони: PATCH /api/bookings/{id} ──────────────────
@@ -664,5 +686,4 @@ export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
   confirmed: 'Подтверждено',
   cancelled: 'Отменено',
   unpaid: 'Не оплачено',
-  rejected: 'Отклонено',
 }

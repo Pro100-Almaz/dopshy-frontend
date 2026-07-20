@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { Loader2, CalendarX, Pencil } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BookingStats from '@/components/bookings/BookingStats.vue'
+import BookingCalendar from '@/components/bookings/BookingCalendar.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
 import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.vue'
 
@@ -12,6 +13,7 @@ import type { Booking, BookingPeriod, BookingStatus } from '@/types'
 import {
   listBookings,
   isBookingInPeriod,
+  isVisibleBookingState,
   formatPrice,
   formatDayLabel,
   formatDateTime,
@@ -22,12 +24,17 @@ import {
 const currentPageTitle = 'Бронирования'
 
 const bookings = ref<Booking[]>([])
-const loading = ref(true)
-const error = ref('')
+const loading = ref(false)
+const listLoaded = ref(false)
 const period = ref<BookingPeriod>('today')
 
+type ViewMode = 'calendar' | 'list'
+const viewMode = ref<ViewMode>('calendar')
+
+const visibleBookings = computed(() => bookings.value.filter((b) => isVisibleBookingState(b.state)))
+
 const filteredBookings = computed(() =>
-  bookings.value.filter((b) => isBookingInPeriod(b, period.value)),
+  visibleBookings.value.filter((b) => isBookingInPeriod(b, period.value)),
 )
 
 function initials(name: string): string {
@@ -49,8 +56,19 @@ const STATUS_CLASS: Record<BookingStatus, string> = {
 const editing = ref<Booking | null>(null)
 const paymentDetail = ref<Booking | null>(null)
 
-async function refresh() {
-  bookings.value = await listBookings()
+async function loadList() {
+  loading.value = true
+  try {
+    bookings.value = await listBookings()
+    listLoaded.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+function showList() {
+  viewMode.value = 'list'
+  if (!listLoaded.value) loadList()
 }
 
 function openEdit(booking: Booking) {
@@ -59,26 +77,55 @@ function openEdit(booking: Booking) {
 
 async function onSaved() {
   editing.value = null
-  await refresh()
+  await loadList()
 }
-
-onMounted(async () => {
-  loading.value = true
-  try {
-    await refresh()
-  } finally {
-    loading.value = false
-  }
-})
 </script>
 
 <template>
   <AdminLayout>
     <PageBreadcrumb :pageTitle="currentPageTitle" />
 
-    <div class="space-y-6">
+    <!-- Переключатель: календарь / список -->
+    <div class="mb-6 flex">
+      <div
+        class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-white/[0.03]"
+      >
+        <button
+          type="button"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="
+            viewMode === 'calendar'
+              ? 'bg-success-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+          "
+          :aria-pressed="viewMode === 'calendar'"
+          @click="viewMode = 'calendar'"
+        >
+          Посмотреть через календарь
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          :class="
+            viewMode === 'list'
+              ? 'bg-success-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+          "
+          :aria-pressed="viewMode === 'list'"
+          @click="showList"
+        >
+          Показать списком
+        </button>
+      </div>
+    </div>
+
+    <!-- Календарь (грузит брони видимого периода самостоятельно) -->
+    <BookingCalendar v-if="viewMode === 'calendar'" />
+
+    <!-- Список -->
+    <div v-else class="space-y-6">
       <!-- Day / week / month summary -->
-      <BookingStats v-model="period" :bookings="bookings" />
+      <BookingStats v-model="period" :bookings="visibleBookings" />
 
       <!-- Bookings table -->
       <div
