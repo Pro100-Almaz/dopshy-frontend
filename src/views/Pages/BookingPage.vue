@@ -347,8 +347,8 @@ onUnmounted(() => {
           </p>
         </div>
 
-        <!-- Rows -->
-        <div v-else class="max-w-full overflow-x-auto custom-scrollbar">
+        <!-- Rows (table — large screens) -->
+        <div v-else class="hidden max-w-full overflow-x-auto custom-scrollbar lg:block">
           <table class="min-w-full">
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700">
@@ -523,6 +523,96 @@ onUnmounted(() => {
             </tbody>
           </table>
         </div>
+
+        <!-- Rows (cards — small screens) -->
+        <ul v-if="!tableLoading && tableBookings.length" class="divide-y divide-gray-200 dark:divide-gray-700 lg:hidden">
+          <li v-for="b in tableBookings" :key="b.id" class="px-5 py-4">
+            <!-- Header: ref + status + edit -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                  {{ b.id }}
+                </span>
+                <span
+                  class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                  :class="STATUS_CLASS[b.status]"
+                >
+                  {{ BOOKING_STATUS_LABEL[b.status] }}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
+                :aria-label="`Редактировать бронь ${b.ref}`"
+                @click="openEdit(b)"
+              >
+                <Pencil class="h-4 w-4" />
+              </button>
+            </div>
+
+            <!-- Customer -->
+            <div class="mt-3 flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
+              >
+                {{ initials(b.customerName) }}
+              </div>
+              <div class="min-w-0">
+                <span class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                  {{ b.customerName }}
+                </span>
+                <span class="block truncate text-gray-500 text-theme-xs dark:text-gray-400">
+                  {{ b.customerPhone }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Field / source / date-time -->
+            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-theme-sm">
+              <div>
+                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Поле</dt>
+                <dd class="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span class="text-gray-700 dark:text-gray-300">{{ b.fieldName }}</span>
+                  <span
+                    v-if="b.fieldType"
+                    class="rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                  >
+                    {{ FIELD_TYPE_LABEL[b.fieldType] }}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Источник</dt>
+                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">{{ b.source }}</dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Дата и время</dt>
+                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">
+                  {{ formatDayLabel(b.date).day }} {{ formatDayLabel(b.date).month }},
+                  {{ formatDayLabel(b.date).weekday }} · {{ b.start }}–{{ b.end }}
+                </dd>
+              </div>
+            </dl>
+
+            <!-- Payments -->
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-success-200 rounded-full px-2 py-0.5 hover:bg-success-400 dark:bg-success-500/15 dark:hover:bg-success-500/20"
+                :aria-label="`Показать оплаты брони ${b.ref}`"
+                @click="paymentDetail = b"
+              >
+                Оплачено: {{ formatPrice(b.paidTotal) }}
+              </button>
+              <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15">
+                Остаток: {{ formatPrice(b.total - b.paidTotal) }}
+              </span>
+              <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                Сумма: {{ formatPrice(b.total) }}
+              </span>
+            </div>
+          </li>
+        </ul>
 
         <!-- Pagination (today / week / month) -->
         <div
