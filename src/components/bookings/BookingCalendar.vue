@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Loader2, CalendarX, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import type { Booking, Field } from '@/types'
@@ -416,16 +416,23 @@ const visibleRange = computed<{ from: string; to: string } | null>(() => {
 })
 
 let rangeReq = 0
-async function loadRange(from: string, to: string, fieldId: string) {
+// Дешёвое структурное сравнение — списки детерминированы (отсортированы бэкендом/маппером).
+function changed(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+async function loadRange(from: string, to: string, fieldId: string, silent = false) {
   const req = ++rangeReq
-  loading.value = true
+  if (!silent) loading.value = true
   try {
     const rows = await listFieldBookingsInRange(fieldId, from, to)
-    if (req === rangeReq) bookings.value = rows
+    // Присваиваем только при реальном изменении — тихий опрос не должен дёргать список.
+    if (req === rangeReq && changed(bookings.value, rows)) bookings.value = rows
   } catch {
-    if (req === rangeReq) bookings.value = []
+    // При тихом опросе транзиентный сбой сети не должен стирать текущие данные.
+    if (req === rangeReq && !silent) bookings.value = []
   } finally {
-    if (req === rangeReq) loading.value = false
+    if (req === rangeReq && !silent) loading.value = false
   }
 }
 
@@ -437,6 +444,43 @@ watch(
   },
   { immediate: true },
 )
+
+// ── Живое обновление (как в списке) ─────────────────
+// Реального времени пока нет — тихо опрашиваем бэкенд каждые 5 секунд. Обновляем
+// сетку только при реальном изменении данных, не трогая индикатор загрузки —
+// поэтому для пользователя незаметно. Год (range === null) не опрашиваем.
+const POLL_MS = 5000
+let pollId: ReturnType<typeof setInterval> | null = null
+let silentInFlight = false
+
+async function pollBookings() {
+  if (document.hidden) return
+  if (loading.value || silentInFlight) return
+  const range = visibleRange.value
+  const fieldId = selectedFieldId.value
+  if (!range || !fieldId) return // год или поле не выбрано — пропускаем
+  silentInFlight = true
+  try {
+    await loadRange(range.from, range.to, fieldId, true)
+  } finally {
+    silentInFlight = false
+  }
+}
+
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) pollBookings()
+}
+
+onMounted(() => {
+  pollId = setInterval(pollBookings, POLL_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+onUnmounted(() => {
+  if (pollId) clearInterval(pollId)
+  document.removeEventListener('visibilitychange', onVisibility)
+})
 </script>
 
 <template>
