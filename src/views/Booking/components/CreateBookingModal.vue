@@ -24,8 +24,12 @@ const emit = defineEmits<{ close: []; created: [] }>()
 const store = useBookingStore()
 const auth = useAuthStore()
 
-const isManager = computed(() =>
-  ['manager', 'super_admin', 'admin'].includes(auth.user?.role ?? ''),
+// Поле предоплаты видно только сотрудникам (админ / супер-админ / менеджер),
+// которые вошли в систему. Анонимный клиент на публичной странице поля его не видит.
+const isManager = computed(
+  () =>
+    auth.isAuthenticated &&
+    ['super_admin', 'admin', 'manager'].includes(auth.user?.role ?? ''),
 )
 
 const dialog = ref<HTMLDialogElement | null>(null)
@@ -38,6 +42,16 @@ const paid = ref(false)
 
 const form = reactive({ customer: '', phone: '', notes: '', prepayment: '' })
 
+// Телефон обязателен и должен содержать не менее 8 символов.
+const PHONE_MIN_LENGTH = 8
+const phoneError = computed(() =>
+  form.phone.trim().length < PHONE_MIN_LENGTH
+    ? `Номер телефона должен содержать не менее ${PHONE_MIN_LENGTH} символов`
+    : '',
+)
+// Ошибку показываем только после попытки отправки — чтобы не пугать пустым полем сразу.
+const phoneTouched = ref(false)
+
 function resetState() {
   step.value = 'review'
   status.value = 'idle'
@@ -47,10 +61,13 @@ function resetState() {
   form.phone = ''
   form.notes = ''
   form.prepayment = ''
+  phoneTouched.value = false
 }
 
 async function createDraft() {
   if (!store.field || store.count === 0) return
+  phoneTouched.value = true
+  if (phoneError.value) return
   status.value = 'processing'
   errorMessage.value = ''
   try {
@@ -184,12 +201,24 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Имя клиента"
               class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
-            <input
-              v-model="form.phone"
-              type="tel"
-              placeholder="Телефон"
-              class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
-            />
+            <div>
+              <input
+                v-model="form.phone"
+                type="tel"
+                placeholder="Телефон"
+                :aria-invalid="phoneTouched && !!phoneError"
+                class="w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1"
+                :class="
+                  phoneTouched && phoneError
+                    ? 'border-error-400 focus:border-error-500 focus:ring-error-500'
+                    : 'border-gray-300 focus:border-success-600 focus:ring-success-600'
+                "
+                @blur="phoneTouched = true"
+              />
+              <p v-if="phoneTouched && phoneError" class="mt-1 text-xs text-error-500">
+                {{ phoneError }}
+              </p>
+            </div>
             <textarea
               v-model="form.notes"
               rows="2"

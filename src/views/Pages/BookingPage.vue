@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight, Search } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -14,6 +14,7 @@ import {
   listBookings,
   listBookingsInRange,
   periodRange,
+  isBookingInPeriod,
   formatPrice,
   formatDayLabel,
   formatDateTime,
@@ -37,6 +38,10 @@ const tableBookings = ref<Booking[]>([])
 const statsLoading = ref(true)
 const tableLoading = ref(true)
 
+// Поиск по id / имени клиента / телефону. Обрабатывается бэкендом — применяется
+// ко всем периодам и сбрасывает пагинацию на первую страницу.
+const search = ref('')
+
 // Пагинация — для всех периодов. Бэкенд отдаёт по PAGE_SIZE броней на страницу;
 // неполная страница = последняя.
 const PAGE_SIZE = 20
@@ -47,6 +52,27 @@ const hasPrev = computed(() => page.value > 1)
 // Следующая страница есть только когда текущая заполнена целиком (== PAGE_SIZE).
 // `atEnd` страхует случай, когда всего броней ровно кратно PAGE_SIZE.
 const hasNext = computed(() => tableBookings.value.length >= PAGE_SIZE && !atEnd.value)
+
+// Совпадение брони с поисковым запросом (id / имя / телефон) — тот же набор полей,
+// что ищет бэкенд. Нужен, чтобы счётчик в шапке оставался корректным при поиске.
+function matchesSearch(b: Booking, q: string): boolean {
+  if (!q) return true
+  const term = q.toLowerCase()
+  const digits = q.replace(/\D/g, '')
+  const idHit = b.id.toLowerCase().includes(term)
+  const nameHit = b.customerName.toLowerCase().includes(term)
+  const phoneHit = digits.length > 0 && b.customerPhone.replace(/\D/g, '').includes(digits)
+  return idHit || nameHit || phoneHit
+}
+
+// Общее число броней для текущего фильтра (не только текущей страницы). Считаем по
+// полному списку `allBookings`, отфильтрованному по периоду и — при наличии — поиску.
+const periodTotal = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return allBookings.value.filter(
+    (b) => isBookingInPeriod(b, period.value) && matchesSearch(b, q),
+  ).length
+})
 
 function initials(name: string): string {
   return name
@@ -77,17 +103,25 @@ async function loadAll() {
   }
 }
 
+// Монотонный токен запроса: поиск (с дебаунсом) и клики пагинации оба зовут goToPage,
+// поэтому медленный ранний ответ мог перезаписать свежий. Применяем только последний.
+let reqSeq = 0
+
 // Загружает страницу `target` для текущего периода: range-эндпоинт для today/week/month,
 // полный список (GET /bookings) для all_time. Пустая страница за пределами первой —
 // конец пагинации, на неё не переключаемся.
 async function goToPage(target: number) {
   if (target < 1) return
+  const myReq = ++reqSeq
   tableLoading.value = true
   try {
     const range = periodRange(period.value)
+    const q = search.value.trim() || undefined
     const rows = range
-      ? await listBookingsInRange(range.from, range.to, target)
-      : await listBookings(target)
+      ? await listBookingsInRange(range.from, range.to, target, q)
+      : await listBookings(target, q)
+    // Устарел — пришёл более новый запрос, его результат уже актуальнее.
+    if (myReq !== reqSeq) return
     if (rows.length === 0 && target > 1) {
       atEnd.value = true
       return
@@ -96,7 +130,8 @@ async function goToPage(target: number) {
     page.value = target
     atEnd.value = false
   } finally {
-    tableLoading.value = false
+    // Гасим индикатор только для актуального запроса, иначе мигание на гонках.
+    if (myReq === reqSeq) tableLoading.value = false
   }
 }
 
@@ -107,6 +142,21 @@ function changePeriod(next: BookingPeriod) {
   atEnd.value = false
   goToPage(1)
 }
+
+// Поиск с дебаунсом — каждый ввод сбрасывает на первую страницу и перезапрашивает.
+let searchTimer: number | undefined
+watch(search, () => {
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    page.value = 1
+    atEnd.value = false
+    goToPage(1)
+  }, 350)
+})
+
+onUnmounted(() => {
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+})
 
 function prevPage() {
   if (hasPrev.value) goToPage(page.value - 1)
@@ -248,22 +298,35 @@ onUnmounted(() => {
         class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
       >
         <div
-          class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6"
+          class="flex flex-col gap-4 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
         >
-          <h3 class="font-medium text-gray-800 dark:text-white/90">
-            {{
-              period === 'today'
-                ? 'Брони на сегодня'
-                : period === 'week'
-                  ? 'Брони на этой неделе'
-                  : period === 'month'
-                    ? 'Брони в этом месяце'
-                    : 'Все брони'
-            }}
-          </h3>
-          <span class="text-sm text-gray-500 dark:text-gray-400">
-            {{ tableBookings.length }}
-          </span>
+          <div class="flex items-center gap-3">
+            <h3 class="font-medium text-gray-800 dark:text-white/90">
+              {{
+                period === 'today'
+                  ? 'Брони на сегодня'
+                  : period === 'week'
+                    ? 'Брони на этой неделе'
+                    : period === 'month'
+                      ? 'Брони в этом месяце'
+                      : 'Брони'
+              }}
+            </h3>
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ periodTotal }}
+            </span>
+          </div>
+          <div class="relative w-full sm:w-72">
+            <Search
+              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              v-model="search"
+              type="search"
+              placeholder="Поиск по номеру, имени или телефону"
+              class="h-10 w-full rounded-lg border border-gray-300 bg-transparent pl-9 pr-3 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30"
+            />
+          </div>
         </div>
 
         <!-- Loading -->
@@ -279,7 +342,7 @@ onUnmounted(() => {
         >
           <CalendarX class="h-7 w-7 text-gray-400" aria-hidden="true" />
           <p class="text-gray-600 dark:text-gray-400">
-            За выбранный период броней нет.
+            {{ search.trim() ? 'По запросу ничего не найдено.' : 'За выбранный период броней нет.' }}
           </p>
         </div>
 

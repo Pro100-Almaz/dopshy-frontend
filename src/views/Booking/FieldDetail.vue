@@ -213,7 +213,8 @@ onMounted(async () => {
 
         <!-- Summary rail (desktop) -->
         <aside class="hidden lg:block">
-          <div class="sticky top-24 rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+          <div class="sticky top-24 space-y-4">
+          <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
             <h2 class="text-lg font-bold text-gray-900">Ваш выбор</h2>
             <p class="mt-1 text-sm text-gray-500">{{ field.name }}</p>
 
@@ -249,6 +250,16 @@ onMounted(async () => {
             >
               Забронировать <ArrowRight class="h-5 w-5" aria-hidden="true" />
             </button>
+          </div>
+          <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
+            <h2 class="text-lg font-bold text-gray-900">Внимание</h2>
+
+
+
+            <div class="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+              <span class="text-sm text-gray-500">Если вы созздали бронь и хотите изменить/отменить её, напишите на данный WhatsApp: +7 (700) 123-4567</span>
+            </div>
+          </div>
           </div>
         </aside>
       </div>

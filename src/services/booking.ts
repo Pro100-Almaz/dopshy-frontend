@@ -25,9 +25,9 @@ import { apiFetch, mediaUrl } from './api'
 
 // ── Геолокация арены (для карты / маршрута) ─────────
 export const ARENA = {
-  address: 'Алматы, ул. Спортивная 12',
-  lat: 43.238949,
-  lng: 76.889709,
+  address: 'Астана, ул. Сығанақ 6ф',
+  lat: 51.13079357137367,
+  lng:  71.36958624774051
 }
 
 export function directionsUrl(): string {
@@ -775,15 +775,31 @@ function mapBooking(api: BookingApi): Booking {
 
 /**
  * Все брони через GET /bookings. `page` — необязательный номер страницы пагинатора
- * бэкенда (1..N); опущен → полный список (для сводок). null-элементы отбрасываем.
+ * бэкенда (1..N); опущен → полный список (для сводок). `search` ищет по id, имени
+ * клиента и телефону (обрабатывается бэкендом). null-элементы отбрасываем.
  */
-export async function listBookings(page?: number): Promise<Booking[]> {
-  const qs = page != null ? `?page=${page}` : ''
+export async function listBookings(page?: number, search?: string): Promise<Booking[]> {
+  const qs = buildBookingQuery({ page, search })
   const rows = await apiFetch<(BookingApi | null)[]>(`/bookings${qs}`)
   return rows
     .filter((r): r is BookingApi => r != null)
     .map(mapBooking)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+/** Собирает query-строку броней из page/search/field, опуская пустые параметры. */
+function buildBookingQuery(params: {
+  page?: number
+  search?: string
+  field?: string | number
+}): string {
+  const qs = new URLSearchParams()
+  if (params.field != null && params.field !== '') qs.set('field', String(params.field))
+  if (params.page != null) qs.set('page', String(params.page))
+  const search = params.search?.trim()
+  if (search) qs.set('search', search)
+  const str = qs.toString()
+  return str ? `?${str}` : ''
 }
 
 /** Брони одного поля в диапазоне дат (GET /bookings/range/{from}/{to}?field=). */
@@ -896,14 +912,16 @@ export function periodRange(
 /**
  * Брони в диапазоне дат через GET /bookings/range (все поля, с пагинацией).
  * `page` — номер страницы пагинатора бэкенда (1..N); опущен → без пагинации.
+ * `search` ищет по id, имени клиента и телефону (обрабатывается бэкендом).
  * Порядок бэкенда (date, time_start, field) сохраняется. null-элементы отбрасываем.
  */
 export async function listBookingsInRange(
   dateFrom: string,
   dateTo: string,
   page?: number,
+  search?: string,
 ): Promise<Booking[]> {
-  const qs = page != null ? `?page=${page}` : ''
+  const qs = buildBookingQuery({ page, search })
   const rows = await apiFetch<(BookingApi | null)[]>(`/bookings/range/${dateFrom}/${dateTo}${qs}`)
   return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
