@@ -208,11 +208,12 @@ async function pollBookings() {
     const nextAll = await listBookings()
     if (changed(allBookings.value, nextAll)) allBookings.value = nextAll
 
-    // Текущая страница таблицы — тем же запросом, что и goToPage.
+    // Текущая страница таблицы — тем же запросом, что и goToPage, включая поиск.
     const range = periodRange(period.value)
+    const q = search.value.trim() || undefined
     const rows = range
-      ? await listBookingsInRange(range.from, range.to, page.value)
-      : await listBookings(page.value)
+      ? await listBookingsInRange(range.from, range.to, page.value, q)
+      : await listBookings(page.value, q)
     // Пустую страницу за пределами первой игнорируем, чтобы не сбить пагинацию.
     if (!(rows.length === 0 && page.value > 1) && changed(tableBookings.value, rows)) {
       tableBookings.value = rows

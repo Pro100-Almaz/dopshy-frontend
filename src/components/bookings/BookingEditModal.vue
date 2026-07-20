@@ -19,6 +19,9 @@ const STATUS_OPTIONS: BookingState[] = (Object.keys(BOOKING_STATE_LABEL) as Book
   (s) => s !== 'draft',
 )
 
+// Верхний предел для любой суммы оплаты — защита от опечаток/переполнения.
+const MAX_PAYMENT = 10_000_000
+
 // Метка для сырого статуса — известные из справочника, неизвестные показываем как есть.
 function stateLabel(state: string): string {
   return BOOKING_STATE_LABEL[state as BookingState] ?? state
@@ -67,6 +70,16 @@ async function save() {
   }
   if (form.end <= form.start) {
     error.value = 'Время окончания должно быть позже начала'
+    return
+  }
+  const payments = [
+    { value: Number(form.paidKaspiQr), label: 'Kaspi QR' },
+    { value: Number(form.paidCash), label: 'Наличные' },
+    { value: Number(form.paidAvans), label: 'Аванс' },
+  ]
+  const over = payments.find((p) => p.value > MAX_PAYMENT)
+  if (over) {
+    error.value = `Сумма «${over.label}» не может превышать ${MAX_PAYMENT.toLocaleString('ru-RU')} ₸`
     return
   }
   saving.value = true
@@ -142,7 +155,7 @@ const inputClass =
             </select>
           </div>
 
-          <!-- Date -->
+          <!-- Date
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Дата
@@ -150,7 +163,7 @@ const inputClass =
             <input v-model="form.date" type="date" :class="inputClass" />
           </div>
 
-          <!-- Times -->
+          Times
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -164,7 +177,7 @@ const inputClass =
               </label>
               <input v-model="form.end" type="time" :class="inputClass" />
             </div>
-          </div>
+          </div> -->
 
           <!-- Status -->
           <div>
@@ -194,6 +207,7 @@ const inputClass =
                 v-model.number="form.paidKaspiQr"
                 type="number"
                 min="0"
+                :max="MAX_PAYMENT"
                 step="1"
                 inputmode="numeric"
                 :class="inputClass"
@@ -207,6 +221,7 @@ const inputClass =
                 v-model.number="form.paidCash"
                 type="number"
                 min="0"
+                :max="MAX_PAYMENT"
                 step="1"
                 inputmode="numeric"
                 :class="inputClass"
@@ -220,6 +235,7 @@ const inputClass =
                 v-model.number="form.paidAvans"
                 type="number"
                 min="0"
+                :max="MAX_PAYMENT"
                 step="1"
                 inputmode="numeric"
                 :class="inputClass"

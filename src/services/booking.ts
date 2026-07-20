@@ -672,7 +672,9 @@ export function toISO(d: Date): string {
 }
 
 export function formatPrice(value: number): string {
-  return new Intl.NumberFormat('ru-RU').format(value) + ' ₸'
+  // Неразрывный пробел перед ₸ — сумма и знак валюты не переносятся на разные строки
+  // на узких колонках (напр. таблица броней на 13" экранах).
+  return new Intl.NumberFormat('ru-RU').format(value) + '\u00A0₸'
 }
 
 const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
