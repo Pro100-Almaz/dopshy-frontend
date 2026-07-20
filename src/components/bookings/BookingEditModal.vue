@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import type { Booking, BookingState, Field } from '@/types'
 import { getManagerFields, updateBooking, BOOKING_STATE_LABEL } from '@/services/booking'
+import { ApiError } from '@/services/api'
 
 const props = defineProps<{ booking: Booking }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
@@ -13,7 +14,10 @@ const fields = ref<Field[]>([])
 const saving = ref(false)
 const error = ref('')
 
-const STATUS_OPTIONS = Object.keys(BOOKING_STATE_LABEL) as BookingState[]
+// «Черновик» — служебный статус, вручную не выставляется.
+const STATUS_OPTIONS: BookingState[] = (Object.keys(BOOKING_STATE_LABEL) as BookingState[]).filter(
+  (s) => s !== 'draft',
+)
 
 // Метка для сырого статуса — известные из справочника, неизвестные показываем как есть.
 function stateLabel(state: string): string {
@@ -81,7 +85,11 @@ async function save() {
     })
     emit('saved')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось сохранить бронь'
+    if (e instanceof ApiError && e.status === 404) {
+      error.value = 'Доступная бронь не найдена'
+    } else {
+      error.value = e instanceof Error ? e.message : 'Не удалось сохранить бронь'
+    }
   } finally {
     saving.value = false
   }
