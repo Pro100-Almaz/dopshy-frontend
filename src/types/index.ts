@@ -223,6 +223,14 @@ export interface BookingApi {
   updated_at: string // ISO datetime
 }
 
+// Полная карточка брони (GET /api/bookings/{id}) — данные бота, проброшенные
+// как есть. Расширяет BookingApi дополнительными полями детали.
+export interface BookingDetailApi extends BookingApi {
+  reserved_until?: string | null // ISO datetime — до какого момента держится черновик
+  group_transition?: string | null
+  last_receipt_date?: string | null // 'yyyy-mm-dd'
+}
+
 // ── Бот-ассистент: пауза для передачи диалога менеджеру ──────────────
 // Почему пауза выставлена: вручную менеджером ('manual') или автоматически
 // системой, когда менеджер ответил клиенту напрямую в WhatsApp ('auto').
@@ -251,4 +259,28 @@ export interface Contact {
   paused: boolean // true = бот выключен для контакта
   paused_reason: PausedReason
   last_activity: string // ISO datetime; список приходит отсортированным (новые сверху)
+}
+
+// ── История действий (GET /manager/history) ─────────
+// Запись журнала: изменение статуса брони, оплата и т.п.,
+// совершённое ботом (whatsapp) или менеджером (manager:<id>).
+export interface HistoryEntry {
+  id: number
+  booking_id: number
+  source: string // 'whatsapp' | 'manager:<id>'
+  description: string
+  created_at: string // ISO datetime
+}
+
+// Канал действия — производное от source, для фильтра и бейджа.
+export type HistoryChannel = 'whatsapp' | 'manager'
+
+// Стандартный конверт постраничного ответа бэкенда.
+export interface HistoryPage {
+  ok: boolean
+  data: HistoryEntry[]
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
 }

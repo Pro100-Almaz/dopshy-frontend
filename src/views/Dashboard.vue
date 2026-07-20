@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed, markRaw } from 'vue'
+import { onMounted, onUnmounted, computed, markRaw } from 'vue'
 import {
   CalendarDays,
   Percent,
@@ -152,7 +152,34 @@ const businessTabs = [
   { value: 'boxing', label: 'Бокс', icon: markRaw(Swords) },
 ]
 
+// ── Живое обновление ────────────────────────────────
+// Реального времени пока нет — опрашиваем бэкенд каждые 5 секунд. Обновление
+// тихое (без скелетона) и применяется только при изменении данных, поэтому
+// для пользователя незаметно. Поллинг живёт только пока открыта эта страница.
+const POLL_MS = 5000
+let pollId: ReturnType<typeof setInterval> | null = null
+
+function poll() {
+  // Не грузим впустую, когда вкладка в фоне (или открыт заглушка-модуль бокса).
+  if (document.hidden || dashStore.activeTab !== 'football') return
+  dashStore.fetchDashboard({ silent: true }).catch(() => {
+    /* временный сбой сети — оставляем последние данные, следующий тик повторит */
+  })
+}
+
+function onVisibility() {
+  // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
+  if (!document.hidden) poll()
+}
+
 onMounted(() => {
   dashStore.fetchDashboard()
+  pollId = setInterval(poll, POLL_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+})
+
+onUnmounted(() => {
+  if (pollId) clearInterval(pollId)
+  document.removeEventListener('visibilitychange', onVisibility)
 })
 </script>
