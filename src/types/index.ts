@@ -263,18 +263,29 @@ export interface Contact {
 }
 
 // ── История действий (GET /manager/history) ─────────
-// Запись журнала: изменение статуса брони, оплата и т.п.,
-// совершённое ботом (whatsapp) или менеджером (manager:<id>).
+// Запись журнала: изменение статуса брони, оплата и т.п. `source` имеет вид
+// '<тип>:<значение>' — 'manager:username', 'chatbot:smth', 'landing:phone',
+// 'account:email'. Нераспознанный формат отображается целиком.
 export interface HistoryEntry {
   id: number
   booking_id: number
-  source: string // 'whatsapp' | 'manager:<id>'
+  source: string // '<kind>:<value>', напр. 'manager:almaz'
   description: string
   created_at: string // ISO datetime
 }
 
-// Канал действия — производное от source, для фильтра и бейджа.
+// Канал действия — производное от source, для query-фильтра.
 export type HistoryChannel = 'whatsapp' | 'manager'
+
+// Распознанный тип источника (левая часть до ':'); 'other' — нет ':' или тип неизвестен.
+export type SourceKind = 'manager' | 'chatbot' | 'landing' | 'account' | 'other'
+
+// Разобранный источник: тип для иконки/цвета + текст для показа (правая часть,
+// либо вся строка для 'other').
+export interface ParsedSource {
+  kind: SourceKind
+  label: string
+}
 
 // Стандартный конверт постраничного ответа бэкенда.
 export interface HistoryPage {

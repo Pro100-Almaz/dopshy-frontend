@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import type { Component } from 'vue'
 import {
   X,
   Loader2,
@@ -11,12 +12,24 @@ import {
   StickyNote,
   Bot,
   UserCog,
+  Globe,
+  UserRound,
+  HelpCircle,
 } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
-import type { BookingDetailApi } from '@/types'
+import type { BookingDetailApi, SourceKind } from '@/types'
 import { getBookingDetail, formatPrice, formatDateTime, BOOKING_STATE_LABEL } from '@/services/booking'
-import { channelOf, sourceLabel } from '@/services/history'
+import { parseSource, SOURCE_META } from '@/services/history'
+
+// Иконка по типу источника; цвета/метки — в SOURCE_META сервиса.
+const SOURCE_ICON: Record<SourceKind, Component> = {
+  manager: UserCog,
+  chatbot: Bot,
+  landing: Globe,
+  account: UserRound,
+  other: HelpCircle,
+}
 
 const props = defineProps<{ id: number | string }>()
 defineEmits<{ close: [] }>()
@@ -79,7 +92,7 @@ const stateClass = computed(() => {
   return 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400'
 })
 
-const isManager = computed(() => channelOf(detail.value?.source ?? '') === 'manager')
+const src = computed(() => parseSource(detail.value?.source ?? ''))
 
 const payments = computed(() => {
   const b = detail.value
@@ -150,15 +163,11 @@ const remaining = computed(() => total.value - paidTotal.value)
             </span>
             <span
               class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-theme-xs font-medium"
-              :class="
-                isManager
-                  ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'
-                  : 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
-              "
+              :class="SOURCE_META[src.kind].badgeClass"
+              :title="SOURCE_META[src.kind].typeLabel"
             >
-              <UserCog v-if="isManager" class="h-3.5 w-3.5" />
-              <Bot v-else class="h-3.5 w-3.5" />
-              {{ sourceLabel(detail.source) }}
+              <component :is="SOURCE_ICON[src.kind]" class="h-3.5 w-3.5" />
+              {{ src.label }}
             </span>
           </div>
 
