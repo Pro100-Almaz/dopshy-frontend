@@ -8,7 +8,6 @@ import type {
   Booking,
   BookingApi,
   BookingDetailApi,
-  BookingStatus,
   BookingState,
   BookingPeriod,
   FieldApi,
@@ -713,17 +712,6 @@ function addDays(base: Date, days: number): Date {
   return d
 }
 
-const STATE_TO_STATUS: Record<string, BookingStatus> = {
-  draft: 'pending',
-  awaiting_payment: 'pending',
-  pending: 'pending',
-  unpaid: 'pending',
-  confirmed: 'confirmed',
-  paid: 'confirmed',
-  completed: 'completed',
-  cancelled: 'cancelled',
-}
-
 export const TO_STATE: Record<string, BookingState> = {
   draft: 'draft',
   awaiting_payment: 'awaiting_payment',
@@ -765,7 +753,6 @@ function mapBooking(api: BookingApi): Booking {
     start: trimSeconds(api.time_start),
     end: trimSeconds(api.time_end),
     total: toMoney(api.price_total),
-    status: STATE_TO_STATUS[api.state] ?? 'pending',
     state: api.state,
     createdAt: api.created_at,
     source: api.source,
@@ -930,13 +917,6 @@ export async function listBookingsInRange(
   return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
 
-export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
-  confirmed: 'Подтверждено',
-  pending: 'Ожидает',
-  completed: 'Завершено',
-  cancelled: 'Отменено',
-}
-
 // Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
 export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
   draft: 'Черновик',
@@ -944,4 +924,28 @@ export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
   confirmed: 'Подтверждено',
   cancelled: 'Отменено',
   unpaid: 'Не оплачено',
+}
+
+// Человекочитаемая подпись статуса брони по сырому state с бэкенда.
+// Неизвестные значения возвращаем как есть, чтобы ничего не «терялось».
+export function bookingStateLabel(state: string): string {
+  return BOOKING_STATE_LABEL[state as BookingState] ?? state
+}
+
+// Цвет бейджа статуса брони по сырому state с бэкенда. «Ожидает оплаты»
+// (awaiting_payment) — единственное состояние с предупреждающим цветом.
+const BOOKING_STATE_CLASS: Record<string, string> = {
+  awaiting_payment: 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  confirmed: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
+  paid: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
+  cancelled: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  unpaid: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  rejected: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+}
+
+const BOOKING_STATE_CLASS_DEFAULT =
+  'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+
+export function bookingStateClass(state: string): string {
+  return BOOKING_STATE_CLASS[state] ?? BOOKING_STATE_CLASS_DEFAULT
 }

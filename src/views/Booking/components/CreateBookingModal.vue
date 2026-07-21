@@ -258,26 +258,26 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Заметка (необязательно)"
               class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
-            <div v-if="canEditPrice">
-              <label
-                for="booking-price"
-                class="mb-1 block text-xs font-semibold uppercase text-gray-500"
-                >Цена брони</label
-              >
-              <input
-                id="booking-price"
-                v-model="form.price"
-                type="number"
-                min="0"
-                step="1"
-                inputmode="numeric"
-                :placeholder="String(calculatedPrice)"
-                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
-              />
-              <p class="mt-1 text-[11px] text-gray-400">
-                Расчётная цена: {{ formatPrice(calculatedPrice) }}
-              </p>
-            </div>
+<!--            <div v-if="canEditPrice">-->
+<!--              <label-->
+<!--                for="booking-price"-->
+<!--                class="mb-1 block text-xs font-semibold uppercase text-gray-500"-->
+<!--                >Цена брони</label-->
+<!--              >-->
+<!--              <input-->
+<!--                id="booking-price"-->
+<!--                v-model="form.price"-->
+<!--                type="number"-->
+<!--                min="0"-->
+<!--                step="1"-->
+<!--                inputmode="numeric"-->
+<!--                :placeholder="String(calculatedPrice)"-->
+<!--                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"-->
+<!--              />-->
+<!--              <p class="mt-1 text-[11px] text-gray-400">-->
+<!--                Расчётная цена: {{ formatPrice(calculatedPrice) }}-->
+<!--              </p>-->
+<!--            </div>-->
             <div v-if="isManager">
               <label
                 for="booking-prepayment"
