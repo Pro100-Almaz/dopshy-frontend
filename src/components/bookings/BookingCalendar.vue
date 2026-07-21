@@ -883,6 +883,13 @@ onUnmounted(() => {
           </dd>
         </div>
       </dl>
+
+      <p
+        v-if="hover.notes"
+        class="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-gray-800"
+      >
+        {{ hover.notes }}
+      </p>
     </div>
   </Teleport>
 </template>

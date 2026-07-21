@@ -34,6 +34,7 @@ const form = reactive({
   start: '',
   end: '',
   status: 'draft' as string,
+  notes: '',
   paidKaspiQr: 0,
   paidCash: 0,
   paidAvans: 0,
@@ -46,6 +47,7 @@ function fillFrom(b: Booking) {
   form.start = b.start
   form.end = b.end
   form.status = b.state
+  form.notes = b.notes ?? ''
   form.paidKaspiQr = b.paidKaspiQr
   form.paidCash = b.paidCash
   form.paidAvans = b.paidAvans
@@ -92,6 +94,7 @@ async function save() {
       date: form.date,
       end_date: form.date,
       status: form.status as BookingState,
+      notes: form.notes.trim(),
       paid_kaspi_qr: Number(form.paidKaspiQr) || 0,
       paid_cash: Number(form.paidCash) || 0,
       paid_avans: Number(form.paidAvans) || 0,
@@ -195,6 +198,20 @@ const inputClass =
                 {{ BOOKING_STATE_LABEL[s] }}
               </option>
             </select>
+          </div>
+
+          <!-- Notes -->
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Заметка
+            </label>
+            <textarea
+              v-model="form.notes"
+              rows="3"
+              placeholder="Заметка к брони (необязательно)"
+              :class="inputClass"
+              class="h-auto resize-y"
+            ></textarea>
           </div>
 
           <!-- Payments -->

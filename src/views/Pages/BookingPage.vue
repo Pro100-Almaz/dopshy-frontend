@@ -420,6 +420,13 @@ onUnmounted(() => {
                       <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
                         {{ b.customerPhone }}
                       </span>
+                      <span
+                        v-if="b.notes"
+                        :title="b.notes"
+                        class="mt-0.5 block max-w-[16rem] truncate text-theme-xs italic text-gray-400 dark:text-gray-500"
+                      >
+                        {{ b.notes }}
+                      </span>
                     </div>
                   </div>
                 </td>
@@ -591,6 +598,10 @@ onUnmounted(() => {
                   {{ formatDayLabel(b.date).day }} {{ formatDayLabel(b.date).month }},
                   {{ formatDayLabel(b.date).weekday }} · {{ b.start }}–{{ b.end }}
                 </dd>
+              </div>
+              <div v-if="b.notes" class="col-span-2">
+                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Заметка</dt>
+                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">{{ b.notes }}</dd>
               </div>
             </dl>
 
