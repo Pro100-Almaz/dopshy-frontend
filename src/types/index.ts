@@ -172,6 +172,7 @@ export interface Booking {
   state: string // сырой статус с бэкенда (для редактирования)
   createdAt: string // ISO datetime
   source?: string
+  notes?: string // заметка менеджера к брони
   // Оплаты, ₸. С бэкенда приходят строками (см. BookingApi) — здесь уже числа.
   paidBot: number
   paidKaspiQr: number

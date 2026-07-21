@@ -767,6 +767,7 @@ function mapBooking(api: BookingApi): Booking {
     state: api.state,
     createdAt: api.created_at,
     source: api.source,
+    notes: api.notes ?? undefined,
     paidBot,
     paidKaspiQr,
     paidCash,
@@ -828,6 +829,7 @@ export interface BookingUpdatePayload {
   date?: string // 'yyyy-mm-dd'
   end_date?: string
   status?: BookingState
+  notes?: string
   // Оплаты, ₸ — редактируются менеджером. Бэкенд ожидает числа.
   paid_kaspi_qr?: number
   paid_cash?: number
