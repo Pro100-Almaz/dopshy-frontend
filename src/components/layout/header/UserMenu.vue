@@ -97,7 +97,7 @@ const userInitials = computed(() => {
 })
 
 const menuItems = [
-  { href: '/profile', icon: User, text: 'Редактировать профиль' },
+  { href: '/profile', icon: User, text: 'Профиль' },
   { href: '/settings', icon: Settings, text: 'Настройки аккаунта' },
   { href: '/profile', icon: HelpCircle, text: 'Поддержка' },
 ]
