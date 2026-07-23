@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import type { Component } from 'vue'
 import {
   Loader2,
   History as HistoryIcon,
   Bot,
   UserCog,
+  Globe,
+  UserRound,
+  HelpCircle,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-vue-next'
@@ -17,8 +21,17 @@ import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BookingDetailModal from '@/components/bookings/BookingDetailModal.vue'
 
-import type { HistoryChannel, HistoryEntry } from '@/types'
-import { listHistory, channelOf, sourceLabel, formatDateTime } from '@/services/history'
+import type { HistoryChannel, HistoryEntry, SourceKind } from '@/types'
+import { listHistory, parseSource, SOURCE_META, formatDateTime } from '@/services/history'
+
+// Иконка по типу источника; цвета/метки — в SOURCE_META сервиса.
+const SOURCE_ICON: Record<SourceKind, Component> = {
+  manager: UserCog,
+  chatbot: Bot,
+  landing: Globe,
+  account: UserRound,
+  other: HelpCircle,
+}
 
 const currentPageTitle = 'История действий'
 
@@ -177,6 +190,14 @@ const pageItems = computed<(number | '…')[]>(() => {
   items.push(tp)
   return items
 })
+
+// Записи с разобранным источником: иконка + цвет по типу, текст — правая часть.
+const rows = computed(() =>
+  entries.value.map((e) => {
+    const src = parseSource(e.source)
+    return { ...e, src, meta: SOURCE_META[src.kind], icon: SOURCE_ICON[src.kind] }
+  }),
+)
 
 // Диапазон отображаемых записей: «1–20 из 37».
 const rangeLabel = computed(() => {
@@ -372,7 +393,7 @@ onUnmounted(() => {
 
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <tr
-                v-for="e in entries"
+                v-for="e in rows"
                 :key="e.id"
                 class="cursor-pointer transition-colors hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 dark:hover:bg-white/[0.02]"
                 role="button"
@@ -393,15 +414,11 @@ onUnmounted(() => {
                 <td class="whitespace-nowrap px-5 py-4 sm:px-6">
                   <span
                     class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-theme-xs font-medium"
-                    :class="
-                      channelOf(e.source) === 'manager'
-                        ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'
-                        : 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
-                    "
+                    :class="e.meta.badgeClass"
+                    :title="e.meta.typeLabel"
                   >
-                    <UserCog v-if="channelOf(e.source) === 'manager'" class="h-3.5 w-3.5" />
-                    <Bot v-else class="h-3.5 w-3.5" />
-                    {{ sourceLabel(e.source) }}
+                    <component :is="e.icon" class="h-3.5 w-3.5" />
+                    {{ e.src.label }}
                   </span>
                 </td>
 
