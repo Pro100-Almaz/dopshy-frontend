@@ -368,8 +368,8 @@ export async function getManagerWeek(
   if (!days.length) return week
   try {
     const week_bookings = await getBookingsInRange(field.id, days[0].iso, days[days.length - 1].iso)
-    const allowed_states = [BOOKING_STATE_ENUMS.CONFIRMED, BOOKING_STATE_ENUMS.AWAITING_PAYMENT]
-    const bookings = week_bookings.filter((booking) => (allowed_states.includes(booking.value.state)))
+    const allowed_states = (BOOKING_STATE_ENUMS.CONFIRMED, BOOKING_STATE_ENUMS.AWAITING_PAYMENT)
+    const bookings = week_bookings.filter((booking) => (allowed_states.includes(booking.state)))
     return overlayBookings(week, bookings)
   } catch {
     // Занятость недоступна (напр. публичный клиент без авторизации) — показываем
