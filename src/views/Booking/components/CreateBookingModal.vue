@@ -247,7 +247,7 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Заметка (необязательно)"
               class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
-            // Todo: A booking's total price editing modal for the future
+            <!--Todo: A booking's total price editing modal for the future-->
             <!--            <div v-if="canEditPrice">-->
             <!--              <label-->
             <!--                for="booking-price"-->
