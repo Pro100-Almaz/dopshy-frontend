@@ -712,13 +712,6 @@ function addDays(base: Date, days: number): Date {
   return d
 }
 
-export const TO_STATE: Record<string, BookingState> = {
-  draft: 'draft',
-  awaiting_payment: 'awaiting_payment',
-  unpaid: 'unpaid',
-  confirmed: 'confirmed',
-  cancelled: 'cancelled',
-}
 
 const HIDDEN_BOOKING_STATES: ReadonlySet<string> = new Set(['cancelled', 'rejected', 'unpaid'])
 
@@ -917,14 +910,25 @@ export async function listBookingsInRange(
   return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
 
+
+export const BOOKING_STATE_ENUMS = {
+  DRAFT: 'draft',
+  AWAITING_PAYMENT: 'awaiting_payment',
+  CONFIRMED: 'confirmed',
+  CANCELLED: 'cancelled',
+  UNPAID: 'unpaid',
+} as const satisfies Record<string, BookingState>
+
+
 // Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
 export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
-  draft: 'Черновик',
-  awaiting_payment: 'Ожидает оплаты',
-  confirmed: 'Подтверждено',
-  cancelled: 'Отменено',
-  unpaid: 'Не оплачено',
+  [BOOKING_STATE_ENUMS.DRAFT]: 'Черновик',
+  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT]: 'Ожидает оплаты',
+  [BOOKING_STATE_ENUMS.CONFIRMED]: 'Подтверждено',
+  [BOOKING_STATE_ENUMS.CANCELLED]: 'Отменено',
+  [BOOKING_STATE_ENUMS.UNPAID]: 'Не оплачено',
 }
+
 
 // Человекочитаемая подпись статуса брони по сырому state с бэкенда.
 // Неизвестные значения возвращаем как есть, чтобы ничего не «терялось».
@@ -935,11 +939,11 @@ export function bookingStateLabel(state: string): string {
 // Цвет бейджа статуса брони по сырому state с бэкенда. «Ожидает оплаты»
 // (awaiting_payment) — единственное состояние с предупреждающим цветом.
 const BOOKING_STATE_CLASS: Record<string, string> = {
-  awaiting_payment: 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
-  confirmed: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
-  cancelled: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
-  unpaid: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
-  rejected: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  [BOOKING_STATE_ENUMS.DRAFT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.CONFIRMED]: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
+  [BOOKING_STATE_ENUMS.CANCELLED]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  [BOOKING_STATE_ENUMS.UNPAID]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
 }
 
 const BOOKING_STATE_CLASS_DEFAULT =
