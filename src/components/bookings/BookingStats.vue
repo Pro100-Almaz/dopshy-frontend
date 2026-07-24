@@ -25,7 +25,7 @@ const stats = computed(() => {
   for (const p of PERIODS) {
     // Карточки-сводки учитывают только подтверждённые брони — и в счётчике, и в сумме.
     const items = props.bookings.filter(
-      (b) => isBookingInPeriod(b, p.key) && (b.state === 'confirmed' || b.state === 'paid'),
+      (b) => isBookingInPeriod(b, p.key) && (b.state === 'confirmed'),
     )
     result[p.key] = {
       count: items.length,

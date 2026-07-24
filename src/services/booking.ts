@@ -937,7 +937,6 @@ export function bookingStateLabel(state: string): string {
 const BOOKING_STATE_CLASS: Record<string, string> = {
   awaiting_payment: 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
   confirmed: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
-  paid: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
   cancelled: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
   unpaid: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
   rejected: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
