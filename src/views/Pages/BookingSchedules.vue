@@ -231,12 +231,6 @@ onUnmounted(() => {
                 @click="selectField(f.id)"
               >
                 <span class="font-bebas text-base leading-none tracking-wide sm:text-lg">{{ f.name }}</span>
-                <span
-                  class="mt-0.5 text-[10px] uppercase sm:mt-1 sm:text-[11px]"
-                  :class="f.id === selectedFieldId ? 'text-white/70' : 'text-gray-400'"
-                >
-                  {{ FIELD_TYPE_LABEL[f.type] }}
-                </span>
               </button>
             </div>
           </section>

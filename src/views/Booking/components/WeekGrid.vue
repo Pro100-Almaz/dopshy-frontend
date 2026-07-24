@@ -211,7 +211,7 @@ function hideBooking() {
           :aria-pressed="store.isSelected(cell.id)"
           :aria-label="`${week.days[ci].label.weekday} ${week.days[ci].label.day}, ${row.label} — ${
             cell.status === 'booked'
-              ? `занято${cell.booking ? `, ${cell.booking.customerName}` : ''}`
+              ? `занято${cell.booking?.customerName ? `: ${cell.booking.customerName}` : ''}`
               : repeatStates[cell.id] === 'occurrence'
                 ? 'повтор'
                 : formatPrice(cell.price)
@@ -250,8 +250,10 @@ function hideBooking() {
             aria-hidden="true"
           />
           <span v-else-if="cell.status === 'available'">{{ priceShort(cell.price) }}</span>
-          <span v-else-if="cell.status === 'booked'" class="text-[10px] uppercase tracking-wide"
-            >занято</span
+          <span
+            v-else-if="cell.status === 'booked'"
+            class="block truncate px-1 text-[10px] font-medium"
+            >{{ cell.booking?.customerName || 'занято' }}</span
           >
         </button>
       </template>

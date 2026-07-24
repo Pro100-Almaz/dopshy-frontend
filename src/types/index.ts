@@ -146,8 +146,6 @@ export interface BookingConfirmation {
   phone: string
 }
 
-export type BookingStatus = 'confirmed' | 'pending' | 'completed' | 'cancelled'
-
 // Сырые статусы брони на бэкенде (значения enum) — используются при редактировании.
 export type BookingState =
   | 'draft'
@@ -168,8 +166,7 @@ export interface Booking {
   start: string // 'HH:mm'
   end: string // 'HH:mm'
   total: number // ₸
-  status: BookingStatus
-  state: string // сырой статус с бэкенда (для редактирования)
+  state: string // сырой статус с бэкенда (единственный источник статуса брони)
   createdAt: string // ISO datetime
   source?: string
   notes?: string // заметка менеджера к брони

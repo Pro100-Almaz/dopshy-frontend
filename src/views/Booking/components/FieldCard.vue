@@ -35,8 +35,8 @@ const to = { path: `/booking/${props.field.id}`, query: { date: props.date } }
         <span
           class="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-gray-700 backdrop-blur-sm"
         >
-          <component :is="field.indoor ? Home : Sun" class="h-3.5 w-3.5" aria-hidden="true" />
-          {{ field.indoor ? 'Крытое' : 'Открытое' }}
+          <component :is="field.indoor ? Sun : Home" class="h-3.5 w-3.5" aria-hidden="true" />
+          Крытое
         </span>
       </div>
     </div>

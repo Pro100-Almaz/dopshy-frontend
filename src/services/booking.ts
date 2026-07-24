@@ -8,7 +8,6 @@ import type {
   Booking,
   BookingApi,
   BookingDetailApi,
-  BookingStatus,
   BookingState,
   BookingPeriod,
   FieldApi,
@@ -387,6 +386,8 @@ export interface BatchSlotIn {
   date: string // 'yyyy-mm-dd' — дата первого вхождения (старт повтора)
   time_start: string // 'HH:mm'
   time_end: string // 'HH:mm'
+  // Ручная цена брони (менеджер переопределяет расчётную). Опущено → бэкенд считает сам.
+  price_total?: number
   // Повтор интервала. Бэкенд разворачивает вхождения сам (daily/weekly/monthly).
   repeat_mode?: RepeatMode // по умолчанию 'none'
   repeat_until?: string // 'yyyy-mm-dd', обязателен при repeat_mode !== 'none'
@@ -711,24 +712,6 @@ function addDays(base: Date, days: number): Date {
   return d
 }
 
-const STATE_TO_STATUS: Record<string, BookingStatus> = {
-  draft: 'pending',
-  awaiting_payment: 'pending',
-  pending: 'pending',
-  unpaid: 'pending',
-  confirmed: 'confirmed',
-  paid: 'confirmed',
-  completed: 'completed',
-  cancelled: 'cancelled',
-}
-
-export const TO_STATE: Record<string, BookingState> = {
-  draft: 'draft',
-  awaiting_payment: 'awaiting_payment',
-  unpaid: 'unpaid',
-  confirmed: 'confirmed',
-  cancelled: 'cancelled',
-}
 
 const HIDDEN_BOOKING_STATES: ReadonlySet<string> = new Set(['cancelled', 'rejected', 'unpaid'])
 
@@ -763,7 +746,6 @@ function mapBooking(api: BookingApi): Booking {
     start: trimSeconds(api.time_start),
     end: trimSeconds(api.time_end),
     total: toMoney(api.price_total),
-    status: STATE_TO_STATUS[api.state] ?? 'pending',
     state: api.state,
     createdAt: api.created_at,
     source: api.source,
@@ -930,18 +912,45 @@ export async function listBookingsInRange(
   return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
 
-export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
-  confirmed: 'Подтверждено',
-  pending: 'Ожидает',
-  completed: 'Завершено',
-  cancelled: 'Отменено',
-}
+
+export const BOOKING_STATE_ENUMS = {
+  DRAFT: 'draft',
+  AWAITING_PAYMENT: 'awaiting_payment',
+  CONFIRMED: 'confirmed',
+  CANCELLED: 'cancelled',
+  UNPAID: 'unpaid',
+} as const satisfies Record<string, BookingState>
+
 
 // Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
 export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
-  draft: 'Черновик',
-  awaiting_payment: 'Ожидает оплаты',
-  confirmed: 'Подтверждено',
-  cancelled: 'Отменено',
-  unpaid: 'Не оплачено',
+  [BOOKING_STATE_ENUMS.DRAFT]: 'Черновик',
+  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT]: 'Ожидает оплаты',
+  [BOOKING_STATE_ENUMS.CONFIRMED]: 'Подтверждено',
+  [BOOKING_STATE_ENUMS.CANCELLED]: 'Отменено',
+  [BOOKING_STATE_ENUMS.UNPAID]: 'Не оплачено',
+}
+
+
+// Человекочитаемая подпись статуса брони по сырому state с бэкенда.
+// Неизвестные значения возвращаем как есть, чтобы ничего не «терялось».
+export function bookingStateLabel(state: string): string {
+  return BOOKING_STATE_LABEL[state as BookingState] ?? state
+}
+
+// Цвет бейджа статуса брони по сырому state с бэкенда. «Ожидает оплаты»
+// (awaiting_payment) — единственное состояние с предупреждающим цветом.
+const BOOKING_STATE_CLASS: Record<string, string> = {
+  [BOOKING_STATE_ENUMS.DRAFT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.CONFIRMED]: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
+  [BOOKING_STATE_ENUMS.CANCELLED]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  [BOOKING_STATE_ENUMS.UNPAID]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+}
+
+const BOOKING_STATE_CLASS_DEFAULT =
+  'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+
+export function bookingStateClass(state: string): string {
+  return BOOKING_STATE_CLASS[state] ?? BOOKING_STATE_CLASS_DEFAULT
 }

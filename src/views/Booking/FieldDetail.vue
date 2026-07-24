@@ -99,8 +99,8 @@ onMounted(async () => {
                 <span
                   class="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-gray-700 backdrop-blur-sm"
                 >
-                  <component :is="field.indoor ? Home : Sun" class="h-3.5 w-3.5" aria-hidden="true" />
-                  {{ field.indoor ? 'Крытое' : 'Открытое' }}
+                  <component :is="field.indoor ? Sun : Home" class="h-3.5 w-3.5" aria-hidden="true" />
+                  Крытое
                 </span>
               </div>
             </div>
@@ -244,7 +244,7 @@ onMounted(async () => {
 
             <button
               type="button"
-              :disabled="store.count === 0"
+              :disabled="true"
               class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
               @click="openBooking"
             >

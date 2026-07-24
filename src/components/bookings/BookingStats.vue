@@ -4,7 +4,7 @@ import type { Component } from 'vue'
 import { CalendarCheck, CalendarRange, CalendarDays } from 'lucide-vue-next'
 
 import type { Booking, BookingPeriod } from '@/types'
-import { isBookingInPeriod, formatPrice } from '@/services/booking'
+import { isBookingInPeriod, formatPrice, BOOKING_STATE_ENUMS } from '@/services/booking'
 
 const props = defineProps<{
   bookings: Booking[]
@@ -14,10 +14,30 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [period: BookingPeriod] }>()
 
 const PERIODS: { key: BookingPeriod; label: string; icon: Component; iconBg: string }[] = [
-  { key: 'today', label: 'Сегодня', icon: CalendarCheck, iconBg: 'bg-success-50 text-success-600 dark:bg-success-500/15' },
-  { key: 'week', label: 'На этой неделе', icon: CalendarRange, iconBg: 'bg-blue-light-50 text-blue-light-500 dark:bg-blue-light-500/15' },
-  { key: 'month', label: 'В этом месяце', icon: CalendarDays, iconBg: 'bg-warning-50 text-warning-600 dark:bg-warning-500/15' },
-  { key: 'all_time', label: 'За все время', icon: CalendarDays, iconBg: 'bg-error-50 text-error-600 dark:bg-error-500/15' },
+  {
+    key: 'today',
+    label: 'Сегодня',
+    icon: CalendarCheck,
+    iconBg: 'bg-success-50 text-success-600 dark:bg-success-500/15',
+  },
+  {
+    key: 'week',
+    label: 'На этой неделе',
+    icon: CalendarRange,
+    iconBg: 'bg-blue-light-50 text-blue-light-500 dark:bg-blue-light-500/15',
+  },
+  {
+    key: 'month',
+    label: 'В этом месяце',
+    icon: CalendarDays,
+    iconBg: 'bg-warning-50 text-warning-600 dark:bg-warning-500/15',
+  },
+  {
+    key: 'all_time',
+    label: 'За все время',
+    icon: CalendarDays,
+    iconBg: 'bg-error-50 text-error-600 dark:bg-error-500/15',
+  },
 ]
 
 const stats = computed(() => {
@@ -25,7 +45,7 @@ const stats = computed(() => {
   for (const p of PERIODS) {
     // Карточки-сводки учитывают только подтверждённые брони — и в счётчике, и в сумме.
     const items = props.bookings.filter(
-      (b) => isBookingInPeriod(b, p.key) && b.status === 'confirmed',
+      (b) => isBookingInPeriod(b, p.key) && (b.state === BOOKING_STATE_ENUMS.CONFIRMED),
     )
     result[p.key] = {
       count: items.length,

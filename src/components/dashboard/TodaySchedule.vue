@@ -21,10 +21,10 @@
           {{ b.customerName || '—' }}
         </p>
         <span
-          :class="statusClasses(b.status)"
+          :class="bookingStateClass(b.state)"
           class="mt-0.5 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold"
         >
-          {{ statusLabel(b.status) }}
+          {{ bookingStateLabel(b.state) }}
         </span>
       </div>
     </div>
@@ -43,22 +43,8 @@
 
 <script setup lang="ts">
 import { CalendarX2 } from 'lucide-vue-next'
-import type { Booking, BookingStatus } from '@/types'
-import { BOOKING_STATUS_LABEL } from '@/services/booking'
+import type { Booking } from '@/types'
+import { bookingStateClass, bookingStateLabel } from '@/services/booking'
 
 defineProps<{ bookings: Booking[] }>()
-
-function statusClasses(status: BookingStatus) {
-  const map: Record<BookingStatus, string> = {
-    confirmed: 'bg-success-50 text-success-700 dark:bg-success-500/[0.12] dark:text-success-400',
-    pending: 'bg-warning-50 text-warning-700 dark:bg-warning-500/[0.12] dark:text-warning-400',
-    completed: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
-    cancelled: 'bg-error-50 text-error-600 dark:bg-error-500/[0.12] dark:text-error-400',
-  }
-  return map[status] || ''
-}
-
-function statusLabel(status: BookingStatus) {
-  return BOOKING_STATUS_LABEL[status] || status
-}
 </script>

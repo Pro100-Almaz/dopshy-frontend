@@ -9,7 +9,7 @@ import BookingCalendar from '@/components/bookings/BookingCalendar.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
 import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.vue'
 
-import type { Booking, BookingPeriod, BookingStatus } from '@/types'
+import type { Booking, BookingPeriod } from '@/types'
 import {
   listBookings,
   listBookingsInRange,
@@ -19,7 +19,8 @@ import {
   formatDayLabel,
   formatDateTime,
   FIELD_TYPE_LABEL,
-  BOOKING_STATUS_LABEL,
+  bookingStateLabel,
+  bookingStateClass,
 } from '@/services/booking'
 
 const currentPageTitle = 'Бронирования'
@@ -69,9 +70,8 @@ function matchesSearch(b: Booking, q: string): boolean {
 // полному списку `allBookings`, отфильтрованному по периоду и — при наличии — поиску.
 const periodTotal = computed(() => {
   const q = search.value.trim().toLowerCase()
-  return allBookings.value.filter(
-    (b) => isBookingInPeriod(b, period.value) && matchesSearch(b, q),
-  ).length
+  return allBookings.value.filter((b) => isBookingInPeriod(b, period.value) && matchesSearch(b, q))
+    .length
 })
 
 function initials(name: string): string {
@@ -81,13 +81,6 @@ function initials(name: string): string {
     .map((w) => w[0] ?? '')
     .join('')
     .toUpperCase()
-}
-
-const STATUS_CLASS: Record<BookingStatus, string> = {
-  confirmed: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
-  pending: 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
-  completed: 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300',
-  cancelled: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
 }
 
 const editing = ref<Booking | null>(null)
@@ -117,6 +110,7 @@ async function goToPage(target: number) {
   try {
     const range = periodRange(period.value)
     const q = search.value.trim() || undefined
+
     const rows = range
       ? await listBookingsInRange(range.from, range.to, target, q)
       : await listBookings(target, q)
@@ -343,7 +337,9 @@ onUnmounted(() => {
         >
           <CalendarX class="h-7 w-7 text-gray-400" aria-hidden="true" />
           <p class="text-gray-600 dark:text-gray-400">
-            {{ search.trim() ? 'По запросу ничего не найдено.' : 'За выбранный период броней нет.' }}
+            {{
+              search.trim() ? 'По запросу ничего не найдено.' : 'За выбранный период броней нет.'
+            }}
           </p>
         </div>
 
@@ -362,7 +358,9 @@ onUnmounted(() => {
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Источник</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Добавлено в</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                    Добавлено в
+                  </p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Поле</p>
@@ -414,7 +412,9 @@ onUnmounted(() => {
                       {{ initials(b.customerName) }}
                     </div>
                     <div>
-                      <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                      <span
+                        class="block font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                      >
                         {{ b.customerName }}
                       </span>
                       <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
@@ -493,7 +493,9 @@ onUnmounted(() => {
 
                 <!-- Rest -->
                 <td class="px-5 py-4 sm:px-6">
-                  <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15 dark:hover:bg-warning-500/20">
+                  <span
+                    class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15 dark:hover:bg-warning-500/20"
+                  >
                     {{ formatPrice(b.total - b.paidTotal) }}
                   </span>
                 </td>
@@ -509,9 +511,9 @@ onUnmounted(() => {
                 <td class="px-5 py-4 sm:px-6">
                   <span
                     class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
-                    :class="STATUS_CLASS[b.status]"
+                    :class="bookingStateClass(b.state)"
                   >
-                    {{ BOOKING_STATUS_LABEL[b.status] }}
+                    {{ bookingStateLabel(b.state) }}
                   </span>
                 </td>
 
@@ -532,7 +534,10 @@ onUnmounted(() => {
         </div>
 
         <!-- Rows (cards — small screens) -->
-        <ul v-if="!tableLoading && tableBookings.length" class="divide-y divide-gray-200 dark:divide-gray-700 lg:hidden">
+        <ul
+          v-if="!tableLoading && tableBookings.length"
+          class="divide-y divide-gray-200 dark:divide-gray-700 lg:hidden"
+        >
           <li v-for="b in tableBookings" :key="b.id" class="px-5 py-4">
             <!-- Header: ref + status + edit -->
             <div class="flex items-start justify-between gap-3">
@@ -542,9 +547,9 @@ onUnmounted(() => {
                 </span>
                 <span
                   class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
-                  :class="STATUS_CLASS[b.status]"
+                  :class="bookingStateClass(b.state)"
                 >
-                  {{ BOOKING_STATUS_LABEL[b.status] }}
+                  {{ bookingStateLabel(b.state) }}
                 </span>
               </div>
               <button
@@ -565,7 +570,9 @@ onUnmounted(() => {
                 {{ initials(b.customerName) }}
               </div>
               <div class="min-w-0">
-                <span class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                <span
+                  class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                >
                   {{ b.customerName }}
                 </span>
                 <span class="block truncate text-gray-500 text-theme-xs dark:text-gray-400">
@@ -615,7 +622,9 @@ onUnmounted(() => {
               >
                 Оплачено: {{ formatPrice(b.paidTotal) }}
               </button>
-              <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15">
+              <span
+                class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15"
+              >
                 Остаток: {{ formatPrice(b.total - b.paidTotal) }}
               </span>
               <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
@@ -658,12 +667,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <BookingEditModal
-      v-if="editing"
-      :booking="editing"
-      @close="editing = null"
-      @saved="onSaved"
-    />
+    <BookingEditModal v-if="editing" :booking="editing" @close="editing = null" @saved="onSaved" />
 
     <PaymentBreakdownModal
       v-if="paymentDetail"

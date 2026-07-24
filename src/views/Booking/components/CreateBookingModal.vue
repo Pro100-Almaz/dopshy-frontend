@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
-import {
-  X,
-  Loader2,
-  AlertTriangle,
-  CheckCircle2,
-  CreditCard,
-  ArrowRight,
-} from 'lucide-vue-next'
+import { X, Loader2, AlertTriangle, CheckCircle2, CreditCard, ArrowRight } from 'lucide-vue-next'
 import {
   createBookingsBatch,
   formatPrice,
@@ -27,9 +20,7 @@ const auth = useAuthStore()
 // Поле предоплаты видно только сотрудникам (админ / супер-админ / менеджер),
 // которые вошли в систему. Анонимный клиент на публичной странице поля его не видит.
 const isManager = computed(
-  () =>
-    auth.isAuthenticated &&
-    ['super_admin', 'admin', 'manager'].includes(auth.user?.role ?? ''),
+  () => auth.isAuthenticated && ['super_admin', 'admin', 'manager'].includes(auth.user?.role ?? ''),
 )
 
 const dialog = ref<HTMLDialogElement | null>(null)
@@ -40,7 +31,31 @@ const status = ref<'idle' | 'processing' | 'error'>('idle')
 const errorMessage = ref('')
 const paid = ref(false)
 
-const form = reactive({ customer: '', phone: '', notes: '', prepayment: '' })
+const form = reactive({ customer: '', phone: '', notes: '', prepayment: '', price: '' })
+
+// ── Редактируемая цена одиночной брони ──────────────
+// «Одиночная бронь» = ровно один интервал без повтора (создаётся одна бронь).
+// Только в этом случае менеджер может вручную переопределить расчётную цену.
+const singleInterval = computed(() => (store.intervals.length === 1 ? store.intervals[0] : null))
+const isSingleBooking = computed(
+  () => !!singleInterval.value && store.occurrenceCount(singleInterval.value.id) === 1,
+)
+const canEditPrice = computed(() => isManager.value && isSingleBooking.value)
+
+// Расчётная (дефолтная) цена одиночной брони.
+const calculatedPrice = computed(() => singleInterval.value?.price ?? 0)
+
+// Введённая цена как число (null, если недоступно/пусто/некорректно) — уходит как price_total.
+const priceOverride = computed(() => {
+  if (!canEditPrice.value) return null
+  const n = Number(form.price)
+  return form.price !== '' && Number.isFinite(n) && n >= 0 ? n : null
+})
+
+// Итог: ручная цена (одиночная бронь) либо расчётная сумма по всем интервалам.
+const effectiveTotal = computed(() =>
+  priceOverride.value != null ? priceOverride.value : store.projectedTotal,
+)
 
 // Телефон обязателен и должен содержать не менее 8 символов.
 const PHONE_MIN_LENGTH = 8
@@ -61,6 +76,8 @@ function resetState() {
   form.phone = ''
   form.notes = ''
   form.prepayment = ''
+  // Одиночная бронь — предзаполняем расчётной ценой, чтобы менеджер правил от неё.
+  form.price = isSingleBooking.value ? String(calculatedPrice.value) : ''
   phoneTouched.value = false
 }
 
@@ -71,8 +88,13 @@ async function createDraft() {
   status.value = 'processing'
   errorMessage.value = ''
   try {
+    // Ручная цена одиночной брони уходит как price_total на самом слоте (иначе бэкенд считает сам).
+    const slots =
+      priceOverride.value != null
+        ? store.batchSlots.map((s) => ({ ...s, price_total: priceOverride.value! }))
+        : store.batchSlots
     await createBookingsBatch({
-      slots: store.batchSlots,
+      slots,
       customer: form.customer.trim() || undefined,
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
@@ -225,6 +247,27 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Заметка (необязательно)"
               class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
+            // Todo: A booking's total price editing modal for the future
+            <!--            <div v-if="canEditPrice">-->
+            <!--              <label-->
+            <!--                for="booking-price"-->
+            <!--                class="mb-1 block text-xs font-semibold uppercase text-gray-500"-->
+            <!--                >Цена брони</label-->
+            <!--              >-->
+            <!--              <input-->
+            <!--                id="booking-price"-->
+            <!--                v-model="form.price"-->
+            <!--                type="number"-->
+            <!--                min="0"-->
+            <!--                step="1"-->
+            <!--                inputmode="numeric"-->
+            <!--                :placeholder="String(calculatedPrice)"-->
+            <!--                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"-->
+            <!--              />-->
+            <!--              <p class="mt-1 text-[11px] text-gray-400">-->
+            <!--                Расчётная цена: {{ formatPrice(calculatedPrice) }}-->
+            <!--              </p>-->
+            <!--            </div>-->
             <div v-if="isManager">
               <label
                 for="booking-prepayment"
@@ -256,10 +299,7 @@ function onBackdropClick(e: MouseEvent) {
 
         <!-- Step 2: payment (mock) -->
         <template v-else>
-          <div
-            v-if="!paid"
-            class="flex flex-col items-center gap-3 py-4 text-center"
-          >
+          <div v-if="!paid" class="flex flex-col items-center gap-3 py-4 text-center">
             <div class="grid h-12 w-12 place-items-center rounded-full bg-success-50">
               <CheckCircle2 class="h-7 w-7 text-success-600" aria-hidden="true" />
             </div>
@@ -284,7 +324,7 @@ function onBackdropClick(e: MouseEvent) {
       <div class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
         <div>
           <p class="text-xs text-gray-500">Итого</p>
-          <p class="text-xl font-bold text-gray-900">{{ formatPrice(store.projectedTotal) }}</p>
+          <p class="text-xl font-bold text-gray-900">{{ formatPrice(effectiveTotal) }}</p>
         </div>
 
         <button
@@ -295,7 +335,9 @@ function onBackdropClick(e: MouseEvent) {
           @click="createDraft"
         >
           <Loader2 v-if="status === 'processing'" class="h-5 w-5 animate-spin" aria-hidden="true" />
-          <template v-else>Создать бронь <ArrowRight class="h-5 w-5" aria-hidden="true" /></template>
+          <template v-else
+            >Создать бронь <ArrowRight class="h-5 w-5" aria-hidden="true"
+          /></template>
         </button>
 
         <button
