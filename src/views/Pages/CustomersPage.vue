@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Loader2, Users, Search, MessageCircle, CalendarCheck } from 'lucide-vue-next'
+import {
+  Loader2,
+  Users,
+  Search,
+  MessageCircle,
+  CalendarCheck,
+  TriangleAlert,
+} from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BotToggle from '@/components/customers/BotToggle.vue'
 
 import type { BotStatus, Contact } from '@/types'
-import { listContacts, relativeTime } from '@/services/customer'
+import { getBotEnabled, listContacts, relativeTime, setBotEnabled } from '@/services/customer'
+import { ApiError } from '@/services/api'
 
 const currentPageTitle = 'Клиентская база'
 
@@ -102,11 +110,76 @@ async function load(silent = false) {
 let pollId: number | undefined
 function onVisibility() {
   // Вернулись на вкладку — сразу обновляемся, чтобы не показывать устаревшее.
-  if (!document.hidden) load(true)
+  // Глобальный выключатель мог тронуть другой менеджер, поэтому читаем и его.
+  if (!document.hidden) {
+    load(true)
+    loadBotEnabled(true)
+  }
 }
+
+// ── Глобальный выключатель бота ─────────────────────────────────────
+// `on` — зеркало is_enabled с бэкенда. Пока состояние не прочитано, держим
+// переключатель выключенным и заблокированным, чтобы не показать ложное «вкл».
+const on = ref(false)
+const pending = ref(true)
+const label = computed(() => (on.value ? 'Вкл' : 'Выкл'))
+
+// silent — фоновое перечитывание (возврат на вкладку): не блокируем переключатель
+// и не показываем тост, иначе экран дёргается на каждом фокусе.
+async function loadBotEnabled(silent = false) {
+  if (silent && pending.value) return
+  if (!silent) pending.value = true
+  try {
+    const { is_enabled } = await getBotEnabled()
+    on.value = is_enabled
+  } catch (e) {
+    if (!silent) onError(botErrorMessage(e))
+  } finally {
+    if (!silent) pending.value = false
+  }
+}
+
+
+function botErrorMessage(e: unknown): string {
+  if (e instanceof ApiError && e.status === 502) {
+    return 'Не удалось связаться с сервисом бота, попробуйте ещё раз'
+  }
+  return e instanceof Error ? e.message : 'Не удалось изменить глобальный статус бота'
+}
+
+async function toggle() {
+  if (pending.value) return
+  const previous = on.value
+  const next = !previous
+  // Выключение необратимо для входящих: сообщения за время паузы не копятся.
+  if (!next && !window.confirm(CONFIRM_OFF)) return
+  on.value = next
+  pending.value = true
+  try {
+    // Отправляем целевое состояние, а не «переключи», и верим ответу, а не next.
+    const { is_enabled } = await setBotEnabled(next)
+    on.value = is_enabled
+  } catch (e) {
+    on.value = previous
+    onError(botErrorMessage(e))
+    // Запись не прошла — перечитываем, вместо того чтобы доверять локальному откату.
+    void loadBotEnabled()
+  } finally {
+    pending.value = false
+  }
+}
+
+const CONFIRM_OFF = [
+  'Выключить бота для всех клиентов?',
+  '',
+  '• Входящие сообщения за время паузы будут потеряны — бот не ответит на них и после включения.',
+  '• Авто-паузу при ручном ответе менеджера бот тоже перестанет замечать.',
+  '• Исходящие авто-сообщения (отмена неоплаченных броней) продолжат отправляться.',
+].join('\n')
 
 onMounted(() => {
   load()
+  loadBotEnabled()
   pollId = window.setInterval(() => load(true), POLL_MS)
   document.addEventListener('visibilitychange', onVisibility)
 })
@@ -122,6 +195,22 @@ onUnmounted(() => {
     <PageBreadcrumb :pageTitle="currentPageTitle" />
 
     <div class="space-y-6">
+      <!-- Пока бот выключен глобально, пер-контактные переключатели ничего не меняют. -->
+      <div
+        v-if="!on && !pending"
+        class="flex items-start gap-3 rounded-2xl border border-warning-200 bg-warning-50 px-5 py-4 dark:border-warning-500/30 dark:bg-warning-500/10"
+      >
+        <TriangleAlert class="mt-0.5 h-5 w-5 shrink-0 text-warning-600 dark:text-warning-400" />
+        <div class="text-theme-sm text-warning-700 dark:text-warning-400">
+          <p class="font-medium">Бот выключен для всех клиентов</p>
+          <p class="mt-0.5 text-theme-xs">
+            Входящие сообщения не обрабатываются и не сохраняются — после включения бот на них не
+            ответит. Исходящие авто-сообщения об отмене неоплаченных броней продолжают отправляться.
+            Переключатели по контактам сейчас ни на что не влияют.
+          </p>
+        </div>
+      </div>
+
       <div
         class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
       >
@@ -216,7 +305,29 @@ onUnmounted(() => {
                   </p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Бот</p>
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                      BOT
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      :aria-checked="on"
+                      :aria-label="`Бот для всех клиентов: ${label}`"
+                      title="Глобальный выключатель бота — влияет на всех клиентов"
+                      :disabled="pending"
+                      class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-3 focus:ring-brand-500/20 disabled:opacity-60"
+                      :class="on ? 'bg-success-500' : 'bg-gray-300 dark:bg-gray-700'"
+                      @click="toggle"
+                    >
+                      <span
+                        class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-theme-xs transition-transform"
+                        :class="on ? 'translate-x-5' : 'translate-x-0.5'"
+                      >
+                        <Loader2 v-if="pending" class="h-3 w-3 animate-spin text-gray-500" />
+                      </span>
+                    </button>
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -236,7 +347,9 @@ onUnmounted(() => {
                       {{ initials(c) }}
                     </div>
                     <div>
-                      <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                      <span
+                        class="block font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                      >
                         {{ displayName(c) }}
                       </span>
                       <span class="block text-gray-500 text-theme-xs dark:text-gray-400">

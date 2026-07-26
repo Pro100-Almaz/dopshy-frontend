@@ -1,4 +1,4 @@
-import type { BotStatus, BotToggleResult, Contact } from '@/types'
+import type { BotEnabledStatus, BotStatus, BotToggleResult, Contact } from '@/types'
 import { apiFetch } from './api'
 
 /**
@@ -43,6 +43,18 @@ export function pauseBot(phone: string): Promise<BotToggleResult> {
 export function resumeBot(phone: string): Promise<BotToggleResult> {
   return apiFetch<BotToggleResult>(`/bot-status/${phonePath(phone)}/resume`, {
     method: 'POST',
+  })
+}
+
+// GLobal bot switch
+export function getBotEnabled(): Promise<BotEnabledStatus> {
+  return apiFetch<BotEnabledStatus>('/bot-status/enabled_status')
+}
+
+export function setBotEnabled(enabled: boolean): Promise<BotEnabledStatus> {
+  return apiFetch<BotEnabledStatus>('/bot-status/enabled_status', {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
   })
 }
 

@@ -247,6 +247,11 @@ export interface BotToggleResult {
   paused: boolean
 }
 
+
+export interface BotEnabledStatus {
+  is_enabled: boolean
+}
+
 // WhatsApp-контакт — главная сущность списка (GET /bot-status/contacts).
 // Это любой, кто писал боту; может иметь или не иметь брони.
 export interface Contact {
