@@ -53,7 +53,7 @@ export interface Worker {
 }
 
 // ── Публичное бронирование полей ──────────────────
-export type FieldType = '5x5' | '6x6' | '7x7' | '8x8'
+export type FieldType = '5x5' | '6x6'
 
 export type PricingType =
   | 'morning_day'

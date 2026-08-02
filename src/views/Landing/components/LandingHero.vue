@@ -37,7 +37,7 @@ import { ChevronRight } from 'lucide-vue-next'
           class="landing-fade-up landing-delay-2 text-lg md:text-xl text-gray-300 mb-10 max-w-xl font-light"
         >
           Лучшая среда для футбола. Искусственный газон со стандартом FIFA, профессиональное
-          освещение и первоклассные условия для матчей 5×5 и 7×7.
+          освещение и первоклассные условия для матчей 5×5 и 6×6.
         </p>
 
         <div class="landing-fade-up landing-delay-3 flex flex-wrap items-center gap-4">

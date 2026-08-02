@@ -90,7 +90,7 @@ const FIELDS: Field[] = [
       AMENITIES.gear,
     ],
     description:
-      'Просторное поле для формата 7×7 с трибунами и полноразмерными воротами. Подходит для турниров и корпоративных матчей.',
+      'Просторное поле для формата 6×6 с трибунами и полноразмерными воротами. Подходит для турниров и корпоративных матчей.',
   },
   {
     id: 'indoor-5',
@@ -703,8 +703,7 @@ export function formatDateTime(iso: string): string {
 
 export const FIELD_TYPE_LABEL: Record<string, string> = {
   '5x5': '5×5',
-  '7x7': '7×7',
-  '8x8': '8×8',
+  '6x6': '6×6',
 }
 
 // Bookingz

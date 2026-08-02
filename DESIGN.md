@@ -179,7 +179,7 @@ Flat by default, lift on action. Surfaces rest flat on the mist background, defi
 - **Hero CTA (landing only):** Bebas Neue, skewed `-10deg` parallelogram, green fill with a sweeping white sheen on hover. Signature, brand-surface only — never in the app.
 
 ### Chips / Badges
-- **Field-type badge:** Solid `pitch-green` fill, white bold text, `rounded-full`, `text-xs`. Marks 5×5 / 7×7 on field cards.
+- **Field-type badge:** Solid `pitch-green` fill, white bold text, `rounded-full`, `text-xs`. Marks 5×5 / 6×6 on field cards.
 - **Meta chip:** White or `rgba(255,255,255,0.9)` with backdrop-blur over imagery, hairline `#e4e7ec` border, `#475467` text, `rounded-full`. Amenities, indoor/outdoor.
 - **Status chip:** Tint + deep-text pairs — green (confirmed), amber (pending), red (unpaid/cancelled). Fill is the tint, text is the deep shade of the same hue; never gray text on a colored fill.
 

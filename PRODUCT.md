@@ -10,7 +10,7 @@ web
 
 ## Users
 
-Two audiences share one system. Today the primary users are **arena operators** — managers, coaches, accountants, and floor staff who run Dopsy Arena day-to-day through the admin panel: taking bookings, managing field slots and schedules, tracking payments, and coordinating the academy and staff. As the product develops, focus shifts toward **players booking fields** directly through the public flow (browse fields → pick a 5×5 or 7×7 slot → checkout), most often on their phones. Roles in the system: super_admin, manager, coach, accountant, staff.
+Two audiences share one system. Today the primary users are **arena operators** — managers, coaches, accountants, and floor staff who run Dopsy Arena day-to-day through the admin panel: taking bookings, managing field slots and schedules, tracking payments, and coordinating the academy and staff. As the product develops, focus shifts toward **players booking fields** directly through the public flow (browse fields → pick a 5×5 or 6×6 slot → checkout), most often on their phones. Roles in the system: super_admin, manager, coach, accountant, staff.
 
 ## Product Purpose
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Dribbble, Instagram, Twitter, MapPin, Mail, Phone } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
+import { ARENA, directionsUrl } from '@/services/booking'
 
 const currentYear = new Date().getFullYear()
 </script>
@@ -20,7 +21,7 @@ const currentYear = new Date().getFullYear()
             </span>
           </a>
           <p class="text-gray-500 max-w-sm mb-8 leading-relaxed">
-            Лучшее место для футбола 5×5 и 7×7. Профессиональные условия для тех, кто любит
+            Лучшее место для футбола 5×5 и 6×6. Профессиональные условия для тех, кто любит
             красивую игру.
           </p>
           <div class="flex items-center gap-4">
@@ -82,15 +83,26 @@ const currentYear = new Date().getFullYear()
           <ul class="space-y-4">
             <li class="flex items-start gap-3 text-gray-600 text-sm">
               <MapPin class="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
-              <span>Алматы, ул. Спортивная 12</span>
+              <a
+                :href="directionsUrl()"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="transition-colors hover:text-success-600"
+              >
+                {{ ARENA.address }}
+              </a>
             </li>
             <li class="flex items-center gap-3 text-gray-600 text-sm">
               <Phone class="w-5 h-5 text-success-600 shrink-0" />
-              <span>+7 (700) 123-4567</span>
+              <a href="tel:+77005556000" class="transition-colors hover:text-success-600">
+                +7 (700) 555-6000
+              </a>
             </li>
             <li class="flex items-center gap-3 text-gray-600 text-sm">
               <Mail class="w-5 h-5 text-success-600 shrink-0" />
-              <span>bookings@dopsyarena.com</span>
+              <a href="mailto:arena@dopsy.kz" class="transition-colors hover:text-success-600">
+                arena@dopsy.kz
+              </a>
             </li>
           </ul>
         </div>
