@@ -30,7 +30,7 @@ export const ARENA = {
 }
 
 export function directionsUrl(): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${ARENA.lat},${ARENA.lng}`
+  return 'https://go.2gis.com/CtEyF'
 }
 
 // Известные рабочие изображения (уже используются в проекте) — не гадаем ID.
