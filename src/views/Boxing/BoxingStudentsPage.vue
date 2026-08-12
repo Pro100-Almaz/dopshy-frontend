@@ -4,7 +4,11 @@ import { CheckCircle2, GraduationCap, Loader2, Phone, Search, Users } from 'luci
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import { listBoxingStudents, setBoxingStudentSubscribed } from '@/services/boxing'
+import {
+  formatBirthdate,
+  listBoxingStudents,
+  setBoxingStudentSubscribed,
+} from '@/services/boxing'
 import type { BoxingStudent } from '@/services/boxing'
 
 const currentPageTitle = 'Бокс: ученики'
@@ -203,7 +207,7 @@ onMounted(load)
               </td>
               <td class="px-5 py-4 sm:px-6">
                 <span class="text-theme-sm text-gray-700 dark:text-gray-300">
-                  {{ student.birthdate }}
+                  {{ formatBirthdate(student.birthdate) }}
                 </span>
               </td>
               <td class="px-5 py-4 sm:px-6">

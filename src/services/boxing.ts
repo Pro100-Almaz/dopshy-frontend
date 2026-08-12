@@ -59,8 +59,38 @@ export interface BoxingTrial {
   user: BoxingStudent | null
 }
 
+export interface UpdateBoxingGroupPayload {
+  group_name?: string
+  max_cap?: number
+}
+
+interface UpdateBoxingGroupResponse {
+  ok: boolean
+  data: {
+    group_id: number
+  }
+}
+
 function subscribedQuery(subscribed?: boolean): string {
   return subscribed === undefined ? '' : `?subscribed=${subscribed ? 'true' : 'false'}`
+}
+
+export function formatBirthdate(value: string): string {
+  if (!value) return '—'
+
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(parsed)
+  }
+
+  const isoDate = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  if (isoDate) return isoDate
+
+  return value
 }
 
 function unwrapData(data: unknown): unknown {
@@ -99,6 +129,21 @@ export async function listBoxingGroups(): Promise<BoxingGroup[]> {
     headers: boxingHeaders,
   })
   return listFromResponse<BoxingGroup>(data, ['groups', 'results', 'items'])
+}
+
+export function updateBoxingGroup(
+  groupId: string,
+  payload: UpdateBoxingGroupPayload,
+): Promise<UpdateBoxingGroupResponse> {
+  return apiFetch<UpdateBoxingGroupResponse>(
+    `/manager/academy_groups/${encodeURIComponent(groupId)}`,
+    {
+      ...boxingApiOptions,
+      method: 'PATCH',
+      headers: boxingHeaders,
+      body: JSON.stringify(payload),
+    },
+  )
 }
 
 export async function listBoxingTrials(subscribed?: boolean): Promise<BoxingTrial[]> {

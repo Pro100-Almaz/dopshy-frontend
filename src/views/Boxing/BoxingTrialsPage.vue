@@ -14,6 +14,7 @@ import {
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import {
+  formatBirthdate,
   listBoxingTrials,
   setBoxingTrialAttended,
   setBoxingTrialSubscribed,
@@ -30,8 +31,6 @@ const savingTrialIds = ref<Set<number>>(new Set())
 const visibleTrials = computed(() => {
   const q = query.value.trim().toLowerCase()
   const digits = q.replace(/\D/g, '')
-
-  console.log(trials);
   return trials.value.filter((trial) => {
     if (trial.subscribed) return false
     if (!q) return true
@@ -197,7 +196,7 @@ onMounted(load)
                       {{ trial.child_name }}
                     </span>
                     <span class="block text-theme-xs text-gray-500 dark:text-gray-400">
-                      Age {{ trial.child_age }} · {{ trial.birthdate }}
+                      Age {{ trial.child_age }} · {{ formatBirthdate(trial.birthdate) }}
                     </span>
                   </div>
                 </div>

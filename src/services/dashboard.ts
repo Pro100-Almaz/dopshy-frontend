@@ -4,6 +4,7 @@ import {
   getManagerFields,
   isBookingInPeriod,
 } from '@/services/booking'
+import { listBoxingStudents } from '@/services/boxing'
 
 /** Часы, покрытые бронью (по времени начала/конца 'HH:mm'). */
 function bookingHours(b: Booking): number {
@@ -56,12 +57,18 @@ export const dashboardService = {
       : 0
 
     const unpaidBookings = active.filter(isUnpaid).length
+    let activeStudents = 0
+    try {
+      activeStudents = (await listBoxingStudents(true)).length
+    } catch {
+      activeStudents = 0
+    }
 
     return {
       todayBookings,
       occupancyPercent,
       unpaidBookings,
-      activeStudents: 45,
+      activeStudents,
       onShiftWorkers: 8,
     }
   },
