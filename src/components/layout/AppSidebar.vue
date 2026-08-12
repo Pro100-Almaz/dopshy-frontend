@@ -202,7 +202,6 @@ import {
   LayoutGrid,
   CalendarCheck,
   GraduationCap,
-  BookOpen,
   History,
   Wallet,
   HardHat,
@@ -210,6 +209,7 @@ import {
   BarChart3,
   Settings,
   PersonStanding,
+  LoaderPinwheel,
 } from 'lucide-vue-next'
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
@@ -267,17 +267,37 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: 'Академия',
+    title: 'Футбольная Академия',
     items: [
+      {
+        icon: LoaderPinwheel,
+        name: 'Занятия',
+        path: '/lessons',
+      },
       {
         icon: GraduationCap,
         name: 'Ученики',
         path: '/students',
       },
+    ],
+  },
+  {
+    title: 'Бокс',
+    items: [
       {
-        icon: BookOpen,
-        name: 'Занятия',
-        path: '/lessons',
+        icon: Swords,
+        name: 'Группы',
+        path: '/boxing/groups',
+      },
+      {
+        icon: CalendarCheck,
+        name: 'Пробные',
+        path: '/boxing/trials',
+      },
+      {
+        icon: GraduationCap,
+        name: 'Ученики',
+        path: '/boxing/students',
       },
     ],
   },
@@ -299,12 +319,6 @@ const menuGroups: MenuGroup[] = [
   {
     title: 'Прочее',
     items: [
-      {
-        icon: Swords,
-        name: 'Бокс',
-        path: '/boxing',
-        badge: 'скоро',
-      },
       {
         icon: BarChart3,
         name: 'Отчёты',

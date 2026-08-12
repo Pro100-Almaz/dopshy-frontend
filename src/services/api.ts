@@ -23,6 +23,10 @@ export class ApiError extends Error {
   }
 }
 
+interface ApiFetchOptions extends RequestInit {
+  skipSessionExpiredRedirect?: boolean
+}
+
 /**
  * Tear down the session and send the user to login. Prefers the auth store so
  * reactive state (token/user) resets too; the dynamic import also breaks the
@@ -45,23 +49,24 @@ async function handleSessionExpired(): Promise<void> {
   }
 }
 
-export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): Promise<T> {
   const token =
     localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const { skipSessionExpiredRedirect, ...fetchOptions } = options ?? {}
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...fetchOptions,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
+      ...fetchOptions.headers,
     },
-    ...options,
   })
 
   // An authenticated request rejected with 401 means the token expired or was
   // revoked — end the session and bounce to login. (A 401 with no token, e.g. a
   // failed signin, falls through to normal error handling below.)
-  if (res.status === 401 && token) {
+  if (res.status === 401 && token && !skipSessionExpiredRedirect) {
     await handleSessionExpired()
     throw new Error('Сессия истекла. Войдите снова.')
   }

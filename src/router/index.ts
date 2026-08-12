@@ -120,8 +120,26 @@ const router = createRouter({
     {
       path: '/boxing',
       name: 'Boxing',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: '/boxing/groups',
       meta: { title: 'Бокс' },
+    },
+    {
+      path: '/boxing/groups',
+      name: 'BoxingGroups',
+      component: () => import('../views/Boxing/BoxingGroupsPage.vue'),
+      meta: { title: 'Бокс: группы' },
+    },
+    {
+      path: '/boxing/trials',
+      name: 'BoxingTrials',
+      component: () => import('../views/Boxing/BoxingTrialsPage.vue'),
+      meta: { title: 'Бокс: пробные' },
+    },
+    {
+      path: '/boxing/students',
+      name: 'BoxingStudents',
+      component: () => import('../views/Boxing/BoxingStudentsPage.vue'),
+      meta: { title: 'Бокс: ученики' },
     },
     {
       path: '/reports',

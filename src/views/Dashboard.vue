@@ -12,7 +12,6 @@
               С возвращением, {{ authStore.user?.name?.split(' ')[0] || 'Админ' }}. Вот что происходит на вашей арене.
             </p>
           </div>
-          <BusinessSwitcher v-model="dashStore.activeTab" :tabs="businessTabs" />
         </div>
       </div>
 
@@ -147,10 +146,6 @@ const dashStore = useDashboardStore()
 
 const isLoading = computed(() => dashStore.loading && !dashStore.summary)
 
-const businessTabs = [
-  { value: 'football', label: 'Футбол', icon: markRaw(CircleDot) },
-  { value: 'boxing', label: 'Бокс', icon: markRaw(Swords) },
-]
 
 // ── Живое обновление ────────────────────────────────
 // Реального времени пока нет — опрашиваем бэкенд каждые 5 секунд. Обновление
