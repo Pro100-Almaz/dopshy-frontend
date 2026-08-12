@@ -46,6 +46,7 @@ const error = ref('')
 const editingGroup = ref<BoxingGroupView | null>(null)
 const editGroupName = ref('')
 const editMaxCap = ref<number | null>(null)
+const editSchedules = ref<BoxingGroupSchedule[]>([])
 const editError = ref('')
 const editSaving = ref(false)
 
@@ -109,6 +110,7 @@ function openEditGroup(group: BoxingGroupView) {
   editingGroup.value = group
   editGroupName.value = group.group_name
   editMaxCap.value = group.max_cap
+  editSchedules.value = group.schedules.map((schedule) => ({ ...schedule }))
   editError.value = ''
 }
 
@@ -116,6 +118,19 @@ function closeEditGroup() {
   if (editSaving.value) return
   editingGroup.value = null
   editError.value = ''
+}
+
+function scheduleChanged(group: BoxingGroupView): boolean {
+  if (editSchedules.value.length !== group.schedules.length) return true
+
+  return editSchedules.value.some((schedule, index) => {
+    const original = group.schedules[index]
+    return (
+      schedule.training_day_label.trim() !== original.training_day_label ||
+      schedule.start_time !== original.start_time ||
+      schedule.end_time !== original.end_time
+    )
+  })
 }
 
 async function saveGroupEdit() {
@@ -131,19 +146,25 @@ async function saveGroupEdit() {
 
   if (editMaxCap.value !== null && editMaxCap.value !== group.max_cap) {
     if (!Number.isInteger(editMaxCap.value)) {
-      editError.value = 'Capacity must be an integer.'
+      editError.value = 'Вместимость должна быть целым числом.'
       return
     }
     if (group.curr_cap !== null && editMaxCap.value < group.curr_cap) {
-      editError.value = `Capacity cannot be lower than current capacity (${group.curr_cap}).`
+      editError.value = `Вместимость не может быть меньше текущего количества учеников (${group.curr_cap}).`
       await load()
       return
     }
     payload.max_cap = editMaxCap.value
   }
 
+  if (scheduleChanged(group)) {
+    editError.value =
+      'Расписание пока нельзя сохранить: текущий backend endpoint принимает только название группы и вместимость.'
+    return
+  }
+
   if (!payload.group_name && payload.max_cap === undefined) {
-    editError.value = 'Change group name or capacity before saving.'
+    editError.value = 'Измените название группы или вместимость перед сохранением.'
     return
   }
 
@@ -153,7 +174,7 @@ async function saveGroupEdit() {
     await load()
     editingGroup.value = null
   } catch (e) {
-    editError.value = e instanceof Error ? e.message : 'Failed to update group.'
+    editError.value = e instanceof Error ? e.message : 'Не удалось изменить группу.'
   } finally {
     editSaving.value = false
   }
@@ -445,18 +466,18 @@ const inputClass =
               </label>
               <div class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
                 <div
-                  v-for="(schedule, index) in editingGroup.schedules"
+                  v-for="(schedule, index) in editSchedules"
                   :key="`${schedule.training_day}-${schedule.start_time}-${schedule.end_time}-${index}`"
                   class="grid gap-3 sm:grid-cols-3"
                 >
                   <input
-                    :value="schedule.training_day_label"
+                    v-model="schedule.training_day_label"
                     type="text"
                     :class="inputClass"
-                    readonly
+                    placeholder="День недели"
                   />
-                  <input :value="schedule.start_time" type="time" :class="inputClass" readonly />
-                  <input :value="schedule.end_time" type="time" :class="inputClass" readonly />
+                  <input v-model="schedule.start_time" type="time" :class="inputClass" />
+                  <input v-model="schedule.end_time" type="time" :class="inputClass" />
                 </div>
               </div>
             </div>
