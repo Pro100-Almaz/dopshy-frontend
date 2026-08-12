@@ -121,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, markRaw } from 'vue'
+import { onMounted, onUnmounted, computed } from 'vue'
 import {
   CalendarDays,
   Percent,
@@ -130,16 +130,18 @@ import {
   HardHat,
   Swords,
   Clock,
-  CircleDot,
 } from 'lucide-vue-next'
 import AdminLayout from '@/components/layout/AdminLayout.vue'
-import BusinessSwitcher from '@/components/dashboard/BusinessSwitcher.vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TodaySchedule from '@/components/dashboard/TodaySchedule.vue'
 import RecentPayments from '@/components/dashboard/RecentPayments.vue'
 import QuickActions from '@/components/dashboard/QuickActions.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
+
+defineOptions({
+  name: 'DashboardPage',
+})
 
 const authStore = useAuthStore()
 const dashStore = useDashboardStore()
