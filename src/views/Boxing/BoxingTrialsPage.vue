@@ -108,7 +108,7 @@ onMounted(load)
         <div>
           <h3 class="font-medium text-gray-800 dark:text-white/90">Пробные занятия</h3>
           <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
-            Children who have not subscribed yet.
+            Дети, которые ещё не оформили абонемент.
           </p>
         </div>
         <div class="relative w-full sm:w-72">
@@ -118,7 +118,7 @@ onMounted(load)
           <input
             v-model="query"
             type="search"
-            placeholder="Search name, phone, group"
+            placeholder="Поиск по имени, телефону, группе"
             class="h-10 w-full rounded-lg border border-gray-300 bg-transparent pl-9 pr-3 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30"
           />
         </div>
@@ -138,7 +138,7 @@ onMounted(load)
           class="rounded-lg border border-gray-300 px-4 py-2 text-theme-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
           @click="load"
         >
-          Retry
+          Повторить
         </button>
       </div>
 
@@ -147,7 +147,7 @@ onMounted(load)
         class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
       >
         <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
-        <p class="text-gray-600 dark:text-gray-400">No non-subscribed trial children found.</p>
+        <p class="text-gray-600 dark:text-gray-400">Дети без абонемента не найдены.</p>
       </div>
 
       <div v-else class="max-w-full overflow-x-auto custom-scrollbar">
@@ -155,25 +155,25 @@ onMounted(load)
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
               <th class="w-[19%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Child</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Ребёнок</p>
               </th>
               <th class="w-[17%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Contact</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контакт</p>
               </th>
               <th class="w-[17%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Group / Trial</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Группа / пробное</p>
               </th>
               <th class="w-[11%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">State</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Статус</p>
               </th>
               <th class="w-[19%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Notes</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Заметки</p>
               </th>
               <th class="w-[8%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Attended</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Посетил</p>
               </th>
               <th class="w-[9%] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Subscribe</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Абонемент</p>
               </th>
             </tr>
           </thead>
@@ -196,7 +196,7 @@ onMounted(load)
                       {{ trial.child_name }}
                     </span>
                     <span class="block text-theme-xs text-gray-500 dark:text-gray-400">
-                      Age {{ trial.child_age }} · {{ formatBirthdate(trial.birthdate) }}
+                      Возраст {{ trial.child_age }} · {{ formatBirthdate(trial.birthdate) }}
                     </span>
                   </div>
                 </div>
@@ -240,7 +240,7 @@ onMounted(load)
                     :disabled="savingTrialIds.has(trial.trial_id)"
                     @change="updateAttended(trial, ($event.target as HTMLInputElement).checked)"
                   />
-                  Yes
+                  Да
                 </label>
               </td>
               <td class="px-5 py-4 sm:px-6">
@@ -250,7 +250,7 @@ onMounted(load)
                   :disabled="savingTrialIds.has(trial.trial_id)"
                   @click="subscribeTrial(trial)"
                 >
-                  <CheckCircle2 class="h-3.5 w-3.5" /> Subscribe
+                  <CheckCircle2 class="h-3.5 w-3.5" /> Оформить
                 </button>
               </td>
             </tr>

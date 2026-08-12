@@ -197,7 +197,7 @@ const inputClass =
         class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
       >
         <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6">
-          <h3 class="font-medium text-gray-800 dark:text-white/90">Groups</h3>
+          <h3 class="font-medium text-gray-800 dark:text-white/90">Группы</h3>
           <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
             Select a boxing group to view subscribed children assigned to it.
           </p>
@@ -216,7 +216,7 @@ const inputClass =
             class="rounded-lg border border-gray-300 px-4 py-2 text-theme-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
             @click="load"
           >
-            Retry
+            Повторить
           </button>
         </div>
 
@@ -225,7 +225,7 @@ const inputClass =
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
-          <p class="text-gray-600 dark:text-gray-400">No boxing groups found.</p>
+          <p class="text-gray-600 dark:text-gray-400">Группы по боксу не найдены.</p>
         </div>
 
         <div v-else class="divide-y divide-gray-200 dark:divide-gray-800">
@@ -296,7 +296,7 @@ const inputClass =
                 class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-theme-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
                 @click="openEditGroup(selectedGroup)"
               >
-                <Edit3 class="h-3.5 w-3.5" /> Edit
+                <Edit3 class="h-3.5 w-3.5" /> Изменить
               </button>
               <span
                 class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-theme-xs font-medium text-gray-700 dark:bg-white/5 dark:text-gray-300"
@@ -307,7 +307,7 @@ const inputClass =
               <span
                 class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-theme-xs font-medium text-gray-700 dark:bg-white/5 dark:text-gray-300"
               >
-                <CalendarDays class="h-3.5 w-3.5" /> {{ selectedGroup.schedules.length }} schedules
+                <CalendarDays class="h-3.5 w-3.5" /> {{ selectedGroup.schedules.length }} расписаний
               </span>
             </div>
           </div>
@@ -341,16 +341,16 @@ const inputClass =
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700">
                 <th class="w-[32%] px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Child</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Ребёнок</p>
                 </th>
                 <th class="w-[22%] px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Birthdate</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Дата рождения</p>
                 </th>
                 <th class="w-[24%] px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Contact</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контакт</p>
                 </th>
                 <th class="w-[22%] px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Trials</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Пробные</p>
                 </th>
               </tr>
             </thead>
@@ -366,7 +366,7 @@ const inputClass =
                     {{ student.name }}
                   </span>
                   <span class="block text-theme-xs text-gray-500 dark:text-gray-400">
-                    Age {{ student.age }}
+                    Возраст {{ student.age }}
                   </span>
                 </td>
                 <td class="px-5 py-4 sm:px-6">
@@ -395,7 +395,7 @@ const inputClass =
             v-if="!selectedGroupChildren.length"
             class="flex min-h-[200px] items-center justify-center px-6 text-center text-gray-500 dark:text-gray-400"
           >
-            No subscribed children assigned to this group yet.
+            В этой группе пока нет записанных учеников.
           </div>
         </div>
       </section>
@@ -417,7 +417,7 @@ const inputClass =
           </button>
 
           <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
-            Edit group
+            Изменить группу
           </h3>
           <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
             {{ editingGroup.group_name }}
@@ -427,13 +427,13 @@ const inputClass =
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Group name
+                  Название группы
                 </label>
                 <input v-model="editGroupName" type="text" :class="inputClass" />
               </div>
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                  Max capacity
+                  Макс. вместимость
                 </label>
                 <input v-model.number="editMaxCap" type="number" min="0" step="1" :class="inputClass" />
               </div>
@@ -441,7 +441,7 @@ const inputClass =
 
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Schedule
+                Расписание
               </label>
               <div class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
                 <div
@@ -472,7 +472,7 @@ const inputClass =
                 :disabled="editSaving"
                 @click="closeEditGroup"
               >
-                Cancel
+                Отмена
               </button>
               <button
                 type="submit"
@@ -480,7 +480,7 @@ const inputClass =
                 :disabled="editSaving"
               >
                 <Loader2 v-if="editSaving" class="h-4 w-4 animate-spin" />
-                Save
+                Сохранить
               </button>
             </div>
           </form>

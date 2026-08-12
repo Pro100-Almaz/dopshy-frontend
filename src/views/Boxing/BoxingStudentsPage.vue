@@ -85,7 +85,7 @@ onMounted(load)
         class="flex flex-col gap-4 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
       >
         <div>
-          <h3 class="font-medium text-gray-800 dark:text-white/90">Students</h3>
+          <h3 class="font-medium text-gray-800 dark:text-white/90">Ученики</h3>
           <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
             Switch between non-subscribed trial children and subscribed students.
           </p>
@@ -102,7 +102,7 @@ onMounted(load)
               "
               @click="studentMode = 'unsubscribed'"
             >
-              Non-subscribed
+              Без абонемента
             </button>
             <button
               type="button"
@@ -114,7 +114,7 @@ onMounted(load)
               "
               @click="studentMode = 'subscribed'"
             >
-              Subscribed
+              С абонементом
             </button>
           </div>
           <div class="relative w-full sm:w-72">
@@ -124,7 +124,7 @@ onMounted(load)
             <input
               v-model="query"
               type="search"
-              placeholder="Search name, phone, group"
+              placeholder="Поиск по имени, телефону, группе"
               class="h-10 w-full rounded-lg border border-gray-300 bg-transparent pl-9 pr-3 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30"
             />
           </div>
@@ -145,7 +145,7 @@ onMounted(load)
           class="rounded-lg border border-gray-300 px-4 py-2 text-theme-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
           @click="load"
         >
-          Retry
+          Повторить
         </button>
       </div>
 
@@ -154,7 +154,7 @@ onMounted(load)
         class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
       >
         <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
-        <p class="text-gray-600 dark:text-gray-400">Students not found.</p>
+        <p class="text-gray-600 dark:text-gray-400">Ученики не найдены.</p>
       </div>
 
       <div v-else class="max-w-full overflow-x-auto custom-scrollbar">
@@ -162,22 +162,22 @@ onMounted(load)
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
               <th class="w-[280px] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Child</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Ребёнок</p>
               </th>
               <th class="w-[150px] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Birthdate</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Дата рождения</p>
               </th>
               <th class="w-[230px] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Parent phone</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Телефон родителя</p>
               </th>
               <th v-if="studentMode === 'unsubscribed'" class="w-[110px] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Trials</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Пробные</p>
               </th>
               <th class="px-5 py-3 text-left sm:px-6" :class="studentMode === 'subscribed' ? 'w-[420px]' : 'w-[180px]'">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Assigned group</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Группа</p>
               </th>
               <th v-if="studentMode === 'unsubscribed'" class="w-[170px] px-5 py-3 text-left sm:px-6">
-                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Action</p>
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Действие</p>
               </th>
             </tr>
           </thead>
@@ -200,7 +200,7 @@ onMounted(load)
                       {{ student.name }}
                     </span>
                     <span class="block text-theme-xs text-gray-500 dark:text-gray-400">
-                      Age {{ student.age }}
+                      Возраст {{ student.age }}
                     </span>
                   </div>
                 </div>
@@ -236,7 +236,7 @@ onMounted(load)
                   :disabled="savingStudentIds.has(student.id)"
                   @click="subscribeStudent(student)"
                 >
-                  <CheckCircle2 class="h-3.5 w-3.5" /> Subscribe
+                  <CheckCircle2 class="h-3.5 w-3.5" /> Оформить
                 </button>
               </td>
             </tr>
