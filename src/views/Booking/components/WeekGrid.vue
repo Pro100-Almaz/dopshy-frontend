@@ -4,6 +4,7 @@ import { Loader2, Check, Repeat } from 'lucide-vue-next'
 import type { Slot, SlotBooking, SlotInterval } from '@/types'
 import { formatPrice, type WeekSlots } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import { useAuthStore } from '@/stores/auth'
 import RepeatModal from './RepeatModal.vue'
 
 const props = defineProps<{
@@ -14,6 +15,12 @@ const props = defineProps<{
 }>()
 
 const store = useBookingStore()
+const auth = useAuthStore()
+
+// Данные чужой брони (имя, телефон, заметка, сумма, статус) — только для сотрудников.
+// Клиенту на публичной странице занятый слот виден обезличенно: «ЗАНЯТО».
+const canSeeBookingDetails = computed(() => auth.isStaff)
+const BOOKED_LABEL = 'ЗАНЯТО'
 
 function toMin(time: string): number {
   const [h, m] = time.split(':').map(Number)
@@ -150,6 +157,7 @@ const hoverBooking = ref<SlotBooking | null>(null)
 const tipPos = ref({ x: 0, y: 0 })
 
 function showBooking(booking: SlotBooking, e: MouseEvent) {
+  if (!canSeeBookingDetails.value) return // клиенту чужую бронь не раскрываем
   hoverBooking.value = booking
   tipPos.value = { x: e.clientX, y: e.clientY }
 }
@@ -211,7 +219,11 @@ function hideBooking() {
           :aria-pressed="store.isSelected(cell.id)"
           :aria-label="`${week.days[ci].label.weekday} ${week.days[ci].label.day}, ${row.label} — ${
             cell.status === 'booked'
-              ? `занято${cell.booking?.customerName ? `: ${cell.booking.customerName}` : ''}`
+              ? `занято${
+                  canSeeBookingDetails && cell.booking?.customerName
+                    ? `: ${cell.booking.customerName}`
+                    : ''
+                }`
               : repeatStates[cell.id] === 'occurrence'
                 ? 'повтор'
                 : formatPrice(cell.price)
@@ -221,7 +233,9 @@ function hideBooking() {
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
               : cell.status === 'booked'
-                ? 'cursor-help bg-gray-100 font-medium text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                ? `${
+                    canSeeBookingDetails ? 'cursor-help' : 'cursor-not-allowed'
+                  } bg-gray-100 font-medium text-gray-400 dark:bg-gray-800 dark:text-gray-500`
                 : repeatStates[cell.id] === 'occurrence'
                   ? 'repeat-occ cursor-not-allowed font-semibold text-success-700 dark:text-success-300'
                   : cell.status === 'available'
@@ -253,7 +267,9 @@ function hideBooking() {
           <span
             v-else-if="cell.status === 'booked'"
             class="block truncate px-1 text-[10px] font-medium"
-            >{{ cell.booking?.customerName || 'занято' }}</span
+            >{{
+              canSeeBookingDetails ? cell.booking?.customerName || BOOKED_LABEL : BOOKED_LABEL
+            }}</span
           >
         </button>
       </template>

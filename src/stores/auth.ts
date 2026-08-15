@@ -14,6 +14,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
 
+  /**
+   * Сотрудник арены (админ / супер-админ / менеджер). Только им видны служебные
+   * данные броней — имя и телефон клиента, заметки, статус оплаты. Публичный
+   * клиент и аноним видят занятые слоты обезличенно.
+   */
+  const STAFF_ROLES = ['super_admin', 'admin', 'manager']
+  const isStaff = computed(
+    () => isAuthenticated.value && STAFF_ROLES.includes(user.value?.role ?? ''),
+  )
+
   // Restore user from storage on init
   const stored = localStorage.getItem('dopsy_user') || sessionStorage.getItem('dopsy_user')
   if (stored && token.value) {
@@ -66,5 +76,5 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
-  return { user, token, isAuthenticated, loading, error, login, logout }
+  return { user, token, isAuthenticated, isStaff, loading, error, login, logout }
 })
