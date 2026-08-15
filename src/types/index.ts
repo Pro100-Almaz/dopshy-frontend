@@ -213,7 +213,7 @@ export interface BookingApi {
   notes: string | null
   date: string // ISO yyyy-mm-dd
   // Оплаты — decimal-строки ("0" / "10000.00"), могут быть null. Приводить через Number().
-  paid_bot: string | null
+  paid_api: string | null
   paid_kaspi_qr: string | null
   paid_cash: string | null
   paid_avans: string | null // предоплата / аванс

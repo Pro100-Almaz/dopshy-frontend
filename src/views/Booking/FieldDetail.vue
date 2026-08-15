@@ -31,12 +31,25 @@ const fieldLoading = ref(true)
 const notFound = ref(false)
 const showSchedule = ref(false)
 const showBookingModal = ref(false)
+const bookingDraftCreated = ref(false)
 
 const grouped = computed(() => store.groupedByDate)
 
 function openBooking() {
   if (store.count === 0) return
   showBookingModal.value = true
+}
+
+// Черновик создан — модалку не закрываем: клиент должен увидеть шаг оплаты
+// (сумму предоплаты и то, что счёт придёт в Kaspi). При закрытии перезагружаем
+// страницу, чтобы расписание отразило только что занятые слоты.
+function onBookingCreated() {
+  bookingDraftCreated.value = true
+}
+
+function onBookingModalClose() {
+  showBookingModal.value = false
+  if (bookingDraftCreated.value) window.location.reload()
 }
 
 onMounted(async () => {
@@ -241,10 +254,18 @@ onMounted(async () => {
               <span class="text-sm text-gray-500">Итого</span>
               <span class="text-2xl font-bold text-gray-900">{{ formatPrice(store.total) }}</span>
             </div>
+            <div
+              v-if="store.prepaymentTotal > 0"
+              class="mt-1.5 flex items-center justify-between text-sm"
+            >
+              <span class="text-gray-500">Предоплата в Kaspi</span>
+              <span class="font-semibold text-gray-700">{{
+                formatPrice(store.prepaymentTotal)
+              }}</span>
+            </div>
 
             <button
               type="button"
-              :disabled="true"
               class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
               @click="openBooking"
             >
@@ -274,6 +295,9 @@ onMounted(async () => {
         <div>
           <p class="text-xs text-gray-500">{{ store.count }} слот(а) · итого</p>
           <p class="text-2xl font-bold text-gray-900">{{ formatPrice(store.total) }}</p>
+          <p v-if="store.prepaymentTotal > 0" class="text-xs text-gray-500">
+            предоплата {{ formatPrice(store.prepaymentTotal) }}
+          </p>
         </div>
         <button
           type="button"
@@ -296,8 +320,8 @@ onMounted(async () => {
     <!-- Create booking modal (общая с админкой) -->
     <CreateBookingModal
       :open="showBookingModal"
-      @close="showBookingModal = false"
-      @created="showBookingModal = false"
+      @close="onBookingModalClose"
+      @created="onBookingCreated"
     />
   </div>
 </template>

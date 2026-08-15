@@ -98,7 +98,7 @@ const payments = computed(() => {
   const b = detail.value
   if (!b) return []
   return [
-    { label: 'Бот', value: num(b.paid_bot) },
+    { label: 'Бот (удаленная оплата)', value: num(b.paid_api) },
     { label: 'Kaspi QR', value: num(b.paid_kaspi_qr) },
     { label: 'Наличные', value: num(b.paid_cash) },
     { label: 'Аванс', value: num(b.paid_avans) },

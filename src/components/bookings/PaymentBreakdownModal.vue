@@ -11,7 +11,7 @@ defineEmits<{ close: [] }>()
 
 // Разбивка оплат. Значения в Booking уже числа (см. mapBooking), пустые = 0.
 const rows = computed(() => [
-  { label: 'Бот', value: props.booking.paidBot },
+  { label: 'Бот (удаленная оплата)', value: props.booking.paidBot },
   { label: 'Kaspi QR', value: props.booking.paidKaspiQr },
   { label: 'Наличные', value: props.booking.paidCash },
   { label: 'Аванс', value: props.booking.paidAvans },

@@ -6,6 +6,7 @@ import {
   mergeContiguousSlots,
   buildBatchSlots,
   computeOccurrences,
+  computePrepayment,
   dayFullLabel,
 } from '@/services/booking'
 
@@ -91,6 +92,12 @@ export const useBookingStore = defineStore('booking', () => {
 
   // Строки для /bookings/batch — слитые интервалы + повтор.
   const batchSlots = computed(() => buildBatchSlots(intervals.value, repeatRules.value))
+
+  // Аванс считается автоматически — только по разовым (без повтора) интервалам.
+  const prepaymentTotal = computed(() => computePrepayment(batchSlots.value))
+  const prepaidIntervalCount = computed(
+    () => batchSlots.value.filter((s) => (s.repeat_mode ?? 'none') === 'none').length,
+  )
 
   // Мемо дат вхождений на каждое правило — чтобы не пересчитывать на каждую ячейку.
   const occurrenceIndex = computed(() =>
@@ -186,6 +193,8 @@ export const useBookingStore = defineStore('booking', () => {
     batchSlots,
     total,
     projectedTotal,
+    prepaymentTotal,
+    prepaidIntervalCount,
     occurrenceCount,
     count,
     setField,

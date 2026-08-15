@@ -30,6 +30,7 @@ export const ARENA = {
 }
 
 export function directionsUrl(): string {
+  // return `https://www.google.com/maps/dir/?api=1&destination=${ARENA.lat},${ARENA.lng}`
   return 'https://go.2gis.com/CtEyF'
 }
 
@@ -368,8 +369,12 @@ export async function getManagerWeek(
   if (!days.length) return week
   try {
     const week_bookings = await getBookingsInRange(field.id, days[0].iso, days[days.length - 1].iso)
-    const allowed_states = (BOOKING_STATE_ENUMS.CONFIRMED, BOOKING_STATE_ENUMS.AWAITING_PAYMENT)
-    const bookings = week_bookings.filter((booking) => (allowed_states.includes(booking.state)))
+    // Слот занимают подтверждённые брони и черновики, ожидающие оплаты.
+    const allowed_states: string[] = [
+      BOOKING_STATE_ENUMS.CONFIRMED,
+      BOOKING_STATE_ENUMS.AWAITING_PAYMENT,
+    ]
+    const bookings = week_bookings.filter((booking) => allowed_states.includes(booking.state))
     return overlayBookings(week, bookings)
   } catch {
     // Занятость недоступна (напр. публичный клиент без авторизации) — показываем
@@ -412,6 +417,18 @@ export interface BookingBatchPayload {
  * логики нет — TTL держит слот занятым ограниченное время и затем освобождает.
  */
 export const RESERVATION_TTL_MINUTES = 20
+
+/** Аванс за одну разовую бронь, ₸. Ни клиент, ни менеджер его не вводят вручную. */
+export const PREPAYMENT_PER_SLOT = 10_000
+
+/**
+ * Аванс по составу заказа: PREPAYMENT_PER_SLOT за каждый интервал без повтора.
+ * Повторяющиеся интервалы (repeat_mode ≠ 'none') авансом не облагаются.
+ */
+export function computePrepayment(slots: BatchSlotIn[]): number {
+  const oneOff = slots.filter((s) => (s.repeat_mode ?? 'none') === 'none').length
+  return oneOff * PREPAYMENT_PER_SLOT
+}
 
 /** Создаёт черновики броней пакетом. Пустые поля не отправляем — бэкенд подставит дефолты. */
 export function createBookingsBatch(payload: BookingBatchPayload): Promise<unknown> {
@@ -732,7 +749,7 @@ function toMoney(v: string | number | null | undefined): number {
 }
 
 function mapBooking(api: BookingApi): Booking {
-  const paidBot = toMoney(api.paid_bot)
+  const paidBot = toMoney(api.paid_api)
   const paidKaspiQr = toMoney(api.paid_kaspi_qr)
   const paidCash = toMoney(api.paid_cash)
   const paidAvans = toMoney(api.paid_avans)
