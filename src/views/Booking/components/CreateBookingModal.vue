@@ -36,7 +36,7 @@ const step = ref<Step>('review')
 const status = ref<'idle' | 'processing' | 'error'>('idle')
 const errorMessage = ref('')
 
-const form = reactive({ customer: '', phone: '', notes: '', price: '' })
+const form = reactive({ customer: '', phone: '', notes: '', price: '', prepayment: '' })
 
 // ── Редактируемая цена одиночной брони ──────────────
 // «Одиночная бронь» = ровно один интервал без повтора (создаётся одна бронь).
@@ -63,9 +63,24 @@ const effectiveTotal = computed(() =>
 )
 
 // ── Аванс ───────────────────────────────────────────
-// Считается автоматически: PREPAYMENT_PER_SLOT за каждую разовую бронь (без повтора).
-// Ни клиент, ни менеджер его не вводят — поле ввода в модалке отсутствует.
-const prepayment = computed(() => store.prepaymentTotal)
+// Расчётный аванс: PREPAYMENT_PER_SLOT за каждую разовую бронь (без повтора).
+const calculatedPrepayment = computed(() => store.prepaymentTotal)
+
+// Бронь от менеджера — аванс вводится вручную (предзаполнен расчётным).
+// Бронь с лендинга — уходит расчётная сумма, поля ввода нет.
+const canEditPrepayment = computed(() => isManager.value)
+
+// Введённый аванс как число (null, если недоступно/пусто/некорректно).
+const prepaymentOverride = computed(() => {
+  if (!canEditPrepayment.value) return null
+  const n = Number(form.prepayment)
+  return form.prepayment !== '' && Number.isFinite(n) && n >= 0 ? n : null
+})
+
+// Итог: ручной аванс (менеджер) либо расчётный.
+const prepayment = computed(() =>
+  prepaymentOverride.value != null ? prepaymentOverride.value : calculatedPrepayment.value,
+)
 const hasRepeating = computed(() => store.repeatRules.length > 0)
 
 // Телефон обязателен и должен содержать не менее 8 символов.
@@ -87,6 +102,8 @@ function resetState() {
   form.notes = ''
   // Одиночная бронь — предзаполняем расчётной ценой, чтобы менеджер правил от неё.
   form.price = isSingleBooking.value ? String(calculatedPrice.value) : ''
+  // Аванс — тоже от расчётного, менеджер меняет при необходимости.
+  form.prepayment = canEditPrepayment.value ? String(calculatedPrepayment.value) : ''
   phoneTouched.value = false
 }
 
@@ -107,8 +124,9 @@ async function createDraft() {
       customer: form.customer.trim() || undefined,
       phone: form.phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
-      // Аванс рассчитан автоматически по разовым броням; 0 не отправляем — бэкенд подставит дефолт.
-      // prepayment: prepayment.value || undefined,
+      // Менеджер: уходит введённая сумма (в т.ч. 0 — «без предоплаты»).
+      // Лендинг: расчётная сумма по разовым броням; 0 не отправляем — бэкенд подставит дефолт.
+      prepayment: prepaymentOverride.value ?? (prepayment.value || undefined),
       reserved_until: RESERVATION_TTL_MINUTES,
       updated_by: auth.user?.name || auth.user?.email || undefined,
     })
@@ -249,6 +267,30 @@ function onBackdropClick(e: MouseEvent) {
               placeholder="Заметка (необязательно)"
               class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
             />
+            <!-- Аванс вводит менеджер вручную; с лендинга уходит расчётная сумма -->
+            <div v-if="canEditPrepayment">
+              <label
+                for="booking-prepayment"
+                class="mb-1 block text-xs font-semibold uppercase text-gray-500"
+                >Предоплата</label
+              >
+              <input
+                id="booking-prepayment"
+                v-model="form.prepayment"
+                type="number"
+                min="0"
+                step="1000"
+                inputmode="numeric"
+                :placeholder="String(calculatedPrepayment)"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
+              />
+              <p class="mt-1 text-xs text-gray-400">
+                Расчётная предоплата: {{ formatPrice(calculatedPrepayment) }}
+                <template v-if="store.prepaidIntervalCount > 0">
+                  ({{ formatPrice(PREPAYMENT_PER_SLOT) }} × {{ store.prepaidIntervalCount }})
+                </template>
+              </p>
+            </div>
             <!--Todo: A booking's total price editing modal for the future-->
             <!--            <div v-if="canEditPrice">-->
             <!--              <label-->
@@ -272,7 +314,7 @@ function onBackdropClick(e: MouseEvent) {
             <!--            </div>-->
           </div>
 
-          <!-- Аванс: считается автоматически, вручную не редактируется -->
+          <!-- Итог: сумма брони + аванс (ручной у менеджера, расчётный с лендинга) -->
           <div class="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
             <dl class="space-y-2 text-sm">
               <div class="flex items-baseline justify-between gap-3">
@@ -282,7 +324,10 @@ function onBackdropClick(e: MouseEvent) {
               <div class="flex items-baseline justify-between gap-3">
                 <dt class="text-gray-500">
                   Предоплата
-                  <span v-if="prepayment > 0" class="text-xs text-gray-400">
+                  <span
+                    v-if="prepaymentOverride == null && prepayment > 0"
+                    class="text-xs text-gray-400"
+                  >
                     {{ formatPrice(PREPAYMENT_PER_SLOT) }} × {{ store.prepaidIntervalCount }}
                   </span>
                 </dt>
@@ -290,7 +335,10 @@ function onBackdropClick(e: MouseEvent) {
               </div>
             </dl>
 
-            <p v-if="hasRepeating" class="mt-2 text-xs text-gray-500">
+            <p
+              v-if="hasRepeating && prepaymentOverride == null"
+              class="mt-2 text-xs text-gray-500"
+            >
               Повторяющиеся брони предоплатой не облагаются.
             </p>
 
