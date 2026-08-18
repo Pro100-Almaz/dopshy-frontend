@@ -92,13 +92,13 @@ const router = createRouter({
     {
       path: '/students',
       name: 'Students',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: '/football/students',
       meta: { title: 'Ученики' },
     },
     {
       path: '/lessons',
       name: 'Lessons',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: '/football/groups',
       meta: { title: 'Занятия' },
     },
 
@@ -122,6 +122,30 @@ const router = createRouter({
       name: 'Boxing',
       redirect: '/boxing/groups',
       meta: { title: 'Бокс' },
+    },
+    {
+      path: '/football',
+      name: 'Football',
+      redirect: '/football/groups',
+      meta: { title: 'Футбол' },
+    },
+    {
+      path: '/football/groups',
+      name: 'FootballGroups',
+      component: () => import('../views/Football/FootballGroupsPage.vue'),
+      meta: { title: 'Футбол: группы' },
+    },
+    {
+      path: '/football/trials',
+      name: 'FootballTrials',
+      component: () => import('../views/Football/FootballTrialsPage.vue'),
+      meta: { title: 'Футбол: пробные' },
+    },
+    {
+      path: '/football/students',
+      name: 'FootballStudents',
+      component: () => import('../views/Football/FootballStudentsPage.vue'),
+      meta: { title: 'Футбол: ученики' },
     },
     {
       path: '/boxing/groups',

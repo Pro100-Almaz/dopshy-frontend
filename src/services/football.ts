@@ -2,15 +2,15 @@ import { apiFetch } from './api'
 
 const MANAGER_API_KEY = import.meta.env.VITE_MANAGER_API_KEY || ''
 
-const boxingHeaders: Record<string, string> = MANAGER_API_KEY
+const footballHeaders: Record<string, string> = MANAGER_API_KEY
   ? { 'X-API-Key': MANAGER_API_KEY }
   : {}
 
-const boxingApiOptions = {
+const footballApiOptions = {
   skipSessionExpiredRedirect: true,
 }
 
-export interface BoxingGroup {
+export interface FootballGroup {
   id: string
   group_id: number
   group_type: string
@@ -24,7 +24,7 @@ export interface BoxingGroup {
   end_time: string
 }
 
-export interface BoxingStudent {
+export interface FootballStudent {
   id: string
   name: string
   age: number | null
@@ -37,7 +37,7 @@ export interface BoxingStudent {
   subscribed: boolean
 }
 
-export interface BoxingTrial {
+export interface FootballTrial {
   id: string
   trial_id: number
   group_id: string
@@ -56,17 +56,17 @@ export interface BoxingTrial {
   notes: string
   attended: boolean
   subscribed: boolean
-  user: BoxingStudent | null
+  user: FootballStudent | null
 }
 
-export interface UpdateBoxingGroupPayload {
+export interface UpdateFootballGroupPayload {
   group_name?: string
   max_cap?: number
   start_time?: string
   end_time?: string
 }
 
-interface UpdateBoxingGroupResponse {
+interface UpdateFootballGroupResponse {
   ok: boolean
   data: {
     group_id: number
@@ -134,80 +134,80 @@ function entityFromResponse<T>(data: unknown, keys: string[]): T {
   return payload as T
 }
 
-export async function listBoxingGroups(): Promise<BoxingGroup[]> {
-  const data = await apiFetch<unknown>('/boxing/groups', {
-    ...boxingApiOptions,
-    headers: boxingHeaders,
+export async function listFootballGroups(): Promise<FootballGroup[]> {
+  const data = await apiFetch<unknown>('/football/groups', {
+    ...footballApiOptions,
+    headers: footballHeaders,
   })
-  return listFromResponse<BoxingGroup>(data, ['groups', 'results', 'items'])
+  return listFromResponse<FootballGroup>(data, ['groups', 'results', 'items'])
 }
 
-export function updateBoxingGroup(
+export function updateFootballGroup(
   groupId: string,
-  payload: UpdateBoxingGroupPayload,
-): Promise<UpdateBoxingGroupResponse> {
-  return apiFetch<UpdateBoxingGroupResponse>(
+  payload: UpdateFootballGroupPayload,
+): Promise<UpdateFootballGroupResponse> {
+  return apiFetch<UpdateFootballGroupResponse>(
     `/manager/academy_groups/${encodeURIComponent(groupId)}`,
     {
-      ...boxingApiOptions,
+      ...footballApiOptions,
       method: 'PATCH',
-      headers: boxingHeaders,
+      headers: footballHeaders,
       body: JSON.stringify(payload),
     },
   )
 }
 
-export async function listBoxingTrials(subscribed?: boolean): Promise<BoxingTrial[]> {
-  const data = await apiFetch<unknown>(`/boxing/trials${subscribedQuery(subscribed)}`, {
-    ...boxingApiOptions,
-    headers: boxingHeaders,
+export async function listFootballTrials(subscribed?: boolean): Promise<FootballTrial[]> {
+  const data = await apiFetch<unknown>(`/football/trials${subscribedQuery(subscribed)}`, {
+    ...footballApiOptions,
+    headers: footballHeaders,
   })
-  return listFromResponse<BoxingTrial>(data, ['trials', 'results', 'items'])
+  return listFromResponse<FootballTrial>(data, ['trials', 'results', 'items'])
 }
 
-export async function listBoxingStudents(subscribed?: boolean): Promise<BoxingStudent[]> {
-  const data = await apiFetch<unknown>(`/boxing/students${subscribedQuery(subscribed)}`, {
-    ...boxingApiOptions,
-    headers: boxingHeaders,
+export async function listFootballStudents(subscribed?: boolean): Promise<FootballStudent[]> {
+  const data = await apiFetch<unknown>(`/football/students${subscribedQuery(subscribed)}`, {
+    ...footballApiOptions,
+    headers: footballHeaders,
   })
-  return listFromResponse<BoxingStudent>(data, ['students', 'results', 'items'])
+  return listFromResponse<FootballStudent>(data, ['students', 'results', 'items'])
 }
 
-export async function setBoxingTrialAttended(
+export async function setFootballTrialAttended(
   trialId: number,
   attended: boolean,
-): Promise<BoxingTrial> {
-  const data = await apiFetch<unknown>(`/boxing/trials/${trialId}/attended`, {
-    ...boxingApiOptions,
+): Promise<FootballTrial> {
+  const data = await apiFetch<unknown>(`/football/trials/${trialId}/attended`, {
+    ...footballApiOptions,
     method: 'PATCH',
-    headers: boxingHeaders,
+    headers: footballHeaders,
     body: JSON.stringify({ attended }),
   })
-  return entityFromResponse<BoxingTrial>(data, ['trial'])
+  return entityFromResponse<FootballTrial>(data, ['trial'])
 }
 
-export async function setBoxingTrialSubscribed(
+export async function setFootballTrialSubscribed(
   trialId: number,
   subscribed: boolean,
-): Promise<BoxingTrial> {
-  const data = await apiFetch<unknown>(`/boxing/trials/${trialId}/subscribed`, {
-    ...boxingApiOptions,
+): Promise<FootballTrial> {
+  const data = await apiFetch<unknown>(`/football/trials/${trialId}/subscribed`, {
+    ...footballApiOptions,
     method: 'PATCH',
-    headers: boxingHeaders,
+    headers: footballHeaders,
     body: JSON.stringify({ subscribed }),
   })
-  return entityFromResponse<BoxingTrial>(data, ['trial'])
+  return entityFromResponse<FootballTrial>(data, ['trial'])
 }
 
-export async function setBoxingStudentSubscribed(
+export async function setFootballStudentSubscribed(
   studentId: string,
   subscribed: boolean,
-): Promise<BoxingStudent> {
-  const data = await apiFetch<unknown>(`/boxing/students/${encodeURIComponent(studentId)}/subscribed`, {
-    ...boxingApiOptions,
+): Promise<FootballStudent> {
+  const data = await apiFetch<unknown>(`/football/students/${encodeURIComponent(studentId)}/subscribed`, {
+    ...footballApiOptions,
     method: 'PATCH',
-    headers: boxingHeaders,
+    headers: footballHeaders,
     body: JSON.stringify({ subscribed }),
   })
-  return entityFromResponse<BoxingStudent>(data, ['student'])
+  return entityFromResponse<FootballStudent>(data, ['student'])
 }

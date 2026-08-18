@@ -209,7 +209,6 @@ import {
   BarChart3,
   Settings,
   PersonStanding,
-  LoaderPinwheel,
 } from 'lucide-vue-next'
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
@@ -270,14 +269,19 @@ const menuGroups: MenuGroup[] = [
     title: 'Футбольная Академия',
     items: [
       {
-        icon: LoaderPinwheel,
-        name: 'Занятия',
-        path: '/lessons',
+        icon: Swords,
+        name: 'Группы',
+        path: '/football/groups',
+      },
+      {
+        icon: CalendarCheck,
+        name: 'Пробные',
+        path: '/football/trials',
       },
       {
         icon: GraduationCap,
         name: 'Ученики',
-        path: '/students',
+        path: '/football/students',
       },
     ],
   },

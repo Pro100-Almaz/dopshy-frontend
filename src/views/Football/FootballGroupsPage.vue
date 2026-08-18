@@ -15,48 +15,48 @@ import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import Modal from '@/components/ui/Modal.vue'
 import {
   formatBirthdate,
-  listBoxingGroups,
-  listBoxingStudents,
-  updateBoxingGroup,
-} from '@/services/boxing'
-import type { BoxingGroup, BoxingStudent, UpdateBoxingGroupPayload } from '@/services/boxing'
+  listFootballGroups,
+  listFootballStudents,
+  updateFootballGroup,
+} from '@/services/football'
+import type { FootballGroup, FootballStudent, UpdateFootballGroupPayload } from '@/services/football'
 
-interface BoxingGroupSchedule {
+interface FootballGroupSchedule {
   training_day: string
   training_day_label: string
   start_time: string
   end_time: string
 }
 
-interface BoxingGroupView {
+interface FootballGroupView {
   key: string
   group_type: string
   group_name: string
   max_cap: number | null
   curr_cap: number | null
-  schedules: BoxingGroupSchedule[]
+  schedules: FootballGroupSchedule[]
 }
 
-const currentPageTitle = 'Бокс: группы'
-const groups = ref<BoxingGroup[]>([])
-const subscribedStudents = ref<BoxingStudent[]>([])
+const currentPageTitle = 'Футбол: группы'
+const groups = ref<FootballGroup[]>([])
+const subscribedStudents = ref<FootballStudent[]>([])
 const selectedGroupId = ref('')
 const loading = ref(true)
 const error = ref('')
-const editingGroup = ref<BoxingGroupView | null>(null)
+const editingGroup = ref<FootballGroupView | null>(null)
 const editGroupName = ref('')
 const editMaxCap = ref<number | null>(null)
-const editSchedules = ref<BoxingGroupSchedule[]>([])
-const originalEditSchedules = ref<BoxingGroupSchedule[]>([])
+const editSchedules = ref<FootballGroupSchedule[]>([])
+const originalEditSchedules = ref<FootballGroupSchedule[]>([])
 const editError = ref('')
 const editSaving = ref(false)
 
-function groupKey(group: BoxingGroup): string {
+function groupKey(group: FootballGroup): string {
   return String(group.group_id ?? group.id)
 }
 
-const groupedGroups = computed<BoxingGroupView[]>(() => {
-  const byGroup = new Map<string, BoxingGroupView>()
+const groupedGroups = computed<FootballGroupView[]>(() => {
+  const byGroup = new Map<string, FootballGroupView>()
 
   for (const group of groups.value) {
     const key = groupKey(group)
@@ -88,7 +88,7 @@ const groupedGroups = computed<BoxingGroupView[]>(() => {
   return Array.from(byGroup.values())
 })
 
-const selectedGroup = computed<BoxingGroupView | undefined>(() =>
+const selectedGroup = computed<FootballGroupView | undefined>(() =>
   groupedGroups.value.find((group) => group.key === selectedGroupId.value),
 )
 
@@ -103,7 +103,7 @@ const selectedGroupChildren = computed(() => {
   )
 })
 
-function selectGroup(group: BoxingGroupView) {
+function selectGroup(group: FootballGroupView) {
   selectedGroupId.value = group.key
 }
 
@@ -111,7 +111,7 @@ function normalizeTime(value: string): string {
   return value.slice(0, 5)
 }
 
-function openEditGroup(group: BoxingGroupView) {
+function openEditGroup(group: FootballGroupView) {
   editingGroup.value = group
   editGroupName.value = group.group_name
   editMaxCap.value = group.max_cap
@@ -140,7 +140,7 @@ async function saveGroupEdit() {
   const group = editingGroup.value
   if (!group) return
 
-  const payload: UpdateBoxingGroupPayload = {}
+  const payload: UpdateFootballGroupPayload = {}
   const nextName = editGroupName.value.trim()
 
   if (nextName && nextName !== group.group_name) {
@@ -188,8 +188,8 @@ async function saveGroupEdit() {
 
   editSaving.value = true
   try {
-    console.info('Boxing group update payload', payload)
-    await updateBoxingGroup(group.key, payload)
+    console.info('Football group update payload', payload)
+    await updateFootballGroup(group.key, payload)
     await load()
     editingGroup.value = null
   } catch (e) {
@@ -205,8 +205,8 @@ async function load() {
   loading.value = true
   try {
     const [nextGroups, nextStudents] = await Promise.all([
-      listBoxingGroups(),
-      listBoxingStudents(true),
+      listFootballGroups(),
+      listFootballStudents(true),
     ])
     groups.value = nextGroups
     subscribedStudents.value = nextStudents
@@ -218,7 +218,7 @@ async function load() {
     }
     error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load boxing groups'
+    error.value = e instanceof Error ? e.message : 'Failed to load football groups'
   } finally {
     loading.value = false
   }
@@ -241,7 +241,7 @@ const inputClass =
         <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6">
           <h3 class="font-medium text-gray-800 dark:text-white/90">Группы</h3>
           <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">
-            Select a boxing group to view subscribed children assigned to it.
+            Select a football group to view subscribed children assigned to it.
           </p>
         </div>
 
@@ -267,7 +267,7 @@ const inputClass =
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
-          <p class="text-gray-600 dark:text-gray-400">Группы по боксу не найдены.</p>
+          <p class="text-gray-600 dark:text-gray-400">Группы по футболу не найдены.</p>
         </div>
 
         <div v-else class="divide-y divide-gray-200 dark:divide-gray-800">
