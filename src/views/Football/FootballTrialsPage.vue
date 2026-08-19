@@ -15,15 +15,15 @@ import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import {
   formatBirthdate,
-  listBoxingTrials,
-  setBoxingTrialAttended,
-  setBoxingTrialSubscribed,
-} from '@/services/boxing'
-import type { BoxingTrial } from '@/services/boxing'
+  listFootballTrials,
+  setFootballTrialAttended,
+  setFootballTrialSubscribed,
+} from '@/services/football'
+import type { FootballTrial } from '@/services/football'
 
-const currentPageTitle = 'Бокс: пробные'
+const currentPageTitle = 'Футбол: пробные'
 const query = ref('')
-const trials = ref<BoxingTrial[]>([])
+const trials = ref<FootballTrial[]>([])
 const loading = ref(true)
 const error = ref('')
 const savingTrialIds = ref<Set<number>>(new Set())
@@ -51,26 +51,26 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
-function groupName(trial: BoxingTrial): string {
+function groupName(trial: FootballTrial): string {
   return trial.assigned_group_name || trial.group_id || 'Unassigned'
 }
 
 async function load() {
   loading.value = true
   try {
-    trials.value = await listBoxingTrials(false)
+    trials.value = await listFootballTrials(false)
     error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load boxing trials'
+    error.value = e instanceof Error ? e.message : 'Failed to load football trials'
   } finally {
     loading.value = false
   }
 }
 
-async function updateAttended(trial: BoxingTrial, attended: boolean) {
+async function updateAttended(trial: FootballTrial, attended: boolean) {
   savingTrialIds.value.add(trial.trial_id)
   try {
-    await setBoxingTrialAttended(trial.trial_id, attended)
+    await setFootballTrialAttended(trial.trial_id, attended)
     trial.attended = attended
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to update attendance'
@@ -79,10 +79,10 @@ async function updateAttended(trial: BoxingTrial, attended: boolean) {
   }
 }
 
-async function subscribeTrial(trial: BoxingTrial) {
+async function subscribeTrial(trial: FootballTrial) {
   savingTrialIds.value.add(trial.trial_id)
   try {
-    await setBoxingTrialSubscribed(trial.trial_id, true)
+    await setFootballTrialSubscribed(trial.trial_id, true)
     trials.value = trials.value.filter((item) => item.trial_id !== trial.trial_id)
     error.value = ''
   } catch (e) {
