@@ -1,5 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { isSportKey, type SportKey } from '@/services/academy'
+
+/** Направления академии: маршруты для обоих собираются из одного описания. */
+const ACADEMY_SPORTS: { key: SportKey; name: string; label: string }[] = [
+  { key: 'football', name: 'Football', label: 'Футбол' },
+  { key: 'boxing', name: 'Boxing', label: 'Бокс' },
+]
+
+/**
+ * Последнее выбранное направление (его же пишет стор академии). Старые адреса
+ * без вида спорта ведут туда, где менеджер работал в прошлый раз.
+ */
+function lastSport(): SportKey {
+  try {
+    const stored = localStorage.getItem('dopsy_academy_sport')
+    if (isSportKey(stored)) return stored
+  } catch {
+    /* хранилище недоступно — остаётся футбол */
+  }
+  return 'football'
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(_to, _from, savedPosition) {
@@ -88,82 +110,80 @@ const router = createRouter({
       meta: { title: 'Клиентская база' },
     },
 
-    // ── Академия ───────────────────────────────
+    // ── Академия (футбол и бокс — один набор страниц) ──
+    // Вид спорта — параметр маршрута: одни и те же компоненты обслуживают
+    // оба направления (ТЗ §6.2 — одна кодовая база, SPORT_TYPE переменной).
+    ...ACADEMY_SPORTS.flatMap((sport) => [
+      {
+        path: `/${sport.key}`,
+        name: `${sport.name}Overview`,
+        component: () => import('../views/Academy/AcademyOverview.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: сводка` },
+      },
+      {
+        path: `/${sport.key}/groups`,
+        name: `${sport.name}Groups`,
+        component: () => import('../views/Academy/AcademySchedulePage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: расписание` },
+      },
+      {
+        path: `/${sport.key}/trials`,
+        name: `${sport.name}Trials`,
+        component: () => import('../views/Academy/AcademyTrialsPage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: пробные` },
+      },
+      {
+        path: `/${sport.key}/students`,
+        name: `${sport.name}Students`,
+        component: () => import('../views/Academy/AcademyStudentsPage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: ученики` },
+      },
+      {
+        path: `/${sport.key}/payments`,
+        name: `${sport.name}Payments`,
+        component: () => import('../views/Academy/AcademyPaymentsPage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: платежи` },
+      },
+      {
+        path: `/${sport.key}/bot-content`,
+        name: `${sport.name}BotContent`,
+        component: () => import('../views/Academy/BotContentPage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: контент бота` },
+      },
+    ]),
+
+    // Старые адреса — уводим на текущее направление, чтобы не ломать закладки.
     {
       path: '/students',
       name: 'Students',
-      redirect: '/football/students',
+      redirect: () => `/${lastSport()}/students`,
       meta: { title: 'Ученики' },
     },
     {
       path: '/lessons',
       name: 'Lessons',
-      redirect: '/football/groups',
+      redirect: () => `/${lastSport()}/groups`,
       meta: { title: 'Занятия' },
     },
-
-    // ── Финансы и персонал ──────────────────────
     {
       path: '/payments',
       name: 'Payments',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: () => `/${lastSport()}/payments`,
       meta: { title: 'Платежи' },
     },
+
+    // ── Персонал и прочее ───────────────────────────
     {
       path: '/workers',
       name: 'Workers',
       component: () => import('../views/Pages/BlankPage.vue'),
       meta: { title: 'Сотрудники' },
-    },
-
-    // ── Прочее ─────────────────────────────────
-    {
-      path: '/boxing',
-      name: 'Boxing',
-      redirect: '/boxing/groups',
-      meta: { title: 'Бокс' },
-    },
-    {
-      path: '/football',
-      name: 'Football',
-      redirect: '/football/groups',
-      meta: { title: 'Футбол' },
-    },
-    {
-      path: '/football/groups',
-      name: 'FootballGroups',
-      component: () => import('../views/Football/FootballGroupsPage.vue'),
-      meta: { title: 'Футбол: группы' },
-    },
-    {
-      path: '/football/trials',
-      name: 'FootballTrials',
-      component: () => import('../views/Football/FootballTrialsPage.vue'),
-      meta: { title: 'Футбол: пробные' },
-    },
-    {
-      path: '/football/students',
-      name: 'FootballStudents',
-      component: () => import('../views/Football/FootballStudentsPage.vue'),
-      meta: { title: 'Футбол: ученики' },
-    },
-    {
-      path: '/boxing/groups',
-      name: 'BoxingGroups',
-      component: () => import('../views/Boxing/BoxingGroupsPage.vue'),
-      meta: { title: 'Бокс: группы' },
-    },
-    {
-      path: '/boxing/trials',
-      name: 'BoxingTrials',
-      component: () => import('../views/Boxing/BoxingTrialsPage.vue'),
-      meta: { title: 'Бокс: пробные' },
-    },
-    {
-      path: '/boxing/students',
-      name: 'BoxingStudents',
-      component: () => import('../views/Boxing/BoxingStudentsPage.vue'),
-      meta: { title: 'Бокс: ученики' },
     },
     {
       path: '/reports',

@@ -5,7 +5,6 @@ import { dashboardService } from '@/services/dashboard'
 import { isBookingInPeriod } from '@/services/booking'
 
 export const useDashboardStore = defineStore('dashboard', () => {
-  const activeTab = ref<'football' | 'boxing'>('football')
   const summary = ref<DashboardSummary | null>(null)
   const todayBookings = ref<Booking[]>([])
   const recentPayments = ref<Booking[]>([])
@@ -55,7 +54,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   return {
-    activeTab,
     summary,
     todayBookings,
     recentPayments,

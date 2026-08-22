@@ -13,8 +13,8 @@ export interface DashboardSummary {
   todayBookings: number
   occupancyPercent: number
   unpaidBookings: number
+  /** Ученики с абонементом — по всем направлениям академии. */
   activeStudents: number
-  onShiftWorkers: number
 }
 
 export interface ScheduleSlot {
