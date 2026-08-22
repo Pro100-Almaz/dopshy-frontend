@@ -22,7 +22,7 @@
     >
       <router-link to="/dashboard" class="flex items-center gap-2.5">
         <div
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#10B981]"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pitch-600"
         >
           <svg
             class="h-4.5 w-4.5 text-white"
@@ -99,7 +99,7 @@
                   >
                   <span
                     v-if="item.badge && (isExpanded || isHovered || isMobileOpen)"
-                    class="ml-auto mr-2 rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[#10B981]"
+                    class="ml-auto mr-2 rounded-full bg-pitch-50 px-2 py-0.5 text-[10px] font-bold uppercase text-pitch-700 dark:bg-pitch-500/15 dark:text-pitch-300"
                   >
                     {{ item.badge }}
                   </span>
@@ -108,7 +108,7 @@
                     :class="[
                       'ml-auto w-5 h-5 transition-transform duration-200',
                       {
-                        'rotate-180 text-brand-500': isSubmenuOpen(
+                        'rotate-180 text-pitch-600 dark:text-pitch-400': isSubmenuOpen(
                           groupIndex,
                           index,
                         ),
@@ -123,14 +123,14 @@
                   :class="[
                     'menu-item group',
                     {
-                      'menu-item-active': isActive(item.path),
-                      'menu-item-inactive': !isActive(item.path),
+                      'menu-item-active': isItemActive(item),
+                      'menu-item-inactive': !isItemActive(item),
                     },
                   ]"
                 >
                   <span
                     :class="[
-                      isActive(item.path)
+                      isItemActive(item)
                         ? 'menu-item-icon-active'
                         : 'menu-item-icon-inactive',
                     ]"
@@ -144,7 +144,7 @@
                   >
                   <span
                     v-if="item.badge && (isExpanded || isHovered || isMobileOpen)"
-                    class="ml-auto rounded-full bg-[#10B981]/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[#10B981]"
+                    class="ml-auto rounded-full bg-pitch-50 px-2 py-0.5 text-[10px] font-bold uppercase text-pitch-700 dark:bg-pitch-500/15 dark:text-pitch-300"
                   >
                     {{ item.badge }}
                   </span>
@@ -201,17 +201,21 @@ import {
   LayoutDashboard,
   LayoutGrid,
   CalendarCheck,
+  CalendarDays,
   GraduationCap,
   History,
   Wallet,
   HardHat,
-  Swords,
+  Bot,
   BarChart3,
+  Gauge,
   Settings,
   PersonStanding,
 } from 'lucide-vue-next'
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
+import { SPORTS } from '@/services/academy'
+import { useAcademyStore } from '@/stores/academy'
 
 interface MenuItem {
   icon: Component
@@ -219,6 +223,12 @@ interface MenuItem {
   path?: string
   badge?: string
   subItems?: { name: string; path: string }[]
+  /**
+   * Раздел академии живёт под двумя адресами (`/football/...` и `/boxing/...`).
+   * Пункт остаётся активным при любом направлении — иначе переключение вида
+   * спорта «гасит» подсветку текущего экрана.
+   */
+  matchSuffix?: string
 }
 
 interface MenuGroup {
@@ -228,114 +238,71 @@ interface MenuGroup {
 
 const route = useRoute()
 const { isExpanded, isMobileOpen, isHovered, openSubmenu } = useSidebar()
+const academy = useAcademyStore()
 
-const menuGroups: MenuGroup[] = [
-  {
-    title: 'Меню',
-    items: [
-      {
-        icon: LayoutDashboard,
-        name: 'Панель управления',
-        path: '/dashboard',
-      },
-    ],
-  },
-  {
-    title: 'Управление полями',
-    items: [
-      {
-        icon: LayoutGrid,
-        name: 'Создать бронь',
-        path: '/field-slots',
-      },
-      {
-        icon: CalendarCheck,
-        name: 'Список броней',
-        path: '/bookings',
-      },
-      {
-        icon: History,
-        name: 'История действий',
-        path: '/history',
-      },
-      {
-        icon: PersonStanding,
-        name: 'Клиентская база',
-        path: '/customers',
-      },
-    ],
-  },
-  {
-    title: 'Футбольная Академия',
-    items: [
-      {
-        icon: Swords,
-        name: 'Группы',
-        path: '/football/groups',
-      },
-      {
-        icon: CalendarCheck,
-        name: 'Пробные',
-        path: '/football/trials',
-      },
-      {
-        icon: GraduationCap,
-        name: 'Ученики',
-        path: '/football/students',
-      },
-    ],
-  },
-  {
-    title: 'Бокс',
-    items: [
-      {
-        icon: Swords,
-        name: 'Группы',
-        path: '/boxing/groups',
-      },
-      {
-        icon: CalendarCheck,
-        name: 'Пробные',
-        path: '/boxing/trials',
-      },
-      {
-        icon: GraduationCap,
-        name: 'Ученики',
-        path: '/boxing/students',
-      },
-    ],
-  },
-  {
-    title: 'Финансы и персонал',
-    items: [
-      {
-        icon: Wallet,
-        name: 'Платежи',
-        path: '/payments',
-      },
-      {
-        icon: HardHat,
-        name: 'Сотрудники',
-        path: '/workers',
-      },
-    ],
-  },
-  {
-    title: 'Прочее',
-    items: [
-      {
-        icon: BarChart3,
-        name: 'Отчёты',
-        path: '/reports',
-      },
-      {
-        icon: Settings,
-        name: 'Настройки',
-        path: '/settings',
-      },
-    ],
-  },
-]
+/**
+ * Раньше футбол и бокс были двумя одинаковыми разделами по три пункта. Теперь
+ * один раздел «Академия» и переключатель направления внутри страниц: вдвое
+ * короче список и невозможно случайно работать не с тем видом спорта.
+ */
+const menuGroups = computed<MenuGroup[]>(() => {
+  const sport = academy.activeSport
+
+  return [
+    {
+      title: 'Меню',
+      items: [{ icon: LayoutDashboard, name: 'Панель управления', path: '/dashboard' }],
+    },
+    {
+      title: 'Управление полями',
+      items: [
+        { icon: LayoutGrid, name: 'Создать бронь', path: '/field-slots' },
+        { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
+        { icon: History, name: 'История действий', path: '/history' },
+        { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
+      ],
+    },
+    {
+      title: `Академия · ${SPORTS[sport].label}`,
+      items: [
+        { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
+        { icon: CalendarDays, name: 'Расписание', path: `/${sport}/groups`, matchSuffix: '/groups' },
+        { icon: CalendarCheck, name: 'Пробные', path: `/${sport}/trials`, matchSuffix: '/trials' },
+        {
+          icon: GraduationCap,
+          name: 'Ученики',
+          path: `/${sport}/students`,
+          matchSuffix: '/students',
+        },
+        { icon: Wallet, name: 'Платежи', path: `/${sport}/payments`, matchSuffix: '/payments' },
+        {
+          icon: Bot,
+          name: 'Контент бота',
+          path: `/${sport}/bot-content`,
+          matchSuffix: '/bot-content',
+        },
+      ],
+    },
+    {
+      title: 'Прочее',
+      items: [
+        { icon: HardHat, name: 'Сотрудники', path: '/workers' },
+        { icon: BarChart3, name: 'Отчёты', path: '/reports' },
+        { icon: Settings, name: 'Настройки', path: '/settings' },
+      ],
+    },
+  ]
+})
+
+const SPORT_PREFIXES = Object.keys(SPORTS).map((key) => `/${key}`)
+
+/** Пункт активен на своём адресе — и на том же экране другого направления. */
+function isItemActive(item: MenuItem): boolean {
+  if (!item.path) return false
+  if (route.path === item.path) return true
+  if (item.matchSuffix === undefined) return false
+  return SPORT_PREFIXES.some((prefix) => route.path === `${prefix}${item.matchSuffix}`)
+}
 
 const isActive = (path: string) => route.path === path
 
@@ -345,7 +312,7 @@ const toggleSubmenu = (groupIndex: number, itemIndex: number) => {
 }
 
 const isAnySubmenuRouteActive = computed(() => {
-  return menuGroups.some((group) =>
+  return menuGroups.value.some((group) =>
     group.items.some(
       (item) =>
         item.subItems &&
@@ -356,7 +323,7 @@ const isAnySubmenuRouteActive = computed(() => {
 
 const isSubmenuOpen = (groupIndex: number, itemIndex: number) => {
   const key = `${groupIndex}-${itemIndex}`
-  const item = menuGroups[groupIndex].items[itemIndex]
+  const item = menuGroups.value[groupIndex].items[itemIndex]
   return (
     openSubmenu.value === key ||
     (isAnySubmenuRouteActive.value &&

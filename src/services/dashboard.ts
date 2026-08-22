@@ -4,7 +4,7 @@ import {
   getManagerFields,
   isBookingInPeriod,
 } from '@/services/booking'
-import { listBoxingStudents } from '@/services/boxing'
+import { listStudents, SPORT_KEYS } from '@/services/academy'
 
 /** Часы, покрытые бронью (по времени начала/конца 'HH:mm'). */
 function bookingHours(b: Booking): number {
@@ -31,10 +31,7 @@ export const dashboardService = {
     return listBookings()
   },
 
-  /**
-   * Сводка KPI по реальным броням.
-   * Активные ученики и работники на смене пока остаются заглушкой.
-   */
+  /** Сводка KPI: считается только из данных, которые отдаёт бэкенд. */
   async getSummary(bookings: Booking[]): Promise<DashboardSummary> {
     const now = new Date()
     const active = bookings.filter(isActive)
@@ -57,19 +54,23 @@ export const dashboardService = {
       : 0
 
     const unpaidBookings = active.filter(isUnpaid).length
-    let activeStudents = 0
-    try {
-      activeStudents = (await listBoxingStudents(true)).length
-    } catch {
-      activeStudents = 0
-    }
+    // Ученики по всем направлениям академии: раньше считался только бокс,
+    // из-за чего футбольная школа в KPI не попадала вообще.
+    const studentCounts = await Promise.all(
+      SPORT_KEYS.map(async (sport) => {
+        try {
+          return (await listStudents(sport, true)).length
+        } catch {
+          return 0
+        }
+      }),
+    )
 
     return {
       todayBookings,
       occupancyPercent,
       unpaidBookings,
-      activeStudents,
-      onShiftWorkers: 8,
+      activeStudents: studentCounts.reduce((sum, count) => sum + count, 0),
     }
   },
 }

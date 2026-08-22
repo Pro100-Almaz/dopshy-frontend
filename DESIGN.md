@@ -133,6 +133,11 @@ A high-contrast athletic palette: one saturated pitch-green against a black-to-m
 ### Legacy
 - **Legacy Blue** (`#465fff`): The TailAdmin template accent. Being migrated OUT. Do not introduce it into new surfaces; replace it with pitch-green as admin components are touched.
 
+### Tokens in code
+Pitch-green ships as its own Tailwind ramp — `pitch-25` … `pitch-950` in `src/assets/main.css` — with the same hex values as the `success-*` ramp but a name that states intent: `success` is the outcome of an operation, `pitch` is the brand accent. New surfaces use `pitch-*`; `success-*` stays for genuine success states. Sidebar active states (`menu-item-active`, `menu-item-icon-active`, dropdown/badge variants) already run on `pitch-*`, so the legacy blue is gone from navigation.
+
+Focus is a token too: the `focus-ring` / `focus-ring-inset` utilities draw a 2px `pitch-500` outline. Outline rather than ring, because it reads on white cards, green buttons and hovered table rows without needing a matching offset color.
+
 ### Named Rules
 **The One Pitch Rule.** There is exactly one brand accent: pitch-green. Blue is not a second brand color — it is legacy debt. Red and amber are status signals, not accents. If a new screen needs "a pop of color," it is green.
 
@@ -202,6 +207,14 @@ Flat by default, lift on action. Surfaces rest flat on the mist background, defi
 - **Active:** Green tint background + pitch-green text/icon (migrating from the legacy `brand-50 / brand-500` blue). Inactive: `#344054`, hover to `#f2f4f7`.
 - **Mobile:** Off-canvas drawer; full dark-mode parity.
 
+### Academy surfaces (operator screens)
+Football and boxing run on one set of components parameterized by sport (`src/views/Academy/*`, `src/components/academy/*`), with the class vocabulary centralized in `components/academy/ui.ts` — `panel`, `panelHeader`, `input`, `buttonPrimary / Secondary / Ghost / Danger`, `th / td`. Same button, same panel, same table rule on every academy screen; a page that needs a new control adds it to that module rather than assembling utilities inline.
+
+Recurring pieces: `StatusPill` (five semantic tones, contrast-checked), `StateBlock` (skeleton / error / empty in the shape of the coming content), `OccupancyMeter` (green while seats remain, amber when full), `AttendanceControl` (two explicit actions with the WhatsApp consequence in the tooltip), `ContactActions` (call, WhatsApp, hand the dialog to a manager), `ModulePending` (honest "waiting on the backend" state that lists the expected contract).
+
+### Signature: Week Grid
+The academy schedule is a real week: seven day columns with dates, today's column marked in pitch-green, each lesson a chip carrying time, group and an occupancy bar. Under `lg` it becomes a day picker plus a list — never a horizontally scrolling table. Lessons whose weekday the API didn't resolve surface in an amber strip instead of disappearing.
+
 ### Signature: Slot Grid
 The booking slot grid is the product's defining component — a time-vs-field matrix where each cell is a bookable slot. Available slots read in pitch-green, held/occupied in amber/tint, selected fills solid green with the focus ring. It must stay glanceable for operators and tappable for players: minimum 44px touch targets on the player flow.
 
@@ -215,6 +228,8 @@ The booking slot grid is the product's defining component — a time-vs-field ma
 - **Do** confine Bebas Neue to hero and hype moments; run all UI in Outfit.
 - **Do** design player flows thumb-first: ≥44px touch targets, AA contrast, one obvious action per screen.
 - **Do** provide a reduced-motion alternative for every transition (the hover sheen, slot pulses, card lifts).
+- **Do** say what an action will do when it triggers something outside the screen — marking a trial sends a WhatsApp message, so the button shows which message.
+- **Do** show a named "waiting on the backend" state when an endpoint is missing, instead of an empty table that reads as "no data".
 
 ### Don't:
 - **Don't** let this read as a **generic off-the-shelf admin template**. No anonymous blue-and-gray SaaS chrome, no interchangeable icon-heading-text card grids.
@@ -224,3 +239,5 @@ The booking slot grid is the product's defining component — a time-vs-field ma
 - **Don't** put Bebas Neue in tables, forms, or nav; it becomes a costume.
 - **Don't** rest a card under a heavy shadow, and never nest a card inside a card.
 - **Don't** let muted gray text drop below `#667085` on white — placeholder and caption text must still clear AA.
+- **Don't** duplicate a screen per sport. One component, `sport` as a prop — the two academies drifted apart once already.
+- **Don't** invent a metric. If a number or trend can't be derived from the API, it doesn't go on the screen.
