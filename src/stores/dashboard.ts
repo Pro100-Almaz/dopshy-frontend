@@ -3,8 +3,11 @@ import { ref } from 'vue'
 import type { DashboardSummary, Booking } from '@/types'
 import { dashboardService } from '@/services/dashboard'
 import { isBookingInPeriod } from '@/services/booking'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from './auth'
 
 export const useDashboardStore = defineStore('dashboard', () => {
+  const auth = useAuthStore()
   const summary = ref<DashboardSummary | null>(null)
   const todayBookings = ref<Booking[]>([])
   const recentPayments = ref<Booking[]>([])
@@ -31,10 +34,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     inFlight = (async () => {
       try {
-        const bookings = await dashboardService.getBookings()
+        const role = auth.role
+        const bookings = hasPermission(role, 'arena') ? await dashboardService.getBookings() : []
         const now = new Date()
 
-        const nextSummary = await dashboardService.getSummary(bookings)
+        const nextSummary = await dashboardService.getSummary(bookings, role)
         const nextToday = bookings
           .filter((b) => isBookingInPeriod(b, 'today', now))
           .sort((a, b) => a.start.localeCompare(b.start))

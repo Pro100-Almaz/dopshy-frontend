@@ -111,7 +111,11 @@ const user = computed(() => authStore.user)
 const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Супер-администратор',
   admin: 'Админ',
+  arena_manager: 'Менеджер арены',
+  boxing_manager: 'Менеджер бокса',
+  football_manager: 'Менеджер футбола',
   manager: 'Менеджер',
+  client: 'Клиент',
   coach: 'Тренер',
   accountant: 'Бухгалтер',
   staff: 'Сотрудник',

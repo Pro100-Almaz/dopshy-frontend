@@ -4,7 +4,9 @@ import {
   getManagerFields,
   isBookingInPeriod,
 } from '@/services/booking'
-import { listStudents, SPORT_KEYS } from '@/services/academy'
+import { listStudents } from '@/services/academy'
+import { hasPermission, permittedAcademySports } from './rbac'
+import type { UserRole } from '@/types'
 
 /** Часы, покрытые бронью (по времени начала/конца 'HH:mm'). */
 function bookingHours(b: Booking): number {
@@ -32,7 +34,7 @@ export const dashboardService = {
   },
 
   /** Сводка KPI: считается только из данных, которые отдаёт бэкенд. */
-  async getSummary(bookings: Booking[]): Promise<DashboardSummary> {
+  async getSummary(bookings: Booking[], role?: UserRole | string): Promise<DashboardSummary> {
     const now = new Date()
     const active = bookings.filter(isActive)
 
@@ -40,11 +42,13 @@ export const dashboardService = {
 
     // Загруженность за неделю: занятые часы / общий фонд часов (24 × 7 на каждое поле).
     let fieldCount = 1
-    try {
-      const fields = await getManagerFields()
-      fieldCount = Math.max(1, fields.length)
-    } catch {
-      fieldCount = 1
+    if (hasPermission(role, 'arena')) {
+      try {
+        const fields = await getManagerFields()
+        fieldCount = Math.max(1, fields.length)
+      } catch {
+        fieldCount = 1
+      }
     }
     const weekBookings = active.filter((b) => isBookingInPeriod(b, 'week', now))
     const bookedHours = weekBookings.reduce((sum, b) => sum + bookingHours(b), 0)
@@ -56,15 +60,17 @@ export const dashboardService = {
     const unpaidBookings = active.filter(isUnpaid).length
     // Ученики по всем направлениям академии: раньше считался только бокс,
     // из-за чего футбольная школа в KPI не попадала вообще.
-    const studentCounts = await Promise.all(
-      SPORT_KEYS.map(async (sport) => {
-        try {
-          return (await listStudents(sport, true)).length
-        } catch {
-          return 0
-        }
-      }),
-    )
+    const studentCounts = hasPermission(role, 'academy')
+      ? await Promise.all(
+          permittedAcademySports(role).map(async (sport) => {
+            try {
+              return (await listStudents(sport, true)).length
+            } catch {
+              return 0
+            }
+          }),
+        )
+      : []
 
     return {
       todayBookings,

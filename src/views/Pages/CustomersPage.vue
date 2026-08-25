@@ -16,8 +16,12 @@ import BotToggle from '@/components/customers/BotToggle.vue'
 import type { BotStatus, Contact } from '@/types'
 import { getBotEnabled, listContacts, relativeTime, setBotEnabled } from '@/services/customer'
 import { ApiError } from '@/services/api'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from '@/stores/auth'
 
 const currentPageTitle = 'Клиентская база'
+const auth = useAuthStore()
+const canManageGlobalBot = computed(() => hasPermission(auth.role, 'globalBotSetting'))
 
 // Держим экран свежим: авто-пауза и новые контакты появляются на бэкенде без
 // действий фронта. Реального времени пока нет — тихо опрашиваем каждые 5 секунд.
@@ -113,7 +117,7 @@ function onVisibility() {
   // Глобальный выключатель мог тронуть другой менеджер, поэтому читаем и его.
   if (!document.hidden) {
     load(true)
-    loadBotEnabled(true)
+    if (canManageGlobalBot.value) loadBotEnabled(true)
   }
 }
 
@@ -127,6 +131,7 @@ const label = computed(() => (on.value ? 'Вкл' : 'Выкл'))
 // silent — фоновое перечитывание (возврат на вкладку): не блокируем переключатель
 // и не показываем тост, иначе экран дёргается на каждом фокусе.
 async function loadBotEnabled(silent = false) {
+  if (!canManageGlobalBot.value) return
   if (silent && pending.value) return
   if (!silent) pending.value = true
   try {
@@ -179,7 +184,8 @@ const CONFIRM_OFF = [
 
 onMounted(() => {
   load()
-  loadBotEnabled()
+  if (canManageGlobalBot.value) loadBotEnabled()
+  else pending.value = false
   pollId = window.setInterval(() => load(true), POLL_MS)
   document.addEventListener('visibilitychange', onVisibility)
 })
@@ -197,7 +203,7 @@ onUnmounted(() => {
     <div class="space-y-6">
       <!-- Пока бот выключен глобально, пер-контактные переключатели ничего не меняют. -->
       <div
-        v-if="!on && !pending"
+        v-if="canManageGlobalBot && !on && !pending"
         class="flex items-start gap-3 rounded-2xl border border-warning-200 bg-warning-50 px-5 py-4 dark:border-warning-500/30 dark:bg-warning-500/10"
       >
         <TriangleAlert class="mt-0.5 h-5 w-5 shrink-0 text-warning-600 dark:text-warning-400" />
@@ -310,6 +316,7 @@ onUnmounted(() => {
                       BOT
                     </span>
                     <button
+                      v-if="canManageGlobalBot"
                       type="button"
                       role="switch"
                       :aria-checked="on"

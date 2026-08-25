@@ -215,7 +215,13 @@ import {
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
 import { SPORTS } from '@/services/academy'
+import {
+  fixedSportForRole,
+  hasPermission,
+  permittedAcademySports,
+} from '@/services/rbac'
 import { useAcademyStore } from '@/stores/academy'
+import { useAuthStore } from '@/stores/auth'
 
 interface MenuItem {
   icon: Component
@@ -239,6 +245,7 @@ interface MenuGroup {
 const route = useRoute()
 const { isExpanded, isMobileOpen, isHovered, openSubmenu } = useSidebar()
 const academy = useAcademyStore()
+const auth = useAuthStore()
 
 /**
  * Раньше футбол и бокс были двумя одинаковыми разделами по три пункта. Теперь
@@ -246,52 +253,84 @@ const academy = useAcademyStore()
  * короче список и невозможно случайно работать не с тем видом спорта.
  */
 const menuGroups = computed<MenuGroup[]>(() => {
-  const sport = academy.activeSport
-
-  return [
+  const role = auth.role
+  const allowedSports = permittedAcademySports(role)
+  const fixedSport = fixedSportForRole(role)
+  const sport = fixedSport ?? (allowedSports.includes(academy.activeSport) ? academy.activeSport : allowedSports[0])
+  const groups: MenuGroup[] = [
     {
       title: 'Меню',
       items: [{ icon: LayoutDashboard, name: 'Панель управления', path: '/dashboard' }],
     },
-    {
-      title: 'Управление полями',
-      items: [
-        { icon: LayoutGrid, name: 'Создать бронь', path: '/field-slots' },
-        { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
-        { icon: History, name: 'История действий', path: '/history' },
-        { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
-      ],
-    },
-    {
-      title: `Академия · ${SPORTS[sport].label}`,
-      items: [
-        { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
-        { icon: CalendarDays, name: 'Расписание', path: `/${sport}/groups`, matchSuffix: '/groups' },
-        { icon: CalendarCheck, name: 'Пробные', path: `/${sport}/trials`, matchSuffix: '/trials' },
-        {
-          icon: GraduationCap,
-          name: 'Ученики',
-          path: `/${sport}/students`,
-          matchSuffix: '/students',
-        },
-        { icon: Wallet, name: 'Платежи', path: `/${sport}/payments`, matchSuffix: '/payments' },
-        {
-          icon: Bot,
-          name: 'Контент бота',
-          path: `/${sport}/bot-content`,
-          matchSuffix: '/bot-content',
-        },
-      ],
-    },
-    {
-      title: 'Прочее',
-      items: [
-        { icon: HardHat, name: 'Сотрудники', path: '/workers' },
-        { icon: BarChart3, name: 'Отчёты', path: '/reports' },
-        { icon: Settings, name: 'Настройки', path: '/settings' },
-      ],
-    },
   ]
+
+  if (hasPermission(role, 'arena')) {
+    groups.push(
+      {
+        title: 'Управление полями',
+        items: [
+          { icon: LayoutGrid, name: 'Создать бронь', path: '/field-slots' },
+          { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
+          { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
+          ...(hasPermission(role, 'history')
+            ? [{ icon: History, name: 'История действий', path: '/history' }]
+            : []),
+        ],
+      },
+    )
+  }
+
+  if (sport && hasPermission(role, 'academy')) {
+    groups.push(
+    {
+        title: `Академия · ${SPORTS[sport].label}`,
+        items: [
+          { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
+          { icon: CalendarDays, name: 'Расписание', path: `/${sport}/groups`, matchSuffix: '/groups' },
+          { icon: CalendarCheck, name: 'Пробные', path: `/${sport}/trials`, matchSuffix: '/trials' },
+          {
+            icon: GraduationCap,
+            name: 'Ученики',
+            path: `/${sport}/students`,
+            matchSuffix: '/students',
+          },
+          ...(hasPermission(role, 'academyPayments')
+            ? [{ icon: Wallet, name: 'Платежи', path: `/${sport}/payments`, matchSuffix: '/payments' }]
+            : []),
+          ...(hasPermission(role, 'botContent')
+            ? [
+                {
+                  icon: Bot,
+                  name: 'Контент бота',
+                  path: `/${sport}/bot-content`,
+                  matchSuffix: '/bot-content',
+                },
+              ]
+            : []),
+        ],
+      },
+    )
+  }
+
+  const otherItems: MenuItem[] = [
+    ...(hasPermission(role, 'workers')
+      ? [{ icon: HardHat, name: 'Сотрудники', path: '/workers' }]
+      : []),
+    ...(hasPermission(role, 'reports')
+      ? [{ icon: BarChart3, name: 'Отчёты', path: '/reports' }]
+      : []),
+    ...(hasPermission(role, 'settings')
+      ? [{ icon: Settings, name: 'Настройки', path: '/settings' }]
+      : []),
+  ]
+  if (otherItems.length) {
+    groups.push({
+      title: 'Прочее',
+      items: otherItems,
+    })
+  }
+
+  return groups
 })
 
 const SPORT_PREFIXES = Object.keys(SPORTS).map((key) => `/${key}`)
