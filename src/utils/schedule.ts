@@ -40,17 +40,35 @@ const DAY_ALIASES: Record<number, string[]> = {
  * зафиксирована, поэтому число трактуем эвристикой (0…6 и 1…7 — обе с
  * понедельника) и только когда подпись не разобралась.
  */
-export function resolveWeekday(label?: string | null, value?: number | null): number | null {
-  const normalized = (label ?? '').trim().toLowerCase()
+export function resolveWeekday(label?: unknown, value?: unknown): number | null {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : null
+  const numericLabel =
+    typeof label === 'number'
+      ? label
+      : typeof label === 'string' && /^\d+$/.test(label.trim())
+        ? Number(label)
+        : null
+
+  const normalized = typeof label === 'string' ? label.trim().toLowerCase() : ''
   if (normalized) {
     for (const [index, aliases] of Object.entries(DAY_ALIASES)) {
       if (aliases.some((alias) => normalized.startsWith(alias))) return Number(index)
     }
   }
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value >= 0 && value <= 6) return value
-    if (value === 7) return 6
+  if (numericValue !== null && Number.isFinite(numericValue)) {
+    if (numericValue >= 0 && numericValue <= 6) return numericValue
+    if (numericValue === 7) return 6
+  }
+
+  if (numericLabel !== null && Number.isFinite(numericLabel)) {
+    if (numericLabel >= 0 && numericLabel <= 6) return numericLabel
+    if (numericLabel === 7) return 6
   }
 
   return null
@@ -65,8 +83,9 @@ export function weekdayLong(index: number | null): string {
 }
 
 /** 'HH:mm[:ss]' → минуты от начала суток; мусор → null. */
-export function parseTimeToMinutes(value?: string | null): number | null {
-  const match = (value ?? '').match(/^(\d{1,2}):(\d{2})/)
+export function parseTimeToMinutes(value?: unknown): number | null {
+  const raw = typeof value === 'string' ? value : value == null ? '' : String(value)
+  const match = raw.match(/^(\d{1,2}):(\d{2})/)
   if (!match) return null
   const hours = Number(match[1])
   const minutes = Number(match[2])
@@ -75,13 +94,13 @@ export function parseTimeToMinutes(value?: string | null): number | null {
 }
 
 /** 'HH:mm:ss' → 'HH:mm'. */
-export function formatTime(value?: string | null): string {
+export function formatTime(value?: unknown): string {
   const minutes = parseTimeToMinutes(value)
-  if (minutes === null) return value || '—'
+  if (minutes === null) return typeof value === 'string' && value ? value : '—'
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-export function formatTimeRange(start?: string | null, end?: string | null): string {
+export function formatTimeRange(start?: unknown, end?: unknown): string {
   const from = formatTime(start)
   const to = formatTime(end)
   if (from === '—' && to === '—') return '—'
@@ -90,8 +109,8 @@ export function formatTimeRange(start?: string | null, end?: string | null): str
 }
 
 /** Явная дата из строки: ISO, 'YYYY-MM-DD' или 'DD.MM.YYYY'. */
-export function parseExplicitDate(value?: string | null): Date | null {
-  const raw = (value ?? '').trim()
+export function parseExplicitDate(value?: unknown): Date | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return null
 
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)

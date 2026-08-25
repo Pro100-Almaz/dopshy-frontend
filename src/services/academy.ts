@@ -159,25 +159,31 @@ function subscribedQuery(subscribed?: boolean): string {
   return subscribed === undefined ? '' : `?subscribed=${subscribed ? 'true' : 'false'}`
 }
 
-/** Снимает конверт `{ ok, data }`; `ok: false` превращает в ошибку с текстом бэкенда. */
-function unwrap(data: unknown): unknown {
-  if (data && typeof data === 'object' && 'ok' in data) {
-    const envelope = data as { ok?: unknown; data?: unknown; detail?: unknown; message?: unknown }
+/**
+ * Снимает один или несколько конвертов `{ ok, data }`.
+ *
+ * Новый gateway может вернуть backend-конверт, внутри которого лежит
+ * bot-конверт: `{ ok: true, data: { ok: true, data: { groups: [...] } } }`.
+ */
+export function unwrapAcademyPayload(data: unknown): unknown {
+  let payload = data
+
+  while (payload && typeof payload === 'object' && ('ok' in payload || 'data' in payload)) {
+    const envelope = payload as { ok?: unknown; data?: unknown; detail?: unknown; message?: unknown }
     if (envelope.ok === false) {
       const detail = typeof envelope.detail === 'string' ? envelope.detail : undefined
       const message = typeof envelope.message === 'string' ? envelope.message : undefined
       throw new Error(detail || message || 'Запрос к API академии не удался')
     }
+    if (!('data' in envelope)) break
+    payload = envelope.data
   }
 
-  if (data && typeof data === 'object' && 'data' in data) {
-    return (data as { data: unknown }).data
-  }
-  return data
+  return payload
 }
 
 function listFrom<T>(data: unknown, keys: string[]): T[] {
-  const payload = unwrap(data)
+  const payload = unwrapAcademyPayload(data)
   if (Array.isArray(payload)) return payload as T[]
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>
@@ -189,7 +195,7 @@ function listFrom<T>(data: unknown, keys: string[]): T[] {
 }
 
 function entityFrom<T>(data: unknown, keys: string[]): T {
-  const payload = unwrap(data)
+  const payload = unwrapAcademyPayload(data)
   if (payload && typeof payload === 'object') {
     const record = payload as Record<string, unknown>
     for (const key of keys) {

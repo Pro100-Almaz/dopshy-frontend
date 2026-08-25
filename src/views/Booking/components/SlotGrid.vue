@@ -49,7 +49,7 @@ const emit = defineEmits<{ toggle: [slot: Slot] }>()
             >{{ slot.start }}</span
           >
           <span
-            class="mt-1 text-[11px] leading-none"
+            class="mt-1 text-sm font-semibold leading-none tracking-normal"
             :class="selectedIds.includes(slot.id) ? 'text-white/80' : 'text-gray-500'"
           >
             {{ slot.status === 'booked' ? 'занято' : formatPrice(slot.price) }}

@@ -12,6 +12,7 @@ const props = defineProps<{
   loading?: boolean
   fill?: boolean
   allowRepeat?: boolean
+  large?: boolean
 }>()
 
 const store = useBookingStore()
@@ -125,7 +126,7 @@ onUnmounted(clearPress)
 // Колонки тянутся под контейнер (minmax(0,1fr)) — сетка не выходит за экран
 // ни на 7 днях (десктоп), ни на 4 (мобильный). Первая колонка — шкала часов.
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `3rem repeat(${props.week.days.length || 7}, minmax(0, 1fr))`,
+  gridTemplateColumns: `${props.large ? '5.25rem' : '3rem'} repeat(${props.week.days.length || 7}, minmax(0, 1fr))`,
 }))
 
 const BOOKING_STATE_LABEL: Record<string, string> = {
@@ -195,8 +196,13 @@ function hideBooking() {
         :key="d.iso"
         class="sticky top-0 z-10 border-b border-gray-200 bg-white px-1 py-2 dark:border-gray-800 dark:bg-gray-900"
       >
-        <div class="text-[11px] uppercase text-gray-500">{{ d.label.weekday }}</div>
-        <div class="text-base font-bold leading-none text-gray-900 dark:text-white/90">
+        <div class="uppercase text-gray-500" :class="large ? 'text-base' : 'text-[11px]'">
+          {{ d.label.weekday }}
+        </div>
+        <div
+          class="font-bold leading-none text-gray-900 dark:text-white/90"
+          :class="large ? 'text-2xl' : 'text-base'"
+        >
           {{ d.label.day }}
         </div>
       </div>
@@ -204,7 +210,8 @@ function hideBooking() {
       <!-- Hour rows -->
       <template v-for="row in week.rows" :key="row.startMin">
         <div
-          class="sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900"
+          class="sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900"
+          :class="large ? 'text-lg' : 'text-xs'"
         >
           {{ row.label }}
         </div>
@@ -228,8 +235,9 @@ function hideBooking() {
                 ? 'повтор'
                 : formatPrice(cell.price)
           }`"
-          class="sched-cell h-11 select-none border-b border-r border-gray-100 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
-          :class="
+          class="sched-cell select-none border-b border-r border-gray-100 leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
+          :class="[
+            large ? 'h-14 text-xl' : 'h-11 text-[11px]',
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
               : cell.status === 'booked'
@@ -240,8 +248,8 @@ function hideBooking() {
                   ? 'repeat-occ cursor-not-allowed font-semibold text-success-700 dark:text-success-300'
                   : cell.status === 'available'
                     ? 'bg-white text-gray-600 hover:bg-success-50 hover:text-success-700 dark:bg-transparent dark:text-gray-400 dark:hover:bg-success-600/10'
-                    : 'cursor-not-allowed bg-gray-50 text-transparent dark:bg-gray-900/50'
-          "
+                    : 'cursor-not-allowed bg-gray-50 text-transparent dark:bg-gray-900/50',
+          ]"
           @click="onCell(cell)"
           @contextmenu="onContext(cell, $event)"
           @touchstart="onTouchStart(cell, $event)"
@@ -254,19 +262,33 @@ function hideBooking() {
         >
           <Repeat
             v-if="repeatStates[cell.id] === 'source' && store.isSelected(cell.id)"
-            class="mx-auto h-4 w-4"
+            class="mx-auto"
+            :class="large ? 'h-6 w-6' : 'h-4 w-4'"
             aria-hidden="true"
           />
-          <Check v-else-if="store.isSelected(cell.id)" class="mx-auto h-4 w-4" aria-hidden="true" />
+          <Check
+            v-else-if="store.isSelected(cell.id)"
+            class="mx-auto"
+            :class="large ? 'h-6 w-6' : 'h-4 w-4'"
+            aria-hidden="true"
+          />
           <Repeat
             v-else-if="repeatStates[cell.id] === 'occurrence'"
-            class="mx-auto h-3.5 w-3.5 opacity-80"
+            class="mx-auto opacity-80"
+            :class="large ? 'h-5 w-5' : 'h-3.5 w-3.5'"
             aria-hidden="true"
           />
-          <span v-else-if="cell.status === 'available'">{{ priceShort(cell.price) }}</span>
+          <span
+            v-else-if="cell.status === 'available'"
+            class="font-semibold tracking-normal"
+            :class="large ? 'text-2xl' : 'text-sm'"
+          >
+            {{ priceShort(cell.price) }}
+          </span>
           <span
             v-else-if="cell.status === 'booked'"
-            class="block truncate px-1 text-[10px] font-medium"
+            class="block truncate px-1 font-medium"
+            :class="large ? 'text-base' : 'text-[10px]'"
             >{{
               canSeeBookingDetails ? cell.booking?.customerName || BOOKED_LABEL : BOOKED_LABEL
             }}</span

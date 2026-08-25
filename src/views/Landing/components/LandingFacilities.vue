@@ -43,16 +43,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <section id="facilities" ref="sectionRef" class="py-24 bg-gray-50 relative">
+  <section id="facilities" ref="sectionRef" class="landing-snap-section py-24 bg-gray-50 relative">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
       <!-- Section header -->
       <div class="text-center mb-16">
-        <h2 class="text-5xl md:text-6xl font-bebas text-gray-900 mb-4">
+        <h2 class="text-4xl md:text-5xl font-bebas text-gray-900 mb-4">
           ЛУЧШИЕ <span class="text-success-600">ОБЪЕКТЫ</span>
         </h2>
-        <p class="text-gray-500 max-w-2xl mx-auto text-lg">
-          Всё необходимое, чтобы полностью сосредоточиться на игре. Наша арена построена
-          по профессиональным стандартам для игроков любого уровня.
+        <p class="text-gray-500 max-w-2xl mx-auto text-sm md:text-base">
+          Всё необходимое, чтобы полностью сосредоточиться на игре. Наша арена построена по
+          профессиональным стандартам для игроков любого уровня.
         </p>
       </div>
 
@@ -61,21 +61,21 @@ onMounted(() => {
         <div
           v-for="(feat, idx) in features"
           :key="idx"
-          class="landing-reveal group rounded-2xl bg-white border border-gray-200 p-8 shadow-theme-sm hover:border-success-300 hover:shadow-theme-md transition-all duration-300 hover:-translate-y-2 relative overflow-hidden"
+          class="landing-reveal group rounded-2xl bg-white border border-gray-200 p-6 shadow-theme-sm hover:border-success-300 hover:shadow-theme-md transition-all duration-300 hover:-translate-y-2 relative overflow-hidden"
           :class="{ 'is-revealed': isVisible }"
           :style="{ '--reveal-i': idx }"
         >
           <div
-            class="w-14 h-14 rounded-xl bg-success-50 border border-success-100 flex items-center justify-center text-success-600 mb-6 group-hover:scale-110 group-hover:bg-success-600 group-hover:text-white transition-all duration-300"
+            class="w-12 h-12 rounded-xl bg-success-50 border border-success-100 flex items-center justify-center text-success-600 mb-5 group-hover:scale-110 group-hover:bg-success-600 group-hover:text-white transition-all duration-300"
           >
-            <component :is="feat.icon" class="w-7 h-7" />
+            <component :is="feat.icon" class="w-6 h-6" />
           </div>
 
-          <h3 class="text-2xl font-bebas tracking-wider text-gray-900 mb-3">
+          <h3 class="text-base font-bebas leading-tight tracking-wide text-gray-900 mb-3 break-words">
             {{ feat.title }}
           </h3>
 
-          <p class="text-gray-500 text-sm leading-relaxed">
+          <p class="text-gray-500 text-xs leading-relaxed">
             {{ feat.desc }}
           </p>
         </div>
