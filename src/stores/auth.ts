@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types'
 import { authService } from '@/services/auth'
+import { hasPermission, roleOf } from '@/services/rbac'
 import router from '@/router'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -19,10 +20,12 @@ export const useAuthStore = defineStore('auth', () => {
    * данные броней — имя и телефон клиента, заметки, статус оплаты. Публичный
    * клиент и аноним видят занятые слоты обезличенно.
    */
-  const STAFF_ROLES = ['super_admin', 'admin', 'manager']
   const isStaff = computed(
-    () => isAuthenticated.value && STAFF_ROLES.includes(user.value?.role ?? ''),
+    () =>
+      isAuthenticated.value &&
+      (hasPermission(user.value?.role, 'arena') || hasPermission(user.value?.role, 'academy')),
   )
+  const role = computed(() => roleOf(user.value?.role))
 
   // Restore user from storage on init
   const stored = localStorage.getItem('dopsy_user') || sessionStorage.getItem('dopsy_user')
@@ -76,5 +79,5 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
-  return { user, token, isAuthenticated, isStaff, loading, error, login, logout }
+  return { user, token, role, isAuthenticated, isStaff, loading, error, login, logout }
 })

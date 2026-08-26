@@ -16,11 +16,11 @@ const currentYear = new Date().getFullYear()
             <div class="w-10 h-10 rounded-full bg-success-600 flex items-center justify-center">
               <Dribbble class="w-6 h-6 text-white" />
             </div>
-            <span class="font-bebas text-3xl tracking-wider text-gray-900">
+            <span class="font-bebas text-2xl tracking-wider text-gray-900">
               DOPSY <span class="text-success-600">ARENA</span>
             </span>
           </a>
-          <p class="text-gray-500 max-w-sm mb-8 leading-relaxed">
+          <p class="text-gray-500 max-w-sm mb-8 text-sm leading-relaxed">
             Лучшее место для футбола 5×5 и 6×6. Профессиональные условия для тех, кто любит
             красивую игру.
           </p>
@@ -44,33 +44,26 @@ const currentYear = new Date().getFullYear()
 
         <!-- Quick Links -->
         <div>
-          <h4 class="text-xl font-bebas text-gray-900 mb-6">НАВИГАЦИЯ</h4>
+          <h4 class="text-base font-bebas text-gray-900 mb-6">НАВИГАЦИЯ</h4>
           <ul class="space-y-4">
             <li>
               <a
-                href="#arena"
-                class="text-gray-500 hover:text-success-600 transition-colors text-sm uppercase tracking-wider font-semibold"
-                >Арена</a
-              >
-            </li>
-            <li>
-              <a
                 href="#facilities"
-                class="text-gray-500 hover:text-success-600 transition-colors text-sm uppercase tracking-wider font-semibold"
+                class="text-gray-500 hover:text-success-600 transition-colors text-xs uppercase tracking-wider font-semibold"
                 >Объекты</a
               >
             </li>
             <li>
               <a
                 href="#gallery"
-                class="text-gray-500 hover:text-success-600 transition-colors text-sm uppercase tracking-wider font-semibold"
+                class="text-gray-500 hover:text-success-600 transition-colors text-xs uppercase tracking-wider font-semibold"
                 >Галерея</a
               >
             </li>
             <li>
               <router-link
                 to="/booking"
-                class="text-gray-500 hover:text-success-600 transition-colors text-sm uppercase tracking-wider font-semibold"
+                class="text-gray-500 hover:text-success-600 transition-colors text-xs uppercase tracking-wider font-semibold"
                 >Бронирование</router-link
               >
             </li>
@@ -79,9 +72,9 @@ const currentYear = new Date().getFullYear()
 
         <!-- Contact -->
         <div>
-          <h4 class="text-xl font-bebas text-gray-900 mb-6">КОНТАКТЫ</h4>
+          <h4 class="text-base font-bebas text-gray-900 mb-6">КОНТАКТЫ</h4>
           <ul class="space-y-4">
-            <li class="flex items-start gap-3 text-gray-600 text-sm">
+            <li class="flex items-start gap-3 text-gray-600 text-xs">
               <MapPin class="w-5 h-5 text-success-600 shrink-0 mt-0.5" />
               <a
                 :href="directionsUrl()"
@@ -92,13 +85,13 @@ const currentYear = new Date().getFullYear()
                 {{ ARENA.address }}
               </a>
             </li>
-            <li class="flex items-center gap-3 text-gray-600 text-sm">
+            <li class="flex items-center gap-3 text-gray-600 text-xs">
               <Phone class="w-5 h-5 text-success-600 shrink-0" />
               <a href="tel:+77005556000" class="transition-colors hover:text-success-600">
                 +7 (700) 555-6000
               </a>
             </li>
-            <li class="flex items-center gap-3 text-gray-600 text-sm">
+            <li class="flex items-center gap-3 text-gray-600 text-xs">
               <Mail class="w-5 h-5 text-success-600 shrink-0" />
               <a href="mailto:arena@dopsy.kz" class="transition-colors hover:text-success-600">
                 arena@dopsy.kz
@@ -112,10 +105,10 @@ const currentYear = new Date().getFullYear()
       <div
         class="border-t border-gray-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4"
       >
-        <p class="text-gray-500 text-sm">
+        <p class="text-gray-500 text-xs">
           &copy; {{ currentYear }} Dopsy Arena. Все права защищены.
         </p>
-        <div class="flex items-center gap-6 text-sm text-gray-500">
+        <div class="flex items-center gap-6 text-xs text-gray-500">
           <a href="#" class="hover:text-gray-900 transition-colors">Конфиденциальность</a>
           <a href="#" class="hover:text-gray-900 transition-colors">Условия использования</a>
           <router-link to="/data-deletion" class="hover:text-success-600 transition-colors"

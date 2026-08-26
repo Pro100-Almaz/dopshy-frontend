@@ -1,6 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { isSportKey, type SportKey } from '@/services/academy'
+import {
+  canAccessSport,
+  defaultPathForRole,
+  fixedSportForRole,
+  hasPermission,
+  roleOf,
+} from '@/services/rbac'
+import type { User } from '@/types'
 
 /** Направления академии: маршруты для обоих собираются из одного описания. */
 const ACADEMY_SPORTS: { key: SportKey; name: string; label: string }[] = [
@@ -12,7 +20,20 @@ const ACADEMY_SPORTS: { key: SportKey; name: string; label: string }[] = [
  * Последнее выбранное направление (его же пишет стор академии). Старые адреса
  * без вида спорта ведут туда, где менеджер работал в прошлый раз.
  */
+function storedRole(): string {
+  const stored = localStorage.getItem('dopsy_user') || sessionStorage.getItem('dopsy_user')
+  if (!stored) return 'client'
+  try {
+    return roleOf((JSON.parse(stored) as Partial<User>).role)
+  } catch {
+    return 'client'
+  }
+}
+
 function lastSport(): SportKey {
+  const fixedSport = fixedSportForRole(storedRole())
+  if (fixedSport) return fixedSport
+
   try {
     const stored = localStorage.getItem('dopsy_academy_sport')
     if (isSportKey(stored)) return stored
@@ -236,7 +257,49 @@ router.beforeEach((to, _from, next) => {
 
   // Redirect authenticated users away from login to the dashboard
   if (isPublic && token && to.path === '/login') {
-    return next('/dashboard')
+    return next(defaultPathForRole(storedRole()))
+  }
+
+  if (!isPublic) {
+    const role = storedRole()
+    const path = to.path
+
+    if (role === 'client') return next('/')
+
+    if (path === '/field-slots' || path === '/bookings' || path === '/customers') {
+      if (!hasPermission(role, 'arena')) return next(defaultPathForRole(role))
+    }
+
+    if (path === '/history') {
+      if (!hasPermission(role, 'history')) return next(defaultPathForRole(role))
+    }
+
+    if (path === '/workers') {
+      if (!hasPermission(role, 'workers')) return next(defaultPathForRole(role))
+    }
+
+    if (path === '/reports') {
+      if (!hasPermission(role, 'reports')) return next(defaultPathForRole(role))
+    }
+
+    if (path === '/settings') {
+      if (!hasPermission(role, 'settings')) return next(defaultPathForRole(role))
+    }
+
+    const [, sport, academyPage = 'overview'] = path.match(/^\/(football|boxing)(?:\/([^/]+))?/) ?? []
+    if (isSportKey(sport)) {
+      if (!canAccessSport(role, sport)) {
+        return next(defaultPathForRole(role))
+      }
+
+      if (academyPage === 'payments' && !hasPermission(role, 'academyPayments')) {
+        return next(`/${sport}`)
+      }
+
+      if (academyPage === 'bot-content' && !hasPermission(role, 'botContent')) {
+        return next(`/${sport}`)
+      }
+    }
   }
 
   next()

@@ -107,7 +107,7 @@ const chartOptions = ref({
   },
   colors: ['#465FFF', '#9CB9FF'],
   chart: {
-    fontFamily: 'Outfit, sans-serif',
+    fontFamily: 'Rubik, sans-serif',
     type: 'area',
     toolbar: {
       show: false,

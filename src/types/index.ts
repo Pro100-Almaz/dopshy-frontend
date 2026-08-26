@@ -1,4 +1,14 @@
-export type UserRole = 'super_admin' | 'manager' | 'coach' | 'accountant' | 'staff' | 'admin'
+export type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'arena_manager'
+  | 'boxing_manager'
+  | 'football_manager'
+  | 'manager'
+  | 'client'
+  | 'coach'
+  | 'accountant'
+  | 'staff'
 
 export interface User {
   id: string

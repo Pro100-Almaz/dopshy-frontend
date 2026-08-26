@@ -55,7 +55,7 @@ const series = ref([
 const chartOptions = ref({
   colors: ['#465fff'],
   chart: {
-    fontFamily: 'Outfit, sans-serif',
+    fontFamily: 'Rubik, sans-serif',
     type: 'bar',
     toolbar: {
       show: false,
@@ -103,7 +103,7 @@ const chartOptions = ref({
     show: true,
     position: 'top',
     horizontalAlign: 'left',
-    fontFamily: 'Outfit',
+    fontFamily: 'Rubik',
     markers: {
       radius: 99,
     },

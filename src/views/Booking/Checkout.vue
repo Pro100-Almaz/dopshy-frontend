@@ -101,7 +101,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 text-gray-800" style="font-family: Outfit, sans-serif">
+  <div class="min-h-screen bg-gray-50 text-gray-800" style="font-family: Rubik, sans-serif">
     <BookingHeader
       :back="store.field ? { to: `/booking/${store.field.id}`, label: 'Назад к выбору' } : undefined"
     />

@@ -11,7 +11,7 @@
  * таблицу как рабочую.
  */
 import { ApiError, apiFetch } from './api'
-import type { SportKey } from './academy'
+import { unwrapAcademyPayload, type SportKey } from './academy'
 
 /** Ручка не реализована на сервере — экран показывает состояние ожидания. */
 export class ModuleUnavailableError extends Error {
@@ -152,8 +152,7 @@ export async function listPayments(sport: SportKey): Promise<AcademyPayment[]> {
   const endpoint = `/${sport}/payments`
   try {
     const data = await apiFetch<unknown>(endpoint, request)
-    const payload =
-      data && typeof data === 'object' && 'data' in data ? (data as { data: unknown }).data : data
+    const payload = unwrapAcademyPayload(data)
     const rows = Array.isArray(payload)
       ? payload
       : payload && typeof payload === 'object' && Array.isArray((payload as { payments?: unknown }).payments)

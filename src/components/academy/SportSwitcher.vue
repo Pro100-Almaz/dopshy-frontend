@@ -11,16 +11,20 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { SPORT_KEYS, SPORTS, type SportKey } from '@/services/academy'
+import { hasPermission, permittedAcademySports } from '@/services/rbac'
 import { useAcademyStore } from '@/stores/academy'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ sport: SportKey }>()
 
 const route = useRoute()
 const academy = useAcademyStore()
+const auth = useAuthStore()
+const visible = computed(() => hasPermission(auth.role, 'sportSwitcher'))
 
 /** Тот же экран, другое направление: /football/trials → /boxing/trials. */
 const links = computed(() =>
-  SPORT_KEYS.map((key) => ({
+  SPORT_KEYS.filter((key) => permittedAcademySports(auth.role).includes(key)).map((key) => ({
     key,
     label: SPORTS[key].label,
     to: route.path.replace(`/${props.sport}`, `/${key}`),
@@ -31,6 +35,7 @@ const links = computed(() =>
 
 <template>
   <nav
+    v-if="visible && links.length > 1"
     class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-white/[0.04]"
     aria-label="Направление академии"
   >

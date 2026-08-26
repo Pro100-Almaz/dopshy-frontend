@@ -1,16 +1,26 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import LandingNavbar from './components/LandingNavbar.vue'
 import LandingHero from './components/LandingHero.vue'
+import LandingBookingWidget from './components/LandingBookingWidget.vue'
 import LandingFacilities from './components/LandingFacilities.vue'
 import LandingFooter from './components/LandingFooter.vue'
 import { mediaUrl } from '@/services/api'
+import LocationMap from '@/views/Booking/components/LocationMap.vue'
+
+onMounted(() => {
+  document.documentElement.classList.add('landing-snap-scroll')
+  document.body.classList.add('landing-snap-scroll')
+})
+
+onUnmounted(() => {
+  document.documentElement.classList.remove('landing-snap-scroll')
+  document.body.classList.remove('landing-snap-scroll')
+})
 </script>
 
 <template>
-  <div
-    class="landing-root min-h-screen bg-white overflow-x-hidden"
-    style="font-family: Outfit, sans-serif"
-  >
+  <div class="landing-root min-h-screen bg-white overflow-x-hidden">
     <LandingNavbar />
 
     <main>
@@ -28,7 +38,7 @@ import { mediaUrl } from '@/services/api'
             <span
               v-for="j in 8"
               :key="j"
-              class="inline-flex items-center gap-6 font-bebas text-2xl tracking-widest text-white pr-10"
+              class="inline-flex items-center gap-6 font-bebas text-lg tracking-wider text-white pr-10"
             >
               <span>ГАЗОН СТАНДАРТА FIFA</span>
               <span class="w-2 h-2 rounded-full bg-white inline-block shrink-0" />
@@ -41,46 +51,112 @@ import { mediaUrl } from '@/services/api'
         </div>
       </div>
 
+      <LandingBookingWidget />
+
       <LandingFacilities />
 
       <!-- Gallery -->
-      <section id="gallery" class="py-24 relative bg-gray-50 border-t border-gray-200 overflow-hidden">
+      <section
+        id="gallery"
+        class="landing-snap-section py-24 relative bg-gray-50 border-t border-gray-200 overflow-hidden"
+      >
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <img :src="mediaUrl('img.png')"
+            <img
+              :src="mediaUrl('img.png')"
               alt="Футбольное поле Dopsy Arena с искусственным газоном"
               loading="lazy"
-              class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
+              class="w-full aspect-[4/5] object-cover transition-all duration-500 rounded-sm"
             />
             <img
-            :src="mediaUrl('img_2.png')"
+              :src="mediaUrl('img_2.png')"
               alt="Игроки во время матча на арене"
               loading="lazy"
-              class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"
+              class="w-full aspect-[4/5] object-cover transition-all duration-500 rounded-sm mt-8"
             />
-            <img :src="mediaUrl('img_3.png')"
+            <img
+              :src="mediaUrl('img_3.png')"
               alt="Вечерний матч под профессиональным освещением"
               loading="lazy"
-              class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm"
+              class="w-full aspect-[4/5] object-cover transition-all duration-500 rounded-sm"
             />
             <img
               :src="mediaUrl('img_4.png')"
               alt="Крупный план мяча на газоне поля"
               loading="lazy"
-              class="w-full aspect-[4/5] object-cover grayscale hover:grayscale-0 transition-all duration-500 rounded-sm mt-8"
+              class="w-full aspect-[4/5] object-cover transition-all duration-500 rounded-sm mt-8"
             />
           </div>
         </div>
       </section>
 
+      <!-- Location -->
+      <div id="location" class="landing-snap-section bg-gray-50 px-4 pb-16 sm:px-6 lg:px-8">
+        <section class="mx-auto max-w-5xl">
+          <h2 class="mb-4 text-center text-2xl font-bebas text-gray-900 sm:text-3xl">
+            ГДЕ МЫ <span class="text-success-600">НАХОДИМСЯ</span>
+          </h2>
+          <LocationMap />
+        </section>
+      </div>
     </main>
 
-    <LandingFooter />
+    <div id="footer" class="landing-snap-section">
+      <LandingFooter />
+    </div>
   </div>
 </template>
 
 <style>
 /* ─── Landing page global styles ──────────────────────────────────────────── */
+.landing-root {
+  font-family: 'Rubik Mono One', sans-serif;
+}
+
+.landing-root .font-bebas {
+  font-family: 'Rubik Mono One', sans-serif;
+}
+
+html.landing-snap-scroll,
+body.landing-snap-scroll {
+  height: 100%;
+  overflow: hidden;
+}
+
+.landing-root {
+  height: 100vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.landing-snap-section {
+  scroll-margin-top: 5.5rem;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+@supports (animation-timeline: view()) {
+  .landing-snap-section {
+    animation: landing-section-settle linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+
+@keyframes landing-section-settle {
+  from {
+    opacity: 0.86;
+    transform: translateY(1.5rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 
 /* Scrolling banner */
 .landing-marquee {
@@ -191,12 +267,26 @@ import { mediaUrl } from '@/services/api'
   .landing-root .landing-reveal-right.is-revealed {
     animation: none !important;
   }
+  .landing-root .landing-snap-section {
+    animation: none !important;
+    transform: none !important;
+  }
   .landing-root *,
   .landing-root *::before,
   .landing-root *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  html.landing-snap-scroll,
+  body.landing-snap-scroll {
+    overflow: auto;
+  }
+
+  .landing-root {
+    scroll-behavior: auto;
+    scroll-snap-type: y proximity;
   }
 }
 </style>

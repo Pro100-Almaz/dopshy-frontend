@@ -12,8 +12,7 @@
  * писать на сервер без правок.
  */
 import { ApiError, apiFetch } from './api'
-import type { SportKey } from './academy'
-import { SPORTS } from './academy'
+import { SPORTS, unwrapAcademyPayload, type SportKey } from './academy'
 import { ModuleUnavailableError } from './academyPayments'
 
 export interface FaqItem {
@@ -186,8 +185,7 @@ export async function fetchBotContent(sport: SportKey): Promise<BotContent> {
   const endpoint = `/${sport}/bot-content`
   try {
     const data = await apiFetch<unknown>(endpoint, request)
-    const payload =
-      data && typeof data === 'object' && 'data' in data ? (data as { data: unknown }).data : data
+    const payload = unwrapAcademyPayload(data)
     return mergeWithDefaults(sport, (payload ?? {}) as Partial<BotContent>)
   } catch (e) {
     asModuleError(endpoint, e)

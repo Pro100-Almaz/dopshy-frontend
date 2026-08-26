@@ -76,6 +76,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { User, Settings, HelpCircle, LogOut } from 'lucide-vue-next'
 import { ChevronDownIcon } from '@/icons'
 import { useAuthStore } from '@/stores/auth'
+import { hasPermission } from '@/services/rbac'
 
 const authStore = useAuthStore()
 
@@ -96,11 +97,13 @@ const userInitials = computed(() => {
     .toUpperCase()
 })
 
-const menuItems = [
+const menuItems = computed(() => [
   { href: '/profile', icon: User, text: 'Профиль' },
-  { href: '/settings', icon: Settings, text: 'Настройки аккаунта' },
+  ...(hasPermission(authStore.role, 'settings')
+    ? [{ href: '/settings', icon: Settings, text: 'Настройки аккаунта' }]
+    : []),
   { href: '/profile', icon: HelpCircle, text: 'Поддержка' },
-]
+])
 
 const toggleDropdown = () => {
   dropdownOpen.value = !dropdownOpen.value

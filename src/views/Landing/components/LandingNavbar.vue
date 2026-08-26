@@ -4,19 +4,41 @@ import { Menu, X, Dribbble } from 'lucide-vue-next'
 
 const scrolled = ref(false)
 const mobileMenuOpen = ref(false)
+let scrollRoot: HTMLElement | null = null
 
 const navLinks = [
   { name: 'Арена', href: '#arena' },
+  { name: 'Бронирование', href: '#booking' },
   { name: 'Объекты', href: '#facilities' },
   { name: 'Галерея', href: '#gallery' },
+  { name: 'Карта', href: '#location' },
+  { name: 'Контакты', href: '#footer' },
 ]
 
 function handleScroll() {
-  scrolled.value = window.scrollY > 50
+  scrolled.value = (scrollRoot?.scrollTop ?? window.scrollY) > 50
 }
 
-onMounted(() => window.addEventListener('scroll', handleScroll))
-onUnmounted(() => window.removeEventListener('scroll', handleScroll))
+function scrollToHash(event: MouseEvent, href: string) {
+  if (!href.startsWith('#')) return
+  const target = document.querySelector<HTMLElement>(href)
+  if (!target) return
+  event.preventDefault()
+  mobileMenuOpen.value = false
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  window.history.pushState(null, '', href)
+}
+
+onMounted(() => {
+  scrollRoot = document.querySelector<HTMLElement>('.landing-root')
+  window.addEventListener('scroll', handleScroll)
+  scrollRoot?.addEventListener('scroll', handleScroll)
+  handleScroll()
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+  scrollRoot?.removeEventListener('scroll', handleScroll)
+})
 </script>
 
 <template>
@@ -24,20 +46,24 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
     class="fixed top-0 w-full z-50 transition-all duration-300 border-b"
     :class="
       scrolled
-        ? 'bg-white/80 backdrop-blur-lg border-gray-200 py-3'
+        ? 'bg-gray-50/90 backdrop-blur-lg border-gray-200 py-3'
         : 'bg-transparent border-transparent py-5'
     "
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
       <!-- Logo -->
-      <a href="#" class="flex items-center gap-2 group">
+      <a
+        href="#arena"
+        class="flex items-center gap-2 group"
+        @click="scrollToHash($event, '#arena')"
+      >
         <div
           class="w-10 h-10 rounded-full bg-success-600 flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300"
         >
           <Dribbble class="w-6 h-6 text-white" />
         </div>
         <span
-          class="font-bebas text-3xl tracking-wider transition-colors duration-300"
+          class="font-bebas text-2xl tracking-wider transition-colors duration-300"
           :class="scrolled ? 'text-gray-900' : 'text-white'"
         >
           DOPSY <span class="text-success-600">ARENA</span>
@@ -50,21 +76,18 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
           v-for="link in navLinks"
           :key="link.name"
           :href="link.href"
-          class="text-sm font-semibold uppercase tracking-wider transition-colors duration-200"
-          :class="scrolled ? 'text-gray-600 hover:text-success-600' : 'text-white/90 hover:text-white'"
+          class="text-xs font-semibold uppercase tracking-wider transition-colors duration-200"
+          :class="
+            scrolled ? 'text-gray-600 hover:text-success-600' : 'text-white/90 hover:text-white'
+          "
+          @click="scrollToHash($event, link.href)"
         >
           {{ link.name }}
         </a>
-        <router-link
-          to="/booking"
-          class="text-sm font-semibold uppercase tracking-wider transition-colors duration-200"
-          :class="scrolled ? 'text-gray-600 hover:text-success-600' : 'text-white/90 hover:text-white'"
-        >
-          Бронирование
-        </router-link>
+
         <router-link
           to="/login"
-          class="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border transition-all duration-200"
+          class="px-4 py-2 text-xs font-semibold uppercase tracking-wider border transition-all duration-200"
           :class="
             scrolled
               ? 'border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50'
@@ -78,7 +101,9 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
       <!-- Mobile Menu Toggle -->
       <button
         class="md:hidden -m-2 p-2 transition-colors"
-        :class="scrolled ? 'text-gray-900 hover:text-success-600' : 'text-white hover:text-success-600'"
+        :class="
+          scrolled ? 'text-gray-900 hover:text-success-600' : 'text-white hover:text-success-600'
+        "
         :aria-label="mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'"
         :aria-expanded="mobileMenuOpen"
         aria-controls="mobile-nav"
@@ -108,21 +133,21 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll))
             v-for="link in navLinks"
             :key="link.name"
             :href="link.href"
-            class="text-2xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
-            @click="mobileMenuOpen = false"
+            class="text-xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
+            @click="scrollToHash($event, link.href)"
           >
             {{ link.name }}
           </a>
           <router-link
             to="/booking"
-            class="text-2xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
+            class="text-xl font-bebas tracking-wider text-gray-900 hover:text-success-600 transition-colors"
             @click="mobileMenuOpen = false"
           >
             Бронирование
           </router-link>
           <router-link
             to="/login"
-            class="inline-block text-center px-6 py-3 border border-gray-300 text-gray-700 font-semibold uppercase tracking-wider text-sm hover:bg-gray-50 transition-colors"
+            class="inline-block text-center px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold uppercase tracking-wider text-xs hover:bg-gray-50 transition-colors"
             @click="mobileMenuOpen = false"
           >
             Войти

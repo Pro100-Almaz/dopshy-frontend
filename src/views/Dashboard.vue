@@ -47,17 +47,20 @@
             <!-- KPI cards -->
             <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <KpiCard
+                v-if="canArena"
                 :icon="CalendarDays"
                 label="Бронирования сегодня"
                 :value="dashStore.summary.todayBookings"
               />
               <KpiCard
+                v-if="canArena"
                 :icon="Percent"
                 label="Загруженность"
                 :value="dashStore.summary.occupancyPercent"
                 suffix="%"
               />
               <KpiCard
+                v-if="canArena"
                 :icon="Wallet"
                 label="Неоплаченные"
                 :value="dashStore.summary.unpaidBookings"
@@ -68,6 +71,7 @@
                 "
               />
               <KpiCard
+                v-if="canAcademy"
                 :icon="GraduationCap"
                 label="Ученики с абонементом"
                 :value="dashStore.summary.activeStudents"
@@ -75,7 +79,7 @@
             </div>
 
             <!-- Row: Schedule + Quick Actions -->
-            <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div v-if="canArena" class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div class="lg:col-span-2">
                 <TodaySchedule :bookings="dashStore.todayBookings" />
               </div>
@@ -83,13 +87,13 @@
             </div>
 
             <!-- Payments -->
-            <RecentPayments :bookings="dashStore.recentPayments" />
+            <RecentPayments v-if="canArena" :bookings="dashStore.recentPayments" />
           </div>
         </Transition>
       </div>
 
       <!-- Академия: реальные числа по обоим направлениям -->
-      <section class="mt-6">
+      <section v-if="canAcademy" class="mt-6">
         <div class="mb-3 flex items-end justify-between gap-3">
           <div>
             <h2 class="text-lg font-bold text-gray-900 dark:text-white">Академия</h2>
@@ -177,6 +181,7 @@ import QuickActions from '@/components/dashboard/QuickActions.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAcademyDigest } from '@/composables/useAcademyDigest'
+import { hasPermission, permittedAcademySports } from '@/services/rbac'
 
 defineOptions({
   name: 'DashboardPage',
@@ -187,6 +192,8 @@ const dashStore = useDashboardStore()
 const { digests, loading: digestLoading, load: loadDigests } = useAcademyDigest()
 
 const isLoading = computed(() => dashStore.loading && !dashStore.summary)
+const canArena = computed(() => hasPermission(authStore.role, 'arena'))
+const canAcademy = computed(() => hasPermission(authStore.role, 'academy'))
 
 
 // ── Живое обновление ────────────────────────────────
@@ -212,7 +219,7 @@ function onVisibility() {
 onMounted(() => {
   dashStore.fetchDashboard()
   // Академия — вне поллинга: список пробных бэкенд собирает обходом групп.
-  loadDigests()
+  if (canAcademy.value) loadDigests(permittedAcademySports(authStore.role))
   pollId = setInterval(poll, POLL_MS)
   document.addEventListener('visibilitychange', onVisibility)
 })

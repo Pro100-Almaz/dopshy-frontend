@@ -8,14 +8,7 @@
  */
 import { ref } from 'vue'
 
-import {
-  listGroups,
-  listStudents,
-  listTrials,
-  SPORT_KEYS,
-  SPORTS,
-  type SportKey,
-} from '@/services/academy'
+import { listGroups, listStudents, listTrials, SPORTS, type SportKey } from '@/services/academy'
 import { useAcademyStore } from '@/stores/academy'
 import { resolveWeekday, trialTiming } from '@/utils/schedule'
 import { trialOutcome } from '@/utils/trialOutcome'
@@ -85,10 +78,10 @@ export function useAcademyDigest() {
     }
   }
 
-  async function load() {
+  async function load(sports: SportKey[] = ['football', 'boxing']) {
     loading.value = true
     try {
-      digests.value = await Promise.all(SPORT_KEYS.map(digestFor))
+      digests.value = await Promise.all(sports.map(digestFor))
     } finally {
       loading.value = false
     }
