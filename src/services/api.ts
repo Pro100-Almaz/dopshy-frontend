@@ -1,12 +1,11 @@
 import router from '@/router'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const LOCAL_CHANGES = import.meta.env.LOCAL_CHANGES === 'true'
+const API_BASE = LOCAL_CHANGES ? 'http://localhost:8000/api' : 'https://api.dopsy.kz/api'
 
-// Base URL for backend-served media (Django /media/). In dev this stays a
-// relative path and the Vite proxy forwards it to the backend; in production
-// set VITE_MEDIA_BASE_URL to the backend's absolute media URL if it lives on a
-// different origin than the frontend.
-const MEDIA_BASE = import.meta.env.VITE_MEDIA_BASE_URL || '/media'
+// Base URL for backend-served media. LOCAL_CHANGES=true points the app at the
+// local backend; otherwise the production API/media host is used.
+const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8000/media' : 'https://api.dopsy.kz/media'
 
 /** Build a URL for a file stored in the backend media folder, e.g. mediaUrl('img.png'). */
 export function mediaUrl(name: string): string {

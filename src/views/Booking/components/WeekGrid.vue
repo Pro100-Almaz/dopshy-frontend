@@ -139,8 +139,12 @@ const BOOKING_STATE_LABEL: Record<string, string> = {
   cancelled: 'Отменено',
 }
 
-function priceShort(v: number): string {
+function priceFull(v: number): string {
   return `${Math.round(v)}₸`
+}
+
+function priceShort(v: number): string {
+  return `${Math.round(v / 1000)}K`
 }
 
 function onCell(cell: Slot) {
@@ -197,12 +201,15 @@ function hideBooking() {
         :key="d.iso"
         class="sticky top-0 z-10 border-b border-gray-200 bg-white px-1 py-2 dark:border-gray-800 dark:bg-gray-900"
       >
-        <div class="uppercase text-gray-500" :class="large ? 'text-base' : 'text-[11px]'">
+        <div
+          class="uppercase text-gray-500"
+          :class="large ? 'text-[11px] sm:text-base' : 'text-[8px] sm:text-[11px]'"
+        >
           {{ d.label.weekday }}
         </div>
         <div
           class="font-bold leading-none text-gray-900 dark:text-white/90"
-          :class="large ? 'text-2xl' : 'text-base'"
+          :class="large ? 'text-lg sm:text-2xl' : 'text-[11px] sm:text-base'"
         >
           {{ d.label.day }}
         </div>
@@ -212,7 +219,7 @@ function hideBooking() {
       <template v-for="row in week.rows" :key="row.startMin">
         <div
           class="sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900"
-          :class="large ? 'text-lg' : 'text-xs'"
+          :class="large ? 'text-[13px] sm:text-lg' : 'text-[9px] sm:text-xs'"
         >
           {{ row.label }}
         </div>
@@ -228,9 +235,7 @@ function hideBooking() {
           :aria-label="`${week.days[ci].label.weekday} ${week.days[ci].label.day}, ${row.label} — ${
             cell.status === 'booked'
               ? `занято${
-                  canSeeBookingDetails && cell.booking?.customerName
-                    ? `: ${cell.booking.customerName}`
-                    : ''
+                  canSeeBookingDetails && cell.booking?.phone ? `: ${cell.booking.phone}` : ''
                 }`
               : repeatStates[cell.id] === 'occurrence'
                 ? 'повтор'
@@ -238,7 +243,7 @@ function hideBooking() {
           }`"
           class="sched-cell select-none border-b border-r border-gray-100 leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
           :class="[
-            large ? 'h-14 text-xl' : 'h-11 text-[11px]',
+            large ? 'h-14 text-sm sm:text-xl' : 'h-11 text-[8px] sm:text-[11px]',
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
               : cell.status === 'booked'
@@ -282,14 +287,15 @@ function hideBooking() {
           <span
             v-else-if="cell.status === 'available'"
             class="font-semibold tracking-normal"
-            :class="large ? 'text-base' : 'text-[10px]'"
+            :class="large ? 'text-[11px] sm:text-base' : 'text-[7px] sm:text-[10px]'"
           >
-            {{ priceShort(cell.price) }}
+            <span class="sm:hidden">{{ priceShort(cell.price) }}</span>
+            <span class="hidden sm:inline">{{ priceFull(cell.price) }}</span>
           </span>
           <span
             v-else-if="cell.status === 'booked'"
             class="block truncate px-1 font-medium"
-            :class="large ? 'text-base' : 'text-[10px]'"
+            :class="large ? 'text-[11px] sm:text-base' : 'text-[7px] sm:text-[10px]'"
             >{{ BOOKED_LABEL
             }}</span
           >
@@ -306,7 +312,7 @@ function hideBooking() {
       :style="{ left: `${tipPos.x + 14}px`, top: `${tipPos.y + 14}px` }"
     >
       <p class="text-sm font-semibold text-gray-900 dark:text-white/90">
-        {{ hoverBooking.customerName }}
+        {{ hoverBooking.phone || 'Занято' }}
       </p>
       <p class="text-xs text-gray-500">{{ hoverBooking.phone }}</p>
 
@@ -317,7 +323,7 @@ function hideBooking() {
             {{ hoverBooking.start }}–{{ hoverBooking.end }}
           </dd>
         </div>
-        <div class="flex justify-between gap-4">
+        <div v-if="hoverBooking.total != null" class="flex justify-between gap-4">
           <dt class="text-gray-500">Сумма</dt>
           <dd class="text-gray-700 dark:text-gray-300">{{ formatPrice(hoverBooking.total) }}</dd>
         </div>

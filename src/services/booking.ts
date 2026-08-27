@@ -7,6 +7,7 @@ import type {
   BookingConfirmation,
   Booking,
   BookingApi,
+  BookedSlotApi,
   BookingDetailApi,
   BookingState,
   BookingPeriod,
@@ -303,9 +304,19 @@ export function getWeekSlots(
   return delay({ days, rows }, 350)
 }
 
-// ── Реальные брони: GET /api/bookings/range/{from}/{to}?field=&page= ──
-// `field` и `page` — необязательные query-параметры. Страница полей (field-slots)
-// всегда передаёт конкретное поле и грузит всю неделю без пагинации.
+// ── Обезличенная занятость слотов: GET /api/bookings/slots/range/{from}/{to}?field= ──
+// В ответе нет customer_name, price_total и paid_* — только данные, нужные для
+// наложения занятости на сетку.
+export function getBookedSlotsInRange(
+  fieldId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<BookedSlotApi[]> {
+  return apiFetch<BookedSlotApi[]>(`/bookings/slots/range/${dateFrom}/${dateTo}?field=${fieldId}`)
+}
+
+// ── Полные брони: GET /api/bookings/range/{from}/{to}?field=&page= ──
+// Используется менеджерскими списками/календарём, где нужны клиент и оплаты.
 export function getBookingsInRange(
   fieldId: string,
   dateFrom: string,
@@ -319,14 +330,12 @@ function toMinutes(time: string): number {
   return h * 60 + (m || 0)
 }
 
-function toSlotBooking(api: BookingApi): SlotBooking {
+function toSlotBooking(api: BookedSlotApi): SlotBooking {
   return {
     id: api.id,
-    customerName: api.customer_name,
-    phone: api.phone,
-    start: trimSeconds(api.time_start),
-    end: toDisplayEnd(trimSeconds(api.time_end)),
-    total: toMoney(api.price_total),
+    phone: api.phone ?? '',
+    start: trimSeconds(api.time_start ?? ''),
+    end: toDisplayEnd(trimSeconds(api.time_end ?? '')),
     state: api.state,
     notes: api.notes ?? undefined,
   }
@@ -335,7 +344,7 @@ function toSlotBooking(api: BookingApi): SlotBooking {
 const BLOCKING = (state: string) => state !== 'cancelled'
 
 /** Помечает ячейки сетки занятыми по пересечению [time_start, time_end) со слотом. */
-function overlayBookings(week: WeekSlots, bookings: BookingApi[]): WeekSlots {
+function overlayBookings(week: WeekSlots, bookings: BookedSlotApi[]): WeekSlots {
   const active = bookings.filter((b) => BLOCKING(b.state))
   for (const row of week.rows) {
     for (const cell of row.cells) {
@@ -344,6 +353,9 @@ function overlayBookings(week: WeekSlots, bookings: BookingApi[]): WeekSlots {
       const cellEnd = toMinutes(cell.end)
       const hit = active.find(
         (b) =>
+          b.date &&
+          b.time_start &&
+          b.time_end &&
           b.date === cell.date &&
           toMinutes(b.time_start) < cellEnd &&
           toMinutes(b.time_end) > cellStart,
@@ -368,7 +380,7 @@ export async function getManagerWeek(
   const days = week.days
   if (!days.length) return week
   try {
-    const week_bookings = await getBookingsInRange(field.id, days[0].iso, days[days.length - 1].iso)
+    const week_bookings = await getBookedSlotsInRange(field.id, days[0].iso, days[days.length - 1].iso)
     // Слот занимают подтверждённые брони и черновики, ожидающие оплаты.
     const allowed_states: string[] = [
       BOOKING_STATE_ENUMS.CONFIRMED,
@@ -569,9 +581,9 @@ export async function findRepeatConflicts(
   const from = dates[0]
   const to = dates[dates.length - 1]
 
-  let bookings: BookingApi[]
+  let bookings: BookedSlotApi[]
   try {
-    bookings = await getBookingsInRange(fieldId, from, to)
+    bookings = await getBookedSlotsInRange(fieldId, from, to)
   } catch {
     // Не удалось получить брони — не блокируем менеджера (бэкенд проверит при создании).
     return []
@@ -583,6 +595,7 @@ export async function findRepeatConflicts(
   const conflicts: RepeatConflict[] = []
   for (const b of bookings) {
     if (!BLOCKING(b.state)) continue
+    if (!b.date || !b.time_start || !b.time_end) continue
     if (!dateSet.has(b.date)) continue
     if (toMinutes(b.time_start) < re && toMinutes(b.time_end) > rs) {
       conflicts.push({ date: b.date, booking: toSlotBooking(b) })

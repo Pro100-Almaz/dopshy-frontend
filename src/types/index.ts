@@ -120,11 +120,10 @@ export interface SlotInterval {
 
 export interface SlotBooking {
   id: number
-  customerName: string
   phone: string
   start: string // 'HH:mm'
   end: string // 'HH:mm'
-  total: number
+  total?: number
   state: string
   notes?: string
 }
@@ -229,6 +228,21 @@ export interface BookingApi {
   paid_avans: string | null // предоплата / аванс
   created_at: string // ISO datetime
   updated_at: string // ISO datetime
+}
+
+export interface BookedSlotApi {
+  id: number
+  field: number | null
+  phone: string | null
+  time_start: string | null // 'HH:mm:ss'
+  time_end: string | null // 'HH:mm:ss'
+  state: string
+  source: string
+  notes: string | null
+  date: string | null // ISO yyyy-mm-dd
+  reserved_until: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 // Полная карточка брони (GET /api/bookings/{id}) — данные бота, проброшенные
