@@ -119,7 +119,12 @@ onMounted(loadFields)
         v-else-if="selectedField"
         class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
       >
-        <WeekSchedulePanel :key="selectedField.id" :field="selectedField" large />
+        <WeekSchedulePanel
+          :key="selectedField.id"
+          :field="selectedField"
+          large
+          hide-booking-details
+        />
 
         <aside class="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-theme-sm">
           <div class="rounded-2xl bg-white p-5">

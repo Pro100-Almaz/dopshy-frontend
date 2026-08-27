@@ -13,6 +13,7 @@ const props = defineProps<{
   fill?: boolean
   allowRepeat?: boolean
   large?: boolean
+  hideBookingDetails?: boolean
 }>()
 
 const store = useBookingStore()
@@ -20,7 +21,7 @@ const auth = useAuthStore()
 
 // Данные чужой брони (имя, телефон, заметка, сумма, статус) — только для сотрудников.
 // Клиенту на публичной странице занятый слот виден обезличенно: «ЗАНЯТО».
-const canSeeBookingDetails = computed(() => auth.isStaff)
+const canSeeBookingDetails = computed(() => auth.isStaff && !props.hideBookingDetails)
 const BOOKED_LABEL = 'ЗАНЯТО'
 
 function toMin(time: string): number {
@@ -139,7 +140,7 @@ const BOOKING_STATE_LABEL: Record<string, string> = {
 }
 
 function priceShort(v: number): string {
-  return `${Math.round(v / 1000)}к`
+  return `${Math.round(v)}₸`
 }
 
 function onCell(cell: Slot) {
@@ -281,7 +282,7 @@ function hideBooking() {
           <span
             v-else-if="cell.status === 'available'"
             class="font-semibold tracking-normal"
-            :class="large ? 'text-2xl' : 'text-sm'"
+            :class="large ? 'text-base' : 'text-[10px]'"
           >
             {{ priceShort(cell.price) }}
           </span>
@@ -289,8 +290,7 @@ function hideBooking() {
             v-else-if="cell.status === 'booked'"
             class="block truncate px-1 font-medium"
             :class="large ? 'text-base' : 'text-[10px]'"
-            >{{
-              canSeeBookingDetails ? cell.booking?.customerName || BOOKED_LABEL : BOOKED_LABEL
+            >{{ BOOKED_LABEL
             }}</span
           >
         </button>

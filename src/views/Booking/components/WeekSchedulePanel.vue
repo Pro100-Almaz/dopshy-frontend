@@ -7,7 +7,7 @@ import { useBookingStore } from '@/stores/booking'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import WeekGrid from './WeekGrid.vue'
 
-const props = defineProps<{ field: Field; large?: boolean }>()
+const props = defineProps<{ field: Field; large?: boolean; hideBookingDetails?: boolean }>()
 
 const store = useBookingStore()
 
@@ -111,7 +111,12 @@ watch(dayCount, () => {
     </div>
 
     <div class="p-3 sm:p-4">
-      <WeekGrid :week="week" :loading="loading" :large="large" />
+      <WeekGrid
+        :week="week"
+        :loading="loading"
+        :large="large"
+        :hide-booking-details="hideBookingDetails"
+      />
     </div>
 
     <div
