@@ -83,7 +83,7 @@
               <div class="lg:col-span-2">
                 <TodaySchedule :bookings="dashStore.todayBookings" />
               </div>
-              <QuickActions />
+              <QuickActions @generate-report="reportModalOpen = true" />
             </div>
 
             <!-- Payments -->
@@ -166,18 +166,21 @@
           </router-link>
         </div>
       </section>
+
+      <ReportExtractionModal v-if="reportModalOpen" @close="reportModalOpen = false" />
     </div>
   </AdminLayout>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, ref } from 'vue'
 import { ArrowRight, CalendarDays, GraduationCap, Percent, Wallet } from 'lucide-vue-next'
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TodaySchedule from '@/components/dashboard/TodaySchedule.vue'
 import RecentPayments from '@/components/dashboard/RecentPayments.vue'
 import QuickActions from '@/components/dashboard/QuickActions.vue'
+import ReportExtractionModal from '@/components/dashboard/ReportExtractionModal.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAcademyDigest } from '@/composables/useAcademyDigest'
@@ -194,6 +197,7 @@ const { digests, loading: digestLoading, load: loadDigests } = useAcademyDigest(
 const isLoading = computed(() => dashStore.loading && !dashStore.summary)
 const canArena = computed(() => hasPermission(authStore.role, 'arena'))
 const canAcademy = computed(() => hasPermission(authStore.role, 'academy'))
+const reportModalOpen = ref(false)
 
 
 // ── Живое обновление ────────────────────────────────
