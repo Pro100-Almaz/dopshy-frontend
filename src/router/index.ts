@@ -119,6 +119,12 @@ const router = createRouter({
       meta: { title: 'Бронирования' },
     },
     {
+      path: '/contracts',
+      name: 'Contracts',
+      component: () => import('../views/Pages/ContractsPage.vue'),
+      meta: { title: 'Контракты' },
+    },
+    {
       path: '/history',
       name: 'History',
       component: () => import('../views/Pages/HistoryPage.vue'),
@@ -247,8 +253,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   document.title = `${to.meta.title || 'Страница'} | DOPSY ARENA`
 
-  const token =
-    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const token = localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
   const isPublic = to.meta.public === true
 
   if (!isPublic && !token) {
@@ -266,7 +271,12 @@ router.beforeEach((to, _from, next) => {
 
     if (role === 'client') return next('/')
 
-    if (path === '/field-slots' || path === '/bookings' || path === '/customers') {
+    if (
+      path === '/field-slots' ||
+      path === '/bookings' ||
+      path === '/contracts' ||
+      path === '/customers'
+    ) {
       if (!hasPermission(role, 'arena')) return next(defaultPathForRole(role))
     }
 
@@ -286,7 +296,8 @@ router.beforeEach((to, _from, next) => {
       if (!hasPermission(role, 'settings')) return next(defaultPathForRole(role))
     }
 
-    const [, sport, academyPage = 'overview'] = path.match(/^\/(football|boxing)(?:\/([^/]+))?/) ?? []
+    const [, sport, academyPage = 'overview'] =
+      path.match(/^\/(football|boxing)(?:\/([^/]+))?/) ?? []
     if (isSportKey(sport)) {
       if (!canAccessSport(role, sport)) {
         return next(defaultPathForRole(role))

@@ -185,6 +185,7 @@ export interface Booking {
   paidCash: number
   paidAvans: number
   paidTotal: number // сумма всех paid_* — вычисляется при маппинге
+  hasContract: boolean // бронь создана в рамках контракта
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
@@ -228,6 +229,7 @@ export interface BookingApi {
   paid_avans: string | null // предоплата / аванс
   created_at: string // ISO datetime
   updated_at: string // ISO datetime
+  has_contract: boolean
 }
 
 export interface BookedSlotApi {

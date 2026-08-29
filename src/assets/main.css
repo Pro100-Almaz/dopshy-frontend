@@ -206,8 +206,11 @@ layer(base);
   [role='button']:not(:disabled) {
     cursor: pointer;
   }
+  html {
+    @apply overflow-x-hidden;
+  }
   body {
-    @apply relative font-normal font-rubik z-1 bg-gray-50;
+    @apply relative overflow-x-hidden font-normal font-rubik z-1 bg-gray-50;
   }
 }
 

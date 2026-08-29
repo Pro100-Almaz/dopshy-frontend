@@ -349,18 +349,10 @@ onUnmounted(() => {
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700">
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Бронь</p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Договорняк</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Клиент</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Источник</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                    Добавлено в
-                  </p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Поле</p>
@@ -371,13 +363,13 @@ onUnmounted(() => {
                   </p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Сумма</p>
+                </th>
+                <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Оплачено</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Остаток</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Сумма</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Статус</p>
@@ -396,10 +388,17 @@ onUnmounted(() => {
                 :key="b.id"
                 class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
               >
-                <!-- Ref -->
+                <!-- Contract -->
                 <td class="px-5 py-4 sm:px-6">
-                  <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                    {{ b.id }}
+                  <span
+                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                    :class="
+                      b.hasContract
+                        ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
+                        : 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+                    "
+                  >
+                    {{ b.hasContract ? 'Да' : 'Нет' }}
                   </span>
                 </td>
 
@@ -431,28 +430,6 @@ onUnmounted(() => {
                   </div>
                 </td>
 
-                <!-- Source -->
-                <td class="px-5 py-4 sm:px-6">
-                  <div class="flex items-center gap-2">
-                    <span class="text-gray-700 text-theme-sm dark:text-gray-300">
-                      {{ b.source }}
-                    </span>
-                    <span
-                      v-if="b.fieldType"
-                      class="rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
-                    >
-                      {{ FIELD_TYPE_LABEL[b.fieldType] }}
-                    </span>
-                  </div>
-                </td>
-
-                <!-- Created at -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
-                    {{ formatDateTime(b.createdAt) }}
-                  </span>
-                </td>
-
                 <!-- Field -->
                 <td class="px-5 py-4 sm:px-6">
                   <div class="flex items-center gap-2">
@@ -479,6 +456,13 @@ onUnmounted(() => {
                   </span>
                 </td>
 
+                <!-- Total -->
+                <td class="px-5 py-4 sm:px-6">
+                  <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                    {{ formatPrice(b.total) }}
+                  </span>
+                </td>
+
                 <!-- Paid -->
                 <td class="px-5 py-4 sm:px-6">
                   <button
@@ -500,12 +484,6 @@ onUnmounted(() => {
                   </span>
                 </td>
 
-                <!-- Total -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                    {{ formatPrice(b.total) }}
-                  </span>
-                </td>
 
                 <!-- Status -->
                 <td class="px-5 py-4 sm:px-6">

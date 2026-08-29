@@ -789,6 +789,7 @@ function mapBooking(api: BookingApi): Booking {
     paidCash,
     paidAvans,
     paidTotal: paidBot + paidKaspiQr + paidCash + paidAvans,
+    hasContract: api.has_contract,
   }
 }
 

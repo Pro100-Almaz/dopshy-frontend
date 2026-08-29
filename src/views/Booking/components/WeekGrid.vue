@@ -14,6 +14,7 @@ const props = defineProps<{
   allowRepeat?: boolean
   large?: boolean
   hideBookingDetails?: boolean
+  hideSlotPrices?: boolean
 }>()
 
 const store = useBookingStore()
@@ -239,7 +240,9 @@ function hideBooking() {
                 }`
               : repeatStates[cell.id] === 'occurrence'
                 ? 'повтор'
-                : formatPrice(cell.price)
+                : hideSlotPrices
+                  ? 'доступно'
+                  : formatPrice(cell.price)
           }`"
           class="sched-cell select-none border-b border-r border-gray-100 leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
           :class="[
@@ -285,7 +288,7 @@ function hideBooking() {
             aria-hidden="true"
           />
           <span
-            v-else-if="cell.status === 'available'"
+            v-else-if="cell.status === 'available' && !hideSlotPrices"
             class="font-semibold tracking-normal"
             :class="large ? 'text-[11px] sm:text-base' : 'text-[7px] sm:text-[10px]'"
           >

@@ -6,7 +6,7 @@
          Так sticky-шапка гарантированно закрепляется сверху на любом устройстве,
          а не зависит от оконного скролла (на мобильных он «отклеивал» шапку). -->
     <div
-      class="flex h-dvh flex-1 flex-col overflow-y-auto transition-all duration-300 ease-in-out"
+      class="flex h-dvh flex-1 flex-col overflow-x-hidden overflow-y-auto transition-all duration-300 ease-in-out"
       :class="[isExpanded || isHovered ? 'lg:ml-[290px]' : 'lg:ml-[90px]']"
     >
       <app-header />
