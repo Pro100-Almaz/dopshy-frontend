@@ -48,7 +48,7 @@ onMounted(() => {
       <!-- Section header -->
       <div class="text-center mb-16">
         <h2 class="text-4xl md:text-5xl font-bebas text-gray-900 mb-4">
-          ЛУЧШИЕ <span class="text-success-600">ОБЪЕКТЫ</span>
+          ОБ <span class="text-success-600">ОБЪЕКТАХ</span>
         </h2>
         <p class="text-gray-500 max-w-2xl mx-auto text-sm md:text-base">
           Всё необходимое, чтобы полностью сосредоточиться на игре. Наша арена построена по

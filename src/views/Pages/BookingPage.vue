@@ -1,26 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
-import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight, Search } from 'lucide-vue-next'
+import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight, Search, X } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BookingStats from '@/components/bookings/BookingStats.vue'
 import BookingCalendar from '@/components/bookings/BookingCalendar.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
-import PaymentBreakdownModal from '@/components/bookings/PaymentBreakdownModal.vue'
+import Modal from '@/components/ui/Modal.vue'
 
-import type { Booking, BookingPeriod } from '@/types'
+import type { Booking, BookingPeriod, BookingState } from '@/types'
 import {
   listBookings,
-  listBookingsInRange,
-  periodRange,
   isBookingInPeriod,
   formatPrice,
   formatDayLabel,
-  formatDateTime,
   FIELD_TYPE_LABEL,
+  BOOKING_STATE_LABEL,
   bookingStateLabel,
   bookingStateClass,
+  updateBooking,
 } from '@/services/booking'
 
 const currentPageTitle = 'Бронирования'
@@ -33,26 +32,22 @@ const viewMode = ref<ViewMode>('calendar')
 
 // Полный список — питает карточки-сводки и таблицу за всё время (GET /bookings).
 const allBookings = ref<Booking[]>([])
-// Текущая страница таблицы (range-эндпоинт для today/week/month, GET /bookings для all_time).
-const tableBookings = ref<Booking[]>([])
 
 const statsLoading = ref(true)
 const tableLoading = ref(true)
 
-// Поиск по id / имени клиента / телефону. Обрабатывается бэкендом — применяется
-// ко всем периодам и сбрасывает пагинацию на первую страницу.
+// Поиск по id / имени клиента / телефону применяется к загруженному списку
+// и сбрасывает пагинацию на первую страницу.
 const search = ref('')
+const fieldFilter = ref('')
 
-// Пагинация — для всех периодов. Бэкенд отдаёт по PAGE_SIZE броней на страницу;
-// неполная страница = последняя.
+// Пагинация списка работает поверх уже загруженного набора, чтобы фильтр поля
+// не показывал пустую страницу из-за серверной нарезки без field-параметра.
 const PAGE_SIZE = 20
+const MAX_PAYMENT = 10_000_000
 const page = ref(1)
-const atEnd = ref(false) // достигнута последняя страница (следующая вернула пусто)
 
 const hasPrev = computed(() => page.value > 1)
-// Следующая страница есть только когда текущая заполнена целиком (== PAGE_SIZE).
-// `atEnd` страхует случай, когда всего броней ровно кратно PAGE_SIZE.
-const hasNext = computed(() => tableBookings.value.length >= PAGE_SIZE && !atEnd.value)
 
 // Совпадение брони с поисковым запросом (id / имя / телефон) — тот же набор полей,
 // что ищет бэкенд. Нужен, чтобы счётчик в шапке оставался корректным при поиске.
@@ -66,13 +61,89 @@ function matchesSearch(b: Booking, q: string): boolean {
   return idHit || nameHit || phoneHit
 }
 
-// Общее число броней для текущего фильтра (не только текущей страницы). Считаем по
-// полному списку `allBookings`, отфильтрованному по периоду и — при наличии — поиску.
-const periodTotal = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  return allBookings.value.filter((b) => isBookingInPeriod(b, period.value) && matchesSearch(b, q))
-    .length
+function bookingFieldKey(booking: Booking): string {
+  return booking.fieldId || booking.fieldName
+}
+
+const fieldOptions = computed(() => {
+  const fields = new Map<string, { id: string; name: string; type?: Booking['fieldType'] }>()
+  for (const booking of allBookings.value) {
+    if (!isBookingInPeriod(booking, period.value)) continue
+    const id = bookingFieldKey(booking)
+    if (!fields.has(id)) fields.set(id, { id, name: booking.fieldName, type: booking.fieldType })
+  }
+  return [...fields.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 })
+
+const filteredBookings = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return allBookings.value.filter((booking) => {
+    if (!isBookingInPeriod(booking, period.value) || !matchesSearch(booking, q)) return false
+    return Boolean(fieldFilter.value) && bookingFieldKey(booking) === fieldFilter.value
+  })
+})
+
+const periodTotal = computed(() => filteredBookings.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredBookings.value.length / PAGE_SIZE)))
+const hasNext = computed(() => page.value < totalPages.value)
+const pageBookings = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
+  return filteredBookings.value.slice(start, start + PAGE_SIZE)
+})
+
+interface BookingFieldGroup {
+  key: string
+  fieldName: string
+  fieldType?: Booking['fieldType']
+  bookings: Booking[]
+}
+
+interface BookingDateGroup {
+  date: string
+  fields: BookingFieldGroup[]
+}
+
+const groupedBookings = computed<BookingDateGroup[]>(() => {
+  const byDate = new Map<string, Map<string, BookingFieldGroup>>()
+  const sorted = [...pageBookings.value].sort((a, b) => {
+    const dateDiff = a.date.localeCompare(b.date)
+    if (dateDiff !== 0) return dateDiff
+    const fieldDiff = a.fieldName.localeCompare(b.fieldName, 'ru')
+    if (fieldDiff !== 0) return fieldDiff
+    return a.start.localeCompare(b.start)
+  })
+
+  for (const booking of sorted) {
+    let dateGroup = byDate.get(booking.date)
+    if (!dateGroup) {
+      dateGroup = new Map()
+      byDate.set(booking.date, dateGroup)
+    }
+
+    const fieldKey = bookingFieldKey(booking)
+    let fieldGroup = dateGroup.get(fieldKey)
+    if (!fieldGroup) {
+      fieldGroup = {
+        key: fieldKey,
+        fieldName: booking.fieldName,
+        fieldType: booking.fieldType,
+        bookings: [],
+      }
+      dateGroup.set(fieldKey, fieldGroup)
+    }
+    fieldGroup.bookings.push(booking)
+  }
+
+  return [...byDate.entries()].map(([date, fields]) => ({
+    date,
+    fields: [...fields.values()],
+  }))
+})
+
+function fullDateLabel(iso: string): string {
+  const d = formatDayLabel(iso)
+  return `${d.day} ${d.month}, ${d.weekday}`
+}
 
 function initials(name: string): string {
   return name
@@ -84,73 +155,220 @@ function initials(name: string): string {
 }
 
 const editing = ref<Booking | null>(null)
-const paymentDetail = ref<Booking | null>(null)
+const confirmInlineEdits = ref(false)
+const savingInlineEdits = ref(false)
+const inlineEditError = ref('')
+
+const STATUS_OPTIONS: BookingState[] = (Object.keys(BOOKING_STATE_LABEL) as BookingState[]).filter(
+  (s) => s !== 'draft',
+)
+
+interface InlineEditableValues {
+  paidCash: number
+  paidKaspiQr: number
+  paidAvans: number
+  state: string
+}
+
+interface InlineBookingEdit {
+  id: string
+  ref: string
+  customerName: string
+  fieldKey: string
+  fieldName: string
+  original: InlineEditableValues
+  current: InlineEditableValues
+}
+
+type InlineEditableKey = keyof InlineEditableValues
+
+const inlineEdits = ref<Record<string, InlineBookingEdit>>({})
+
+const INLINE_FIELD_LABEL: Record<InlineEditableKey, string> = {
+  paidCash: 'Наличные',
+  paidKaspiQr: 'QR',
+  paidAvans: 'Предоплата',
+  state: 'Статус',
+}
+
+function inlineBase(booking: Booking): InlineEditableValues {
+  return {
+    paidCash: booking.paidCash,
+    paidKaspiQr: booking.paidKaspiQr,
+    paidAvans: booking.paidAvans,
+    state: booking.state,
+  }
+}
+
+function inlineValue(booking: Booking, key: InlineEditableKey): string | number {
+  return inlineEdits.value[booking.id]?.current[key] ?? inlineBase(booking)[key]
+}
+
+function inlineStatusClass(booking: Booking): string {
+  return bookingStateClass(String(inlineValue(booking, 'state')))
+}
+
+function normalizePayment(raw: string | number): number {
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
+}
+
+function valuesEqual(a: InlineEditableValues, b: InlineEditableValues): boolean {
+  return (
+    a.paidCash === b.paidCash &&
+    a.paidKaspiQr === b.paidKaspiQr &&
+    a.paidAvans === b.paidAvans &&
+    a.state === b.state
+  )
+}
+
+function setInlineValue(booking: Booking, key: InlineEditableKey, raw: string | number) {
+  inlineEditError.value = ''
+  const existing = inlineEdits.value[booking.id]
+  const original = existing?.original ?? inlineBase(booking)
+  const current = { ...(existing?.current ?? original) }
+
+  if (key === 'state') current.state = String(raw)
+  else current[key] = normalizePayment(raw)
+
+  const next = { ...inlineEdits.value }
+  if (valuesEqual(original, current)) {
+    delete next[booking.id]
+  } else {
+    next[booking.id] = {
+      id: booking.id,
+      ref: booking.ref,
+      customerName: booking.customerName,
+      fieldKey: bookingFieldKey(booking),
+      fieldName: booking.fieldName,
+      original,
+      current,
+    }
+  }
+  inlineEdits.value = next
+}
+
+const pendingInlineEdits = computed(() => Object.values(inlineEdits.value))
+
+const inlineEditChanges = computed(() =>
+  pendingInlineEdits.value.map((edit) => ({
+    edit,
+    changes: (Object.keys(INLINE_FIELD_LABEL) as InlineEditableKey[])
+      .filter((key) => edit.original[key] !== edit.current[key])
+      .map((key) => ({
+        key,
+        label: INLINE_FIELD_LABEL[key],
+        from:
+          key === 'state'
+            ? bookingStateLabel(String(edit.original[key]))
+            : formatPrice(Number(edit.original[key])),
+        to:
+          key === 'state'
+            ? bookingStateLabel(String(edit.current[key]))
+            : formatPrice(Number(edit.current[key])),
+      })),
+  })),
+)
+
+const inlineValidationError = computed(() => {
+  for (const edit of pendingInlineEdits.value) {
+    const payments = [
+      { value: edit.current.paidCash, label: 'Наличные' },
+      { value: edit.current.paidKaspiQr, label: 'QR' },
+      { value: edit.current.paidAvans, label: 'Предоплата' },
+    ]
+    const over = payments.find((payment) => payment.value > MAX_PAYMENT)
+    if (over) {
+      return `${edit.ref}: сумма «${over.label}» не может превышать ${MAX_PAYMENT.toLocaleString('ru-RU')} ₸`
+    }
+  }
+  return ''
+})
+
+function openInlineConfirm() {
+  inlineEditError.value = inlineValidationError.value
+  if (!inlineEditError.value) confirmInlineEdits.value = true
+}
+
+function discardInlineEdits() {
+  inlineEdits.value = {}
+  inlineEditError.value = ''
+  confirmInlineEdits.value = false
+}
+
+async function saveInlineEdits() {
+  inlineEditError.value = inlineValidationError.value
+  if (inlineEditError.value) return
+
+  savingInlineEdits.value = true
+  try {
+    await Promise.all(
+      pendingInlineEdits.value.map((edit) =>
+        updateBooking(edit.id, {
+          paid_cash: edit.current.paidCash,
+          paid_kaspi_qr: edit.current.paidKaspiQr,
+          paid_avans: edit.current.paidAvans,
+          status: edit.current.state as BookingState,
+        }),
+      ),
+    )
+    discardInlineEdits()
+    await loadAll()
+  } catch (e) {
+    inlineEditError.value = e instanceof Error ? e.message : 'Не удалось сохранить изменения'
+  } finally {
+    savingInlineEdits.value = false
+  }
+}
 
 // Полный список для сводок и вкладки «За всё время».
 async function loadAll() {
   statsLoading.value = true
+  tableLoading.value = true
   try {
     allBookings.value = await listBookings()
   } finally {
     statsLoading.value = false
+    tableLoading.value = false
   }
 }
 
-// Монотонный токен запроса: поиск (с дебаунсом) и клики пагинации оба зовут goToPage,
-// поэтому медленный ранний ответ мог перезаписать свежий. Применяем только последний.
-let reqSeq = 0
-
-// Загружает страницу `target` для текущего периода: range-эндпоинт для today/week/month,
-// полный список (GET /bookings) для all_time. Пустая страница за пределами первой —
-// конец пагинации, на неё не переключаемся.
 async function goToPage(target: number) {
   if (target < 1) return
-  const myReq = ++reqSeq
-  tableLoading.value = true
-  try {
-    const range = periodRange(period.value)
-    const q = search.value.trim() || undefined
-
-    const rows = range
-      ? await listBookingsInRange(range.from, range.to, target, q)
-      : await listBookings(target, q)
-    // Устарел — пришёл более новый запрос, его результат уже актуальнее.
-    if (myReq !== reqSeq) return
-    if (rows.length === 0 && target > 1) {
-      atEnd.value = true
-      return
-    }
-    tableBookings.value = rows
-    page.value = target
-    atEnd.value = false
-  } finally {
-    // Гасим индикатор только для актуального запроса, иначе мигание на гонках.
-    if (myReq === reqSeq) tableLoading.value = false
-  }
+  page.value = Math.min(target, totalPages.value)
 }
 
 function changePeriod(next: BookingPeriod) {
   if (next === period.value) return
   period.value = next
   page.value = 1
-  atEnd.value = false
-  goToPage(1)
 }
 
-// Поиск с дебаунсом — каждый ввод сбрасывает на первую страницу и перезапрашивает.
-let searchTimer: number | undefined
 watch(search, () => {
-  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => {
-    page.value = 1
-    atEnd.value = false
-    goToPage(1)
-  }, 350)
+  page.value = 1
 })
 
-onUnmounted(() => {
-  if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+watch(fieldFilter, () => {
+  page.value = 1
+  inlineEdits.value = {}
+  inlineEditError.value = ''
+  confirmInlineEdits.value = false
 })
+
+watch(
+  fieldOptions,
+  (options) => {
+    if (!options.length) {
+      fieldFilter.value = ''
+      return
+    }
+
+    if (!options.some((field) => field.id === fieldFilter.value)) {
+      fieldFilter.value = options[0].id
+    }
+  },
+  { immediate: true },
+)
 
 function prevPage() {
   if (hasPrev.value) goToPage(page.value - 1)
@@ -190,28 +408,17 @@ function changed(a: unknown, b: unknown): boolean {
 async function pollBookings() {
   if (document.hidden) return
   if (viewMode.value !== 'list') return // календарь грузит данные сам
-  // Не двигаем строки под пользователем во время редактирования/просмотра оплат
+  // Не двигаем строки под пользователем во время редактирования
   // и не мешаем первичной/навигационной загрузке.
-  if (editing.value || paymentDetail.value) return
+  if (editing.value) return
   if (statsLoading.value || tableLoading.value) return
   if (silentInFlight) return
 
   silentInFlight = true
   try {
-    // Сводки (полный список).
     const nextAll = await listBookings()
     if (changed(allBookings.value, nextAll)) allBookings.value = nextAll
-
-    // Текущая страница таблицы — тем же запросом, что и goToPage, включая поиск.
-    const range = periodRange(period.value)
-    const q = search.value.trim() || undefined
-    const rows = range
-      ? await listBookingsInRange(range.from, range.to, page.value, q)
-      : await listBookings(page.value, q)
-    // Пустую страницу за пределами первой игнорируем, чтобы не сбить пагинацию.
-    if (!(rows.length === 0 && page.value > 1) && changed(tableBookings.value, rows)) {
-      tableBookings.value = rows
-    }
+    if (page.value > totalPages.value) page.value = totalPages.value
   } catch {
     /* временный сбой сети — оставляем текущие данные, следующий тик повторит */
   } finally {
@@ -226,7 +433,6 @@ function onVisibility() {
 
 onMounted(() => {
   loadAll()
-  goToPage(1) // первая страница текущего периода (по умолчанию — сегодня)
 
   pollId = setInterval(pollBookings, POLL_MS)
   document.addEventListener('visibilitychange', onVisibility)
@@ -324,6 +530,59 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <div
+          class="flex flex-wrap gap-2 border-b border-gray-200 px-5 py-3 dark:border-gray-800 sm:px-6"
+        >
+          <button
+            v-for="field in fieldOptions"
+            :key="field.id"
+            type="button"
+            class="rounded-full px-3 py-1.5 text-theme-xs font-medium transition-colors"
+            :class="
+              fieldFilter === field.id
+                ? 'bg-success-500 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10'
+            "
+            @click="fieldFilter = field.id"
+          >
+            {{ field.name }}
+            <span v-if="field.type" class="opacity-80">
+              {{ FIELD_TYPE_LABEL[field.type] }}
+            </span>
+          </button>
+        </div>
+
+        <div
+          v-if="pendingInlineEdits.length || inlineEditError"
+          class="flex flex-col gap-3 border-b border-gray-200 px-5 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <p class="text-theme-sm text-gray-600 dark:text-gray-300">
+            Изменений: {{ pendingInlineEdits.length }}
+          </p>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p v-if="inlineEditError" class="text-theme-xs text-error-600 dark:text-error-500">
+              {{ inlineEditError }}
+            </p>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="rounded-lg border border-gray-300 px-3 py-2 text-theme-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+                @click="discardInlineEdits"
+              >
+                Сбросить
+              </button>
+              <button
+                type="button"
+                class="rounded-lg bg-success-600 px-3 py-2 text-theme-xs font-medium text-white transition-colors hover:bg-success-700 disabled:opacity-60"
+                :disabled="!pendingInlineEdits.length"
+                @click="openInlineConfirm"
+              >
+                Подтвердить
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Loading -->
         <div v-if="tableLoading" class="flex min-h-[240px] items-center justify-center">
           <Loader2 class="h-7 w-7 animate-spin text-success-600" aria-hidden="true" />
@@ -332,285 +591,266 @@ onUnmounted(() => {
 
         <!-- Empty -->
         <div
-          v-else-if="!tableBookings.length"
+          v-else-if="!filteredBookings.length"
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <CalendarX class="h-7 w-7 text-gray-400" aria-hidden="true" />
           <p class="text-gray-600 dark:text-gray-400">
             {{
-              search.trim() ? 'По запросу ничего не найдено.' : 'За выбранный период броней нет.'
+              search.trim()
+                ? 'По выбранным фильтрам броней нет.'
+                : 'За выбранный период броней нет.'
             }}
           </p>
         </div>
 
-        <!-- Rows (table — large screens) -->
-        <div v-else class="hidden max-w-full overflow-x-auto custom-scrollbar lg:block">
-          <table class="min-w-full">
-            <thead>
-              <tr class="border-b border-gray-200 dark:border-gray-700">
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Договорняк</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Клиент</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Поле</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                    Дата и время
-                  </p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Сумма</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Оплачено</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Остаток</p>
-                </th>
-                <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Статус</p>
-                </th>
-                <th class="px-5 py-3 text-right sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                    <span class="sr-only">Действия</span>
-                  </p>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-              <tr
-                v-for="b in tableBookings"
-                :key="b.id"
-                class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-              >
-                <!-- Contract -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span
-                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
-                    :class="
-                      b.hasContract
-                        ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
-                        : 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
-                    "
-                  >
-                    {{ b.hasContract ? 'Да' : 'Нет' }}
-                  </span>
-                </td>
-
-                <!-- Customer -->
-                <td class="px-5 py-4 sm:px-6">
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
-                    >
-                      {{ initials(b.customerName) }}
-                    </div>
-                    <div>
-                      <span
-                        class="block font-medium text-gray-800 text-theme-sm dark:text-white/90"
-                      >
-                        {{ b.customerName }}
-                      </span>
-                      <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
-                        {{ b.customerPhone }}
-                      </span>
-                      <span
-                        v-if="b.notes"
-                        :title="b.notes"
-                        class="mt-0.5 block max-w-[16rem] truncate text-theme-xs italic text-gray-400 dark:text-gray-500"
-                      >
-                        {{ b.notes }}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-
-                <!-- Field -->
-                <td class="px-5 py-4 sm:px-6">
-                  <div class="flex items-center gap-2">
-                    <span class="text-gray-700 text-theme-sm dark:text-gray-300">
-                      {{ b.fieldName }}
-                    </span>
-                    <span
-                      v-if="b.fieldType"
-                      class="rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
-                    >
-                      {{ FIELD_TYPE_LABEL[b.fieldType] }}
-                    </span>
-                  </div>
-                </td>
-
-                <!-- Date & time -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span class="block text-gray-700 text-theme-sm dark:text-gray-300">
-                    {{ formatDayLabel(b.date).day }} {{ formatDayLabel(b.date).month }},
-                    {{ formatDayLabel(b.date).weekday }}
-                  </span>
-                  <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
-                    {{ b.start }}–{{ b.end }}
-                  </span>
-                </td>
-
-                <!-- Total -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                    {{ formatPrice(b.total) }}
-                  </span>
-                </td>
-
-                <!-- Paid -->
-                <td class="px-5 py-4 sm:px-6">
-                  <button
-                    type="button"
-                    class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-success-200 rounded-full px-2 py-0.5 hover:bg-success-400 dark:bg-success-500/15 dark:hover:bg-success-500/20"
-                    :aria-label="`Показать оплаты брони ${b.ref}`"
-                    @click="paymentDetail = b"
-                  >
-                    {{ formatPrice(b.paidTotal) }}
-                  </button>
-                </td>
-
-                <!-- Rest -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span
-                    class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15 dark:hover:bg-warning-500/20"
-                  >
-                    {{ formatPrice(b.total - b.paidTotal) }}
-                  </span>
-                </td>
-
-
-                <!-- Status -->
-                <td class="px-5 py-4 sm:px-6">
-                  <span
-                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
-                    :class="bookingStateClass(b.state)"
-                  >
-                    {{ bookingStateLabel(b.state) }}
-                  </span>
-                </td>
-
-                <!-- Actions -->
-                <td class="px-5 py-4 text-right sm:px-6">
-                  <button
-                    type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
-                    :aria-label="`Редактировать бронь ${b.ref}`"
-                    @click="openEdit(b)"
-                  >
-                    <Pencil class="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Rows (cards — small screens) -->
-        <ul
-          v-if="!tableLoading && tableBookings.length"
-          class="divide-y divide-gray-200 dark:divide-gray-700 lg:hidden"
-        >
-          <li v-for="b in tableBookings" :key="b.id" class="px-5 py-4">
-            <!-- Header: ref + status + edit -->
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                  {{ b.id }}
-                </span>
-                <span
-                  class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
-                  :class="bookingStateClass(b.state)"
-                >
-                  {{ bookingStateLabel(b.state) }}
-                </span>
-              </div>
-              <button
-                type="button"
-                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
-                :aria-label="`Редактировать бронь ${b.ref}`"
-                @click="openEdit(b)"
-              >
-                <Pencil class="h-4 w-4" />
-              </button>
+        <!-- Grouped rows -->
+        <div v-else class="space-y-5 bg-gray-50 px-4 py-5 dark:bg-gray-950/20 sm:px-6">
+          <section
+            v-for="dateGroup in groupedBookings"
+            :key="dateGroup.date"
+            class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+          >
+            <div
+              class="flex flex-col gap-1 border-b border-gray-200 bg-success-500 px-4 py-3 dark:border-green-800 dark:bg-green/[0.02] sm:px-5"
+            >
+              <h4 class="font-medium text-white text-theme-sm dark:text-white/90">
+                {{ fullDateLabel(dateGroup.date) }}
+              </h4>
+              <p class="text-theme-xs text-white dark:text-gray-400">
+                {{ dateGroup.fields.reduce((sum, field) => sum + field.bookings.length, 0) }}
+                броней
+              </p>
             </div>
 
-            <!-- Customer -->
-            <div class="mt-3 flex items-center gap-3">
-              <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
-              >
-                {{ initials(b.customerName) }}
-              </div>
-              <div class="min-w-0">
-                <span
-                  class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
-                >
-                  {{ b.customerName }}
-                </span>
-                <span class="block truncate text-gray-500 text-theme-xs dark:text-gray-400">
-                  {{ b.customerPhone }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Field / source / date-time -->
-            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-theme-sm">
-              <div>
-                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Поле</dt>
-                <dd class="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span class="text-gray-700 dark:text-gray-300">{{ b.fieldName }}</span>
+            <div class="divide-y divide-gray-200 dark:divide-gray-800">
+              <section v-for="fieldGroup in dateGroup.fields" :key="fieldGroup.key">
+                <div class="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5 bg-green-200">
+                  <span class="font-medium text-gray-700 text-theme-sm dark:text-gray-300">
+                    {{ fieldGroup.fieldName }}
+                  </span>
                   <span
-                    v-if="b.fieldType"
+                    v-if="fieldGroup.fieldType"
                     class="rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
                   >
-                    {{ FIELD_TYPE_LABEL[b.fieldType] }}
+                    {{ FIELD_TYPE_LABEL[fieldGroup.fieldType] }}
                   </span>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Источник</dt>
-                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">{{ b.source }}</dd>
-              </div>
-              <div class="col-span-2">
-                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Дата и время</dt>
-                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">
-                  {{ formatDayLabel(b.date).day }} {{ formatDayLabel(b.date).month }},
-                  {{ formatDayLabel(b.date).weekday }} · {{ b.start }}–{{ b.end }}
-                </dd>
-              </div>
-              <div v-if="b.notes" class="col-span-2">
-                <dt class="text-gray-500 text-theme-xs dark:text-gray-400">Заметка</dt>
-                <dd class="mt-0.5 text-gray-700 dark:text-gray-300">{{ b.notes }}</dd>
-              </div>
-            </dl>
+                </div>
 
-            <!-- Payments -->
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-success-200 rounded-full px-2 py-0.5 hover:bg-success-400 dark:bg-success-500/15 dark:hover:bg-success-500/20"
-                :aria-label="`Показать оплаты брони ${b.ref}`"
-                @click="paymentDetail = b"
-              >
-                Оплачено: {{ formatPrice(b.paidTotal) }}
-              </button>
-              <span
-                class="font-medium text-gray-800 text-theme-sm dark:text-white/90 bg-warning-50 rounded-full px-2 py-0.5 dark:bg-warning-500/15"
-              >
-                Остаток: {{ formatPrice(b.total - b.paidTotal) }}
-              </span>
-              <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                Сумма: {{ formatPrice(b.total) }}
-              </span>
+                <div class="max-w-full overflow-x-auto overflow-y-hidden custom-scrollbar">
+                  <table class="min-w-[76rem] w-full">
+                    <thead>
+                      <tr
+                        class="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.02]"
+                      >
+                        <th class="w-28 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Время
+                          </p>
+                        </th>
+                        <th class="px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Клиент
+                          </p>
+                        </th>
+                        <th class="w-28 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Договор
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Сумма
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Удалённо
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Наличные
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            QR
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Предоплата
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Статус
+                          </p>
+                        </th>
+                        <th class="w-16 px-4 py-2.5 text-right sm:px-5">
+                          <span class="sr-only">Действия</span>
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
+                      <tr
+                        v-for="b in fieldGroup.bookings"
+                        :key="b.id"
+                        class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                      >
+                        <td class="whitespace-nowrap px-4 py-4 align-top sm:px-5">
+                          <span
+                            class="block font-semibold text-gray-800 text-theme-sm dark:text-white/90"
+                          >
+                            {{ b.start }}
+                          </span>
+                          <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
+                            до {{ b.end }}
+                          </span>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <div class="flex items-center gap-3">
+                            <div class="min-w-0">
+                              <span
+                                class="block max-w-[15rem] truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                              >
+                                {{ b.customerName }}
+                              </span>
+                              <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
+                                {{ b.customerPhone }}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <span
+                            class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                            :class="
+                              b.hasContract
+                                ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
+                                : 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+                            "
+                          >
+                            {{ b.hasContract ? 'Да' : 'Нет' }}
+                          </span>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                            {{ formatPrice(b.total) }}
+                          </span>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <span class="font-medium text-gray-700 text-theme-sm dark:text-gray-300">
+                            {{ formatPrice(b.paidBot) }}
+                          </span>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <input
+                            type="number"
+                            min="0"
+                            :max="MAX_PAYMENT"
+                            step="1"
+                            inputmode="numeric"
+                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                            :value="inlineValue(b, 'paidCash')"
+                            @input="
+                              setInlineValue(
+                                b,
+                                'paidCash',
+                                ($event.target as HTMLInputElement).value,
+                              )
+                            "
+                          />
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <input
+                            type="number"
+                            min="0"
+                            :max="MAX_PAYMENT"
+                            step="1"
+                            inputmode="numeric"
+                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                            :value="inlineValue(b, 'paidKaspiQr')"
+                            @input="
+                              setInlineValue(
+                                b,
+                                'paidKaspiQr',
+                                ($event.target as HTMLInputElement).value,
+                              )
+                            "
+                          />
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <input
+                            type="number"
+                            min="0"
+                            :max="MAX_PAYMENT"
+                            step="1"
+                            inputmode="numeric"
+                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                            :value="inlineValue(b, 'paidAvans')"
+                            @input="
+                              setInlineValue(
+                                b,
+                                'paidAvans',
+                                ($event.target as HTMLInputElement).value,
+                              )
+                            "
+                          />
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <select
+                            class="h-9 w-36 rounded-lg border border-transparent px-2.5 text-theme-xs font-medium shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
+                            :class="inlineStatusClass(b)"
+                            :value="inlineValue(b, 'state')"
+                            @change="
+                              setInlineValue(b, 'state', ($event.target as HTMLSelectElement).value)
+                            "
+                          >
+                            <option
+                              v-if="
+                                !STATUS_OPTIONS.includes(
+                                  String(inlineValue(b, 'state')) as BookingState,
+                                )
+                              "
+                              :value="inlineValue(b, 'state')"
+                            >
+                              {{ bookingStateLabel(String(inlineValue(b, 'state'))) }}
+                            </option>
+                            <option v-for="status in STATUS_OPTIONS" :key="status" :value="status">
+                              {{ BOOKING_STATE_LABEL[status] }}
+                            </option>
+                          </select>
+                        </td>
+
+                        <td class="px-4 py-4 text-right align-top sm:px-5">
+                          <button
+                            type="button"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
+                            :aria-label="`Редактировать бронь ${b.ref}`"
+                            @click="openEdit(b)"
+                          >
+                            <Pencil class="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-          </li>
-        </ul>
+          </section>
+        </div>
 
         <!-- Pagination (today / week / month) -->
         <div
@@ -647,10 +887,81 @@ onUnmounted(() => {
 
     <BookingEditModal v-if="editing" :booking="editing" @close="editing = null" @saved="onSaved" />
 
-    <PaymentBreakdownModal
-      v-if="paymentDetail"
-      :booking="paymentDetail"
-      @close="paymentDetail = null"
-    />
+    <Modal v-if="confirmInlineEdits" :fullScreenBackdrop="true" @close="confirmInlineEdits = false">
+      <template #body>
+        <div
+          class="relative w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+        >
+          <button
+            class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"
+            aria-label="Закрыть"
+            :disabled="savingInlineEdits"
+            @click="confirmInlineEdits = false"
+          >
+            <X class="h-5 w-5" />
+          </button>
+
+          <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
+            Подтвердить изменения
+          </h3>
+          <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+            Вы уверены, что хотите изменить следующие данные?
+          </p>
+
+          <div class="max-h-[50vh] space-y-4 overflow-y-auto pr-1 custom-scrollbar">
+            <section
+              v-for="item in inlineEditChanges"
+              :key="item.edit.id"
+              class="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
+            >
+              <div class="mb-3">
+                <p class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                  {{ item.edit.customerName }}
+                </p>
+                <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                  {{ item.edit.ref }} · {{ item.edit.fieldName }}
+                </p>
+              </div>
+              <dl class="space-y-2">
+                <div
+                  v-for="change in item.changes"
+                  :key="change.key"
+                  class="flex items-center justify-between gap-4 text-theme-sm"
+                >
+                  <dt class="text-gray-500 dark:text-gray-400">{{ change.label }}</dt>
+                  <dd class="text-right font-medium text-gray-800 dark:text-white/90">
+                    {{ change.from }} -> {{ change.to }}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          <p v-if="inlineEditError" class="mt-4 text-sm text-error-600 dark:text-error-500">
+            {{ inlineEditError }}
+          </p>
+
+          <div class="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+              :disabled="savingInlineEdits"
+              @click="confirmInlineEdits = false"
+            >
+              Нет
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-success-700 disabled:opacity-60"
+              :disabled="savingInlineEdits"
+              @click="saveInlineEdits"
+            >
+              <Loader2 v-if="savingInlineEdits" class="h-4 w-4 animate-spin" />
+              Да
+            </button>
+          </div>
+        </div>
+      </template>
+    </Modal>
   </AdminLayout>
 </template>
