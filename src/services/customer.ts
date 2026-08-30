@@ -1,4 +1,4 @@
-import type { BotEnabledStatus, BotStatus, BotToggleResult, Contact } from '@/types'
+import type { BotEnabledStatus, BotStatus, BotToggleResult, Contact, ContactPage } from '@/types'
 import { apiFetch } from './api'
 
 /**
@@ -15,16 +15,26 @@ function phonePath(phone: string): string {
   return encodeURIComponent(phone)
 }
 
-// ── Список контактов — источник данных для экрана ───────────────────
-interface ContactsResponse {
-  ok: boolean
-  contacts: Contact[]
+export interface ContactsQuery {
+  page?: number
+  page_size?: number
+}
+
+function buildQs(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '' && v !== null) qs.set(k, String(v))
+  }
+  const s = qs.toString()
+  return s ? `?${s}` : ''
 }
 
 /** Все WhatsApp-контакты со встроенным статусом бота, отсортированы по активности. */
-export async function listContacts(): Promise<Contact[]> {
-  const data = await apiFetch<Contact[]>('/bot-status/contacts')
-  return data
+export function listContacts(): Promise<Contact[]>
+export function listContacts(q: ContactsQuery): Promise<ContactPage>
+export function listContacts(q?: ContactsQuery): Promise<Contact[] | ContactPage> {
+  const qs = q ? buildQs({ page: q.page, page_size: q.page_size }) : ''
+  return apiFetch<Contact[] | ContactPage>(`/bot-status/contacts${qs}`)
 }
 
 // ── Статус / переключение бота ──────────────────────────────────────

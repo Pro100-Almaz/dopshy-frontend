@@ -290,6 +290,15 @@ export interface Contact {
   last_activity: string // ISO datetime; список приходит отсортированным (новые сверху)
 }
 
+export interface ContactPage {
+  ok: boolean
+  data: Contact[]
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}
+
 // ── История действий (GET /manager/history) ─────────
 // Запись журнала: изменение статуса брони, оплата и т.п. `source` имеет вид
 // '<тип>:<значение>' — 'manager:username', 'chatbot:smth', 'landing:phone',
