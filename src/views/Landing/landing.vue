@@ -4,6 +4,7 @@ import LandingNavbar from './components/LandingNavbar.vue'
 import LandingHero from './components/LandingHero.vue'
 import LandingBookingWidget from './components/LandingBookingWidget.vue'
 import LandingFacilities from './components/LandingFacilities.vue'
+import LandingAbout from './components/LandingAbout.vue'
 import LandingFooter from './components/LandingFooter.vue'
 import { mediaUrl } from '@/services/api'
 import LocationMap from '@/views/Booking/components/LocationMap.vue'
@@ -55,12 +56,19 @@ onUnmounted(() => {
 
       <LandingFacilities />
 
+      <LandingAbout />
+
       <!-- Gallery -->
       <section
         id="gallery"
         class="landing-snap-section py-24 relative bg-gray-50 border-t border-gray-200 overflow-hidden"
       >
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="mb-14 text-center">
+            <h2 class="text-4xl font-bebas text-gray-900 md:text-5xl">
+              <span class="text-success-600">ГАЛЕРЕЯ</span>
+            </h2>
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <img
               :src="mediaUrl('img.png')"

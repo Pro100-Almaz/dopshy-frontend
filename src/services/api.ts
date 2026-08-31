@@ -1,12 +1,11 @@
 import router from '@/router'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const LOCAL_CHANGES = import.meta.env.LOCAL_CHANGES === 'true'
+export const API_BASE = LOCAL_CHANGES ? 'http://localhost:8000/api' : 'https://api.dopsy.kz/api'
 
-// Base URL for backend-served media (Django /media/). In dev this stays a
-// relative path and the Vite proxy forwards it to the backend; in production
-// set VITE_MEDIA_BASE_URL to the backend's absolute media URL if it lives on a
-// different origin than the frontend.
-const MEDIA_BASE = import.meta.env.VITE_MEDIA_BASE_URL || '/media'
+// Base URL for backend-served media. LOCAL_CHANGES=true points the app at the
+// local backend; otherwise the production API/media host is used.
+const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8000/media' : 'https://api.dopsy.kz/media'
 
 /** Build a URL for a file stored in the backend media folder, e.g. mediaUrl('img.png'). */
 export function mediaUrl(name: string): string {
@@ -25,6 +24,11 @@ export class ApiError extends Error {
 
 interface ApiFetchOptions extends RequestInit {
   skipSessionExpiredRedirect?: boolean
+}
+
+interface ApiBlobResponse {
+  blob: Blob
+  filename?: string
 }
 
 /**
@@ -79,4 +83,51 @@ export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): 
   }
 
   return res.json()
+}
+
+function filenameFromDisposition(value: string | null): string | undefined {
+  if (!value) return undefined
+  const utf8 = value.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8?.[1]) return decodeURIComponent(utf8[1].replace(/"/g, ''))
+  const plain = value.match(/filename="?([^";]+)"?/i)
+  return plain?.[1]
+}
+
+export async function apiFetchBlob(
+  endpoint: string,
+  options?: ApiFetchOptions,
+): Promise<ApiBlobResponse> {
+  const token = localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const { skipSessionExpiredRedirect, ...fetchOptions } = options ?? {}
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...fetchOptions,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...fetchOptions.headers,
+    },
+  })
+
+  if (res.status === 401 && token && !skipSessionExpiredRedirect) {
+    await handleSessionExpired()
+    throw new Error('Сессия истекла. Войдите снова.')
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    let message = ''
+    try {
+      const body = text ? JSON.parse(text) : {}
+      const detail = typeof body.detail === 'string' ? body.detail : undefined
+      message = detail || body.message || ''
+    } catch {
+      message = text.slice(0, 200)
+    }
+    throw new ApiError(res.status, message || `API error ${res.status}`)
+  }
+
+  return {
+    blob: await res.blob(),
+    filename: filenameFromDisposition(res.headers.get('Content-Disposition')),
+  }
 }

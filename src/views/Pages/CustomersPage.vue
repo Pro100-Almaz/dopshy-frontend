@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Loader2,
   Users,
@@ -7,6 +7,8 @@ import {
   MessageCircle,
   CalendarCheck,
   TriangleAlert,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
@@ -22,6 +24,7 @@ import { useAuthStore } from '@/stores/auth'
 const currentPageTitle = 'Клиентская база'
 const auth = useAuthStore()
 const canManageGlobalBot = computed(() => hasPermission(auth.role, 'globalBotSetting'))
+const PAGE_SIZE = 20
 
 // Держим экран свежим: авто-пауза и новые контакты появляются на бэкенде без
 // действий фронта. Реального времени пока нет — тихо опрашиваем каждые 5 секунд.
@@ -32,6 +35,9 @@ const loading = ref(true)
 const error = ref('')
 const toast = ref('')
 const query = ref('')
+const page = ref(1)
+const total = ref(0)
+const totalPages = ref(1)
 
 type FilterKey = 'all' | 'texted' | 'booking' | 'paused'
 const filter = ref<FilterKey>('all')
@@ -54,6 +60,27 @@ const filtered = computed(() => {
     const phoneHit = digits.length > 0 && c.phone.includes(digits)
     return nameHit || phoneHit
   })
+})
+
+const pageItems = computed<(number | '…')[]>(() => {
+  const tp = totalPages.value
+  const cur = page.value
+  if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1)
+  const items: (number | '…')[] = [1]
+  const from = Math.max(2, cur - 1)
+  const to = Math.min(tp - 1, cur + 1)
+  if (from > 2) items.push('…')
+  for (let i = from; i <= to; i++) items.push(i)
+  if (to < tp - 1) items.push('…')
+  items.push(tp)
+  return items
+})
+
+const rangeLabel = computed(() => {
+  if (!total.value) return '0'
+  const start = (page.value - 1) * PAGE_SIZE + 1
+  const end = Math.min(page.value * PAGE_SIZE, total.value)
+  return `${start}–${end} из ${total.value}`
 })
 
 function displayName(c: Contact): string {
@@ -98,9 +125,12 @@ async function load(silent = false) {
     loading.value = true
   }
   try {
-    const next = await listContacts()
+    const res = await listContacts({ page: page.value, page_size: PAGE_SIZE })
+    const next = res.data
     // Фоновое обновление применяем только при изменении — без мигания списка.
     if (!silent || changed(contacts.value, next)) contacts.value = next
+    total.value = res.total
+    totalPages.value = res.total_pages || 1
     error.value = ''
   } catch (e) {
     // Фоновое обновление не должно затирать уже показанный список ошибкой.
@@ -109,6 +139,17 @@ async function load(silent = false) {
     if (silent) silentInFlight = false
     else loading.value = false
   }
+}
+
+watch([query, filter], () => {
+  page.value = 1
+})
+
+watch(page, () => load())
+
+function goTo(p: number) {
+  const clamped = Math.min(Math.max(1, p), totalPages.value)
+  if (clamped !== page.value) page.value = clamped
 }
 
 let pollId: number | undefined
@@ -407,6 +448,59 @@ onUnmounted(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div
+          v-if="!loading && !error && contacts.length"
+          class="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+            Показано {{ rangeLabel }}
+          </p>
+          <nav class="flex items-center gap-1" aria-label="Пагинация">
+            <button
+              type="button"
+              class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+              :disabled="page <= 1"
+              aria-label="Предыдущая страница"
+              @click="goTo(page - 1)"
+            >
+              <ChevronLeft class="h-4 w-4" />
+            </button>
+
+            <template v-for="(item, i) in pageItems" :key="i">
+              <span
+                v-if="item === '…'"
+                class="flex h-9 w-9 items-center justify-center text-theme-sm text-gray-400"
+                >…</span
+              >
+              <button
+                v-else
+                type="button"
+                class="flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-theme-sm font-medium transition-colors"
+                :class="
+                  item === page
+                    ? 'border-success-500 bg-success-500 text-white'
+                    : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]'
+                "
+                :aria-current="item === page ? 'page' : undefined"
+                @click="goTo(item as number)"
+              >
+                {{ item }}
+              </button>
+            </template>
+
+            <button
+              type="button"
+              class="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+              :disabled="page >= totalPages"
+              aria-label="Следующая страница"
+              @click="goTo(page + 1)"
+            >
+              <ChevronRight class="h-4 w-4" />
+            </button>
+          </nav>
         </div>
       </div>
     </div>

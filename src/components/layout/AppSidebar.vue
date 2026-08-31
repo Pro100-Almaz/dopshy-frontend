@@ -14,16 +14,9 @@
     @mouseleave="isHovered = false"
   >
     <!-- Brand Logo -->
-    <div
-      :class="[
-        'py-8 flex',
-        !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start',
-      ]"
-    >
+    <div :class="['py-8 flex', !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start']">
       <router-link to="/dashboard" class="flex items-center gap-2.5">
-        <div
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pitch-600"
-        >
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pitch-600">
           <svg
             class="h-4.5 w-4.5 text-white"
             viewBox="0 0 24 24"
@@ -47,18 +40,14 @@
       </router-link>
     </div>
 
-    <div
-      class="flex flex-1 min-h-0 flex-col overflow-y-auto duration-300 ease-linear no-scrollbar"
-    >
+    <div class="flex flex-1 min-h-0 flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
       <nav class="mb-6">
         <div class="flex flex-col gap-4">
           <div v-for="(menuGroup, groupIndex) in menuGroups" :key="groupIndex">
             <h2
               :class="[
                 'mb-4 text-xs uppercase flex leading-[20px] text-gray-400',
-                !isExpanded && !isHovered
-                  ? 'lg:justify-center'
-                  : 'justify-start',
+                !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start',
               ]"
             >
               <template v-if="isExpanded || isHovered || isMobileOpen">
@@ -78,9 +67,7 @@
                       'menu-item-active': isSubmenuOpen(groupIndex, index),
                       'menu-item-inactive': !isSubmenuOpen(groupIndex, index),
                     },
-                    !isExpanded && !isHovered
-                      ? 'lg:justify-center'
-                      : 'lg:justify-start',
+                    !isExpanded && !isHovered ? 'lg:justify-center' : 'lg:justify-start',
                   ]"
                 >
                   <span
@@ -92,11 +79,9 @@
                   >
                     <component :is="item.icon" :size="20" />
                   </span>
-                  <span
-                    v-if="isExpanded || isHovered || isMobileOpen"
-                    class="menu-item-text"
-                    >{{ item.name }}</span
-                  >
+                  <span v-if="isExpanded || isHovered || isMobileOpen" class="menu-item-text">{{
+                    item.name
+                  }}</span>
                   <span
                     v-if="item.badge && (isExpanded || isHovered || isMobileOpen)"
                     class="ml-auto mr-2 rounded-full bg-pitch-50 px-2 py-0.5 text-[10px] font-bold uppercase text-pitch-700 dark:bg-pitch-500/15 dark:text-pitch-300"
@@ -130,18 +115,14 @@
                 >
                   <span
                     :class="[
-                      isItemActive(item)
-                        ? 'menu-item-icon-active'
-                        : 'menu-item-icon-inactive',
+                      isItemActive(item) ? 'menu-item-icon-active' : 'menu-item-icon-inactive',
                     ]"
                   >
                     <component :is="item.icon" :size="20" />
                   </span>
-                  <span
-                    v-if="isExpanded || isHovered || isMobileOpen"
-                    class="menu-item-text"
-                    >{{ item.name }}</span
-                  >
+                  <span v-if="isExpanded || isHovered || isMobileOpen" class="menu-item-text">{{
+                    item.name
+                  }}</span>
                   <span
                     v-if="item.badge && (isExpanded || isHovered || isMobileOpen)"
                     class="ml-auto rounded-full bg-pitch-50 px-2 py-0.5 text-[10px] font-bold uppercase text-pitch-700 dark:bg-pitch-500/15 dark:text-pitch-300"
@@ -158,8 +139,7 @@
                 >
                   <div
                     v-show="
-                      isSubmenuOpen(groupIndex, index) &&
-                      (isExpanded || isHovered || isMobileOpen)
+                      isSubmenuOpen(groupIndex, index) && (isExpanded || isHovered || isMobileOpen)
                     "
                   >
                     <ul class="mt-2 space-y-1 ml-9">
@@ -169,12 +149,8 @@
                           :class="[
                             'menu-dropdown-item',
                             {
-                              'menu-dropdown-item-active': isActive(
-                                subItem.path,
-                              ),
-                              'menu-dropdown-item-inactive': !isActive(
-                                subItem.path,
-                              ),
+                              'menu-dropdown-item-active': isActive(subItem.path),
+                              'menu-dropdown-item-inactive': !isActive(subItem.path),
                             },
                           ]"
                         >
@@ -202,6 +178,7 @@ import {
   LayoutGrid,
   CalendarCheck,
   CalendarDays,
+  BriefcaseBusiness,
   GraduationCap,
   History,
   Wallet,
@@ -215,11 +192,7 @@ import {
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
 import { SPORTS } from '@/services/academy'
-import {
-  fixedSportForRole,
-  hasPermission,
-  permittedAcademySports,
-} from '@/services/rbac'
+import { fixedSportForRole, hasPermission, permittedAcademySports } from '@/services/rbac'
 import { useAcademyStore } from '@/stores/academy'
 import { useAuthStore } from '@/stores/auth'
 
@@ -256,7 +229,9 @@ const menuGroups = computed<MenuGroup[]>(() => {
   const role = auth.role
   const allowedSports = permittedAcademySports(role)
   const fixedSport = fixedSportForRole(role)
-  const sport = fixedSport ?? (allowedSports.includes(academy.activeSport) ? academy.activeSport : allowedSports[0])
+  const sport =
+    fixedSport ??
+    (allowedSports.includes(academy.activeSport) ? academy.activeSport : allowedSports[0])
   const groups: MenuGroup[] = [
     {
       title: 'Меню',
@@ -265,51 +240,60 @@ const menuGroups = computed<MenuGroup[]>(() => {
   ]
 
   if (hasPermission(role, 'arena')) {
-    groups.push(
-      {
-        title: 'Управление полями',
-        items: [
-          { icon: LayoutGrid, name: 'Создать бронь', path: '/field-slots' },
-          { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
-          { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
-          ...(hasPermission(role, 'history')
-            ? [{ icon: History, name: 'История действий', path: '/history' }]
-            : []),
-        ],
-      },
-    )
+    groups.push({
+      title: 'Управление полями',
+      items: [
+        { icon: LayoutGrid, name: 'Создать бронь', path: '/field-slots' },
+        { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
+        { icon: BriefcaseBusiness, name: 'Контракты', path: '/contracts' },
+        { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
+        ...(hasPermission(role, 'history')
+          ? [{ icon: History, name: 'История действий', path: '/history' }]
+          : []),
+      ],
+    })
   }
 
   if (sport && hasPermission(role, 'academy')) {
-    groups.push(
-    {
-        title: `Академия · ${SPORTS[sport].label}`,
-        items: [
-          { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
-          { icon: CalendarDays, name: 'Расписание', path: `/${sport}/groups`, matchSuffix: '/groups' },
-          { icon: CalendarCheck, name: 'Пробные', path: `/${sport}/trials`, matchSuffix: '/trials' },
-          {
-            icon: GraduationCap,
-            name: 'Ученики',
-            path: `/${sport}/students`,
-            matchSuffix: '/students',
-          },
-          ...(hasPermission(role, 'academyPayments')
-            ? [{ icon: Wallet, name: 'Платежи', path: `/${sport}/payments`, matchSuffix: '/payments' }]
-            : []),
-          ...(hasPermission(role, 'botContent')
-            ? [
-                {
-                  icon: Bot,
-                  name: 'Контент бота',
-                  path: `/${sport}/bot-content`,
-                  matchSuffix: '/bot-content',
-                },
-              ]
-            : []),
-        ],
-      },
-    )
+    groups.push({
+      title: `Академия · ${SPORTS[sport].label}`,
+      items: [
+        { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
+        {
+          icon: CalendarDays,
+          name: 'Расписание',
+          path: `/${sport}/groups`,
+          matchSuffix: '/groups',
+        },
+        { icon: CalendarCheck, name: 'Пробные', path: `/${sport}/trials`, matchSuffix: '/trials' },
+        {
+          icon: GraduationCap,
+          name: 'Ученики',
+          path: `/${sport}/students`,
+          matchSuffix: '/students',
+        },
+        ...(hasPermission(role, 'academyPayments')
+          ? [
+              {
+                icon: Wallet,
+                name: 'Платежи',
+                path: `/${sport}/payments`,
+                matchSuffix: '/payments',
+              },
+            ]
+          : []),
+        ...(hasPermission(role, 'botContent')
+          ? [
+              {
+                icon: Bot,
+                name: 'Контент бота',
+                path: `/${sport}/bot-content`,
+                matchSuffix: '/bot-content',
+              },
+            ]
+          : []),
+      ],
+    })
   }
 
   const otherItems: MenuItem[] = [
@@ -353,9 +337,7 @@ const toggleSubmenu = (groupIndex: number, itemIndex: number) => {
 const isAnySubmenuRouteActive = computed(() => {
   return menuGroups.value.some((group) =>
     group.items.some(
-      (item) =>
-        item.subItems &&
-        item.subItems.some((subItem) => isActive(subItem.path)),
+      (item) => item.subItems && item.subItems.some((subItem) => isActive(subItem.path)),
     ),
   )
 })
@@ -365,8 +347,7 @@ const isSubmenuOpen = (groupIndex: number, itemIndex: number) => {
   const item = menuGroups.value[groupIndex].items[itemIndex]
   return (
     openSubmenu.value === key ||
-    (isAnySubmenuRouteActive.value &&
-      item.subItems?.some((subItem) => isActive(subItem.path)))
+    (isAnySubmenuRouteActive.value && item.subItems?.some((subItem) => isActive(subItem.path)))
   )
 }
 

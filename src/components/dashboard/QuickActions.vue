@@ -13,6 +13,17 @@
         <span class="text-xs font-semibold text-success-700 dark:text-success-400">Новое бронирование</span>
       </router-link>
 
+      <button
+        type="button"
+        class="group flex flex-col items-center gap-2.5 rounded-xl border border-brand-300 bg-brand-50 p-4 text-center transition-colors duration-150 hover:border-brand-400 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-brand-500/40 dark:bg-brand-500/[0.08] dark:hover:bg-brand-500/15 dark:focus-visible:ring-offset-gray-900"
+        @click="emit('generateReport')"
+      >
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
+          <FileText :size="20" :stroke-width="1.75" />
+        </div>
+        <span class="text-xs font-semibold text-brand-700 dark:text-brand-400">Сформировать отчёт</span>
+      </button>
+
       <!-- Недоступные действия -->
       <button
         v-for="action in disabledActions"
@@ -31,11 +42,12 @@
 </template>
 
 <script setup lang="ts">
-import { CalendarPlus, BookPlus, Wallet, UserPlus } from 'lucide-vue-next'
+import { CalendarPlus, BookPlus, FileText, UserPlus } from 'lucide-vue-next'
+
+const emit = defineEmits<{ generateReport: [] }>()
 
 const disabledActions = [
   { label: 'Добавить занятие', icon: BookPlus },
-  { label: 'Принять платёж', icon: Wallet },
   { label: 'Назначить смену', icon: UserPlus },
 ]
 </script>
