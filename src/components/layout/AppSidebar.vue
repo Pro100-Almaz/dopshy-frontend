@@ -272,6 +272,12 @@ const menuGroups = computed<MenuGroup[]>(() => {
           path: `/${sport}/students`,
           matchSuffix: '/students',
         },
+        {
+          icon: PersonStanding,
+          name: 'Клиентская база',
+          path: `/${sport}/customers`,
+          matchSuffix: '/customers',
+        },
         ...(hasPermission(role, 'academyPayments')
           ? [
               {
