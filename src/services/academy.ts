@@ -125,16 +125,35 @@ export interface AcademyTrial {
   school_time?: string | null
 }
 
-/**
- * PATCH /manager/academy_groups/{id} принимает только эти поля. Время —
- * без указания дня, то есть правка применяется к группе целиком: интерфейс
- * обязан говорить об этом прямо, а не делать вид, что меняет один день.
- */
+/** PATCH /manager/academy_groups/{id}: базовые поля и будущий массив дней. */
 export interface UpdateGroupPayload {
   group_name?: string
   max_cap?: number
   start_time?: string
   end_time?: string
+  training_days?: GroupTrainingDayPayload[]
+  age_min?: number | null
+  age_max?: number | null
+  shift?: string | null
+  is_active?: boolean
+}
+
+export interface GroupTrainingDayPayload {
+  training_day: string
+  training_day_value: number
+  start_time: string
+  end_time: string
+}
+
+export interface CreateGroupPayload extends Omit<UpdateGroupPayload, 'training_days'> {
+  group_name: string
+  group_type: string
+  max_cap: number
+  training_days?: GroupTrainingDayPayload[]
+}
+
+export interface AssignStudentPayload {
+  student_id: string
 }
 
 // ── Разбор ответов ──────────────────────────────────────────────────
@@ -169,7 +188,12 @@ export function unwrapAcademyPayload(data: unknown): unknown {
   let payload = data
 
   while (payload && typeof payload === 'object' && ('ok' in payload || 'data' in payload)) {
-    const envelope = payload as { ok?: unknown; data?: unknown; detail?: unknown; message?: unknown }
+    const envelope = payload as {
+      ok?: unknown
+      data?: unknown
+      detail?: unknown
+      message?: unknown
+    }
     if (envelope.ok === false) {
       const detail = typeof envelope.detail === 'string' ? envelope.detail : undefined
       const message = typeof envelope.message === 'string' ? envelope.message : undefined
@@ -290,6 +314,44 @@ export function updateGroup(
     {
       ...academyRequest,
       method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+/** Создание группы — фронтенд готов к ручке, когда бэкенд её добавит. */
+export function createGroup(
+  payload: CreateGroupPayload,
+): Promise<{ ok: boolean; data: { group_id: number } }> {
+  return apiFetch<{ ok: boolean; data: { group_id: number } }>('/manager/academy_groups', {
+    ...academyRequest,
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Мягкое удаление / отключение группы. Если бэкенд позже выберет PATCH
+ * `is_active: false`, UI останется тем же — заменить нужно будет только этот
+ * вызов.
+ */
+export function deleteGroup(groupId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/manager/academy_groups/${encodeURIComponent(groupId)}`, {
+    ...academyRequest,
+    method: 'DELETE',
+  })
+}
+
+/** Назначение существующего ученика в группу. */
+export function assignStudentToGroup(
+  groupId: string,
+  payload: AssignStudentPayload,
+): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `/manager/academy_groups/${encodeURIComponent(groupId)}/students`,
+    {
+      ...academyRequest,
+      method: 'POST',
       body: JSON.stringify(payload),
     },
   )
