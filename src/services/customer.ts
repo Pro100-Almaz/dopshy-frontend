@@ -1,6 +1,8 @@
 import type { BotEnabledStatus, BotStatus, BotToggleResult, Contact, ContactPage } from '@/types'
 import { apiFetch } from './api'
 
+export type BotType = 'arena' | 'football_academy' | 'boxing_academy'
+
 /**
  * Приводит телефон к международному формату без «+» — только цифры.
  * Нужно лишь для телефонов из пользовательского ввода; телефоны из
@@ -16,6 +18,7 @@ function phonePath(phone: string): string {
 }
 
 export interface ContactsQuery {
+  bot_type?: BotType
   page?: number
   page_size?: number
 }
@@ -33,7 +36,7 @@ function buildQs(params: Record<string, string | number | undefined>): string {
 export function listContacts(): Promise<Contact[]>
 export function listContacts(q: ContactsQuery): Promise<ContactPage>
 export function listContacts(q?: ContactsQuery): Promise<Contact[] | ContactPage> {
-  const qs = q ? buildQs({ page: q.page, page_size: q.page_size }) : ''
+  const qs = q ? buildQs({ bot_type: q.bot_type, page: q.page, page_size: q.page_size }) : ''
   return apiFetch<Contact[] | ContactPage>(`/bot-status/contacts${qs}`)
 }
 
@@ -57,14 +60,17 @@ export function resumeBot(phone: string): Promise<BotToggleResult> {
 }
 
 // GLobal bot switch
-export function getBotEnabled(): Promise<BotEnabledStatus> {
-  return apiFetch<BotEnabledStatus>('/bot-status/enabled_status')
+export function getBotEnabled(botType: BotType = 'arena'): Promise<BotEnabledStatus> {
+  return apiFetch<BotEnabledStatus>(`/bot-status/enabled_status${buildQs({ bot_type: botType })}`)
 }
 
-export function setBotEnabled(enabled: boolean): Promise<BotEnabledStatus> {
+export function setBotEnabled(
+  enabled: boolean,
+  botType: BotType = 'arena',
+): Promise<BotEnabledStatus> {
   return apiFetch<BotEnabledStatus>('/bot-status/enabled_status', {
     method: 'PATCH',
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify({ enabled, bot_type: botType }),
   })
 }
 

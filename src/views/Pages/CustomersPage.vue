@@ -16,11 +16,20 @@ import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BotToggle from '@/components/customers/BotToggle.vue'
 
 import type { BotStatus, Contact } from '@/types'
-import { getBotEnabled, listContacts, relativeTime, setBotEnabled } from '@/services/customer'
+import {
+  getBotEnabled,
+  listContacts,
+  relativeTime,
+  setBotEnabled,
+  type BotType,
+} from '@/services/customer'
 import { ApiError } from '@/services/api'
 import { hasPermission } from '@/services/rbac'
 import { useAuthStore } from '@/stores/auth'
 
+const props = withDefaults(defineProps<{ botType?: BotType }>(), {
+  botType: 'arena',
+})
 const currentPageTitle = 'Клиентская база'
 const auth = useAuthStore()
 const canManageGlobalBot = computed(() => hasPermission(auth.role, 'globalBotSetting'))
@@ -125,7 +134,11 @@ async function load(silent = false) {
     loading.value = true
   }
   try {
-    const res = await listContacts({ page: page.value, page_size: PAGE_SIZE })
+    const res = await listContacts({
+      bot_type: props.botType,
+      page: page.value,
+      page_size: PAGE_SIZE,
+    })
     const next = res.data
     // Фоновое обновление применяем только при изменении — без мигания списка.
     if (!silent || changed(contacts.value, next)) contacts.value = next
@@ -146,6 +159,16 @@ watch([query, filter], () => {
 })
 
 watch(page, () => load())
+
+watch(
+  () => props.botType,
+  () => {
+    contacts.value = []
+    if (page.value === 1) load()
+    else page.value = 1
+    if (canManageGlobalBot.value) loadBotEnabled()
+  },
+)
 
 function goTo(p: number) {
   const clamped = Math.min(Math.max(1, p), totalPages.value)
@@ -176,7 +199,7 @@ async function loadBotEnabled(silent = false) {
   if (silent && pending.value) return
   if (!silent) pending.value = true
   try {
-    const { is_enabled } = await getBotEnabled()
+    const { is_enabled } = await getBotEnabled(props.botType)
     on.value = is_enabled
   } catch (e) {
     if (!silent) onError(botErrorMessage(e))
@@ -203,7 +226,7 @@ async function toggle() {
   pending.value = true
   try {
     // Отправляем целевое состояние, а не «переключи», и верим ответу, а не next.
-    const { is_enabled } = await setBotEnabled(next)
+    const { is_enabled } = await setBotEnabled(next, props.botType)
     on.value = is_enabled
   } catch (e) {
     on.value = previous
@@ -239,7 +262,9 @@ onUnmounted(() => {
 
 <template>
   <AdminLayout>
-    <PageBreadcrumb :pageTitle="currentPageTitle" />
+    <slot name="header">
+      <PageBreadcrumb :pageTitle="currentPageTitle" />
+    </slot>
 
     <div class="space-y-6">
       <!-- Пока бот выключен глобально, пер-контактные переключатели ничего не меняют. -->

@@ -170,6 +170,13 @@ const router = createRouter({
         meta: { title: `${sport.label}: ученики` },
       },
       {
+        path: `/${sport.key}/customers`,
+        name: `${sport.name}Customers`,
+        component: () => import('../views/Academy/AcademyCustomersPage.vue'),
+        props: { sport: sport.key },
+        meta: { title: `${sport.label}: клиентская база` },
+      },
+      {
         path: `/${sport.key}/payments`,
         name: `${sport.name}Payments`,
         component: () => import('../views/Academy/AcademyPaymentsPage.vue'),
