@@ -153,7 +153,7 @@ const router = createRouter({
         name: `${sport.name}Groups`,
         component: () => import('../views/Academy/AcademySchedulePage.vue'),
         props: { sport: sport.key },
-        meta: { title: `${sport.label}: расписание` },
+        meta: { title: `${sport.label}: группы и расписание` },
       },
       {
         path: `/${sport.key}/trials`,
@@ -203,7 +203,7 @@ const router = createRouter({
       path: '/lessons',
       name: 'Lessons',
       redirect: () => `/${lastSport()}/groups`,
-      meta: { title: 'Занятия' },
+      meta: { title: 'Группы и расписание' },
     },
     {
       path: '/payments',

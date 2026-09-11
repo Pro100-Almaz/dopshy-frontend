@@ -261,7 +261,7 @@ const menuGroups = computed<MenuGroup[]>(() => {
         { icon: Gauge, name: 'Сводка', path: `/${sport}`, matchSuffix: '' },
         {
           icon: CalendarDays,
-          name: 'Расписание',
+          name: 'Группы и расписание',
           path: `/${sport}/groups`,
           matchSuffix: '/groups',
         },

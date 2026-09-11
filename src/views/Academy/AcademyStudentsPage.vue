@@ -7,15 +7,7 @@
  * переключатель режима, а не один общий список.
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import {
-  GraduationCap,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-  UserPlus,
-  Users,
-  X,
-} from 'lucide-vue-next'
+import { GraduationCap, LoaderCircle, RefreshCw, Search, UserPlus, Users, X } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import { ChevronDownIcon } from '@/icons'
@@ -24,6 +16,7 @@ import ContactActions from '@/components/academy/ContactActions.vue'
 import PersonCell from '@/components/academy/PersonCell.vue'
 import StateBlock from '@/components/academy/StateBlock.vue'
 import StatusPill from '@/components/academy/StatusPill.vue'
+import Modal from '@/components/ui/Modal.vue'
 import {
   buttonDanger,
   buttonGhost,
@@ -38,8 +31,11 @@ import {
 } from '@/components/academy/ui'
 import { useBotHandoff } from '@/composables/useBotHandoff'
 import {
+  assignStudentToGroup,
+  listGroups,
   listStudents,
   setStudentSubscribed,
+  type AcademyGroup,
   type AcademyStudent,
   type SportKey,
 } from '@/services/academy'
@@ -59,12 +55,18 @@ const {
 } = useBotHandoff()
 
 const students = ref<AcademyStudent[]>([])
+const rawGroups = ref<AcademyGroup[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const actionError = ref('')
 const savingIds = ref<PendingMap<string>>({})
 /** Подтверждение снятия абонемента прямо в строке — вместо модалки. */
 const confirmingId = ref('')
+const assigningStudent = ref<AcademyStudent | null>(null)
+const assigningGroupId = ref('')
+const groupQuery = ref('')
+const groupAssigning = ref(false)
+const groupAssignError = ref('')
 
 const subscribedMode = computed(() => filters.mode === 'subscribed')
 
@@ -72,7 +74,12 @@ async function load() {
   loading.value = true
   confirmingId.value = ''
   try {
-    students.value = await listStudents(props.sport, subscribedMode.value)
+    const [nextStudents, nextGroups] = await Promise.all([
+      listStudents(props.sport, subscribedMode.value),
+      listGroups(props.sport),
+    ])
+    students.value = nextStudents
+    rawGroups.value = nextGroups
     loadError.value = ''
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Не удалось загрузить учеников'
@@ -96,6 +103,24 @@ const groupOptions = computed(() => {
     if (name) names.add(name)
   }
   return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'))
+})
+
+const assignmentGroups = computed(() => {
+  const byKey = new Map<string, { id: string; name: string; active: boolean | null }>()
+  for (const group of rawGroups.value) {
+    const id = String(group.group_id ?? group.id)
+    if (!byKey.has(id)) {
+      byKey.set(id, {
+        id,
+        name: group.group_name || 'Без названия',
+        active: group.is_active ?? null,
+      })
+    }
+  }
+  const query = groupQuery.value.trim().toLowerCase()
+  return Array.from(byKey.values())
+    .filter((group) => !query || group.name.toLowerCase().includes(query))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 })
 
 const filtered = computed(() => {
@@ -148,6 +173,11 @@ function setSaving(student: AcademyStudent, value: boolean) {
   savingIds.value = setPending(savingIds.value, student.id, value)
 }
 
+function resetFilters() {
+  filters.query = ''
+  filters.groupId = 'all'
+}
+
 /** Смена статуса убирает ученика из текущего режима — режимы взаимоисключающие. */
 async function setSubscribed(student: AcademyStudent, subscribed: boolean) {
   setSaving(student, true)
@@ -165,6 +195,49 @@ async function setSubscribed(student: AcademyStudent, subscribed: boolean) {
           : 'Не удалось снять абонемент'
   } finally {
     setSaving(student, false)
+  }
+}
+
+function openGroupAssign(student: AcademyStudent) {
+  assigningStudent.value = student
+  assigningGroupId.value = String(student.assigned_group_id ?? '')
+  groupQuery.value = ''
+  groupAssignError.value = ''
+}
+
+function closeGroupAssign() {
+  if (groupAssigning.value) return
+  assigningStudent.value = null
+}
+
+async function assignToGroup() {
+  const student = assigningStudent.value
+  if (!student || !assigningGroupId.value) {
+    groupAssignError.value = 'Выберите группу.'
+    return
+  }
+
+  groupAssigning.value = true
+  groupAssignError.value = ''
+  try {
+    await assignStudentToGroup(assigningGroupId.value, { student_id: student.id })
+    const group = assignmentGroups.value.find((item) => item.id === assigningGroupId.value)
+    students.value = students.value.map((item) =>
+      item.id === student.id
+        ? {
+            ...item,
+            assigned_group_id: assigningGroupId.value,
+            assigned_group_name: group?.name ?? item.assigned_group_name,
+            assigned_group: group?.name ?? item.assigned_group,
+          }
+        : item,
+    )
+    assigningStudent.value = null
+  } catch (e) {
+    groupAssignError.value =
+      e instanceof Error ? e.message : 'Не удалось назначить группу. Проверьте API.'
+  } finally {
+    groupAssigning.value = false
   }
 }
 
@@ -261,10 +334,7 @@ const tabClass = (active: boolean) =>
           v-if="filtersActive"
           type="button"
           :class="[buttonGhost, buttonSize.sm, 'mt-3']"
-          @click="
-            filters.query = '';
-            filters.groupId = 'all'
-          "
+          @click="resetFilters"
         >
           <X class="h-3.5 w-3.5" aria-hidden="true" />
           Сбросить фильтры
@@ -335,11 +405,16 @@ const tabClass = (active: boolean) =>
                   Группа не назначена
                 </span>
               </td>
-              <td :class="[td, 'w-[10%] text-right tabular-nums text-theme-sm text-gray-800 dark:text-gray-200']">
+              <td
+                :class="[
+                  td,
+                  'w-[10%] text-right tabular-nums text-theme-sm text-gray-800 dark:text-gray-200',
+                ]"
+              >
                 {{ student.total_trials }}
               </td>
               <td :class="[td, 'w-[18%]']">
-                <div class="flex justify-end">
+                <div class="flex flex-wrap justify-end gap-2">
                   <button
                     v-if="!subscribedMode"
                     type="button"
@@ -383,6 +458,14 @@ const tabClass = (active: boolean) =>
                   >
                     Снять абонемент
                   </button>
+
+                  <button
+                    type="button"
+                    :class="[buttonSecondary, buttonSize.sm]"
+                    @click="openGroupAssign(student)"
+                  >
+                    Назначить группу
+                  </button>
                 </div>
               </td>
             </tr>
@@ -392,11 +475,7 @@ const tabClass = (active: boolean) =>
         <ul class="divide-y divide-gray-100 dark:divide-gray-800/70 lg:hidden">
           <li v-for="student in filtered" :key="student.id" class="px-5 py-4 sm:px-6">
             <div class="flex items-start justify-between gap-3">
-              <PersonCell
-                :name="student.name"
-                :age="student.age"
-                :birthdate="student.birthdate"
-              />
+              <PersonCell :name="student.name" :age="student.age" :birthdate="student.birthdate" />
               <StatusPill v-if="groupNameOf(student)" tone="neutral">
                 {{ groupNameOf(student) }}
               </StatusPill>
@@ -415,43 +494,52 @@ const tabClass = (active: boolean) =>
               <span class="text-theme-xs text-gray-600 dark:text-gray-400">
                 Пробных: {{ student.total_trials }}
               </span>
-              <button
-                v-if="!subscribedMode"
-                type="button"
-                :class="[buttonPrimary, buttonSize.sm]"
-                :disabled="isSaving(student)"
-                @click="setSubscribed(student, true)"
-              >
-                <UserPlus class="h-3.5 w-3.5" aria-hidden="true" />
-                Оформить абонемент
-              </button>
-              <template v-else>
-                <div v-if="confirmingId === student.id" class="flex items-center gap-2">
+              <div class="flex flex-wrap justify-end gap-2">
+                <button
+                  v-if="!subscribedMode"
+                  type="button"
+                  :class="[buttonPrimary, buttonSize.sm]"
+                  :disabled="isSaving(student)"
+                  @click="setSubscribed(student, true)"
+                >
+                  <UserPlus class="h-3.5 w-3.5" aria-hidden="true" />
+                  Оформить абонемент
+                </button>
+                <template v-else>
+                  <div v-if="confirmingId === student.id" class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      :class="[buttonDanger, buttonSize.sm]"
+                      :disabled="isSaving(student)"
+                      @click="setSubscribed(student, false)"
+                    >
+                      Да, снять
+                    </button>
+                    <button
+                      type="button"
+                      :class="[buttonGhost, buttonSize.sm]"
+                      @click="confirmingId = ''"
+                    >
+                      Отмена
+                    </button>
+                  </div>
                   <button
-                    type="button"
-                    :class="[buttonDanger, buttonSize.sm]"
-                    :disabled="isSaving(student)"
-                    @click="setSubscribed(student, false)"
-                  >
-                    Да, снять
-                  </button>
-                  <button
+                    v-else
                     type="button"
                     :class="[buttonGhost, buttonSize.sm]"
-                    @click="confirmingId = ''"
+                    @click="confirmingId = student.id"
                   >
-                    Отмена
+                    Снять абонемент
                   </button>
-                </div>
+                </template>
                 <button
-                  v-else
                   type="button"
-                  :class="[buttonGhost, buttonSize.sm]"
-                  @click="confirmingId = student.id"
+                  :class="[buttonSecondary, buttonSize.sm]"
+                  @click="openGroupAssign(student)"
                 >
-                  Снять абонемент
+                  Назначить группу
                 </button>
-              </template>
+              </div>
             </div>
           </li>
         </ul>
@@ -462,5 +550,111 @@ const tabClass = (active: boolean) =>
       <Users class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       Список формируется из пробных заявок бота: ребёнок попадает сюда после первого занятия.
     </p>
+
+    <Modal v-if="assigningStudent" :fullScreenBackdrop="true" @close="closeGroupAssign">
+      <template #body>
+        <form
+          class="relative z-10 mx-4 my-8 w-full max-w-xl rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
+          @submit.prevent="assignToGroup"
+        >
+          <div class="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Назначить группу</h2>
+              <p class="mt-1 text-theme-sm text-gray-600 dark:text-gray-400">
+                {{ assigningStudent.name }}
+              </p>
+            </div>
+            <button type="button" :class="[buttonGhost, buttonSize.sm]" @click="closeGroupAssign">
+              <X class="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div class="relative mb-4">
+            <Search
+              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
+              aria-hidden="true"
+            />
+            <input
+              v-model="groupQuery"
+              type="search"
+              placeholder="Поиск группы"
+              :class="[inputSm, 'pl-9']"
+            />
+          </div>
+
+          <div
+            class="max-h-72 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800"
+          >
+            <label
+              v-for="group in assignmentGroups"
+              :key="group.id"
+              class="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-0 dark:border-gray-800"
+            >
+              <span class="min-w-0">
+                <span
+                  class="block truncate text-theme-sm font-medium text-gray-900 dark:text-white"
+                >
+                  {{ group.name }}
+                </span>
+                <span
+                  class="mt-1 block text-theme-xs"
+                  :class="
+                    group.active === false
+                      ? 'text-warning-700 dark:text-warning-300'
+                      : 'text-gray-600 dark:text-gray-400'
+                  "
+                >
+                  {{ group.active === false ? 'Отключена' : 'Активна' }}
+                </span>
+              </span>
+              <input
+                v-model="assigningGroupId"
+                type="radio"
+                name="student-group-assignment"
+                :value="group.id"
+                class="h-4 w-4 border-gray-300 text-pitch-600 focus:ring-pitch-500"
+              />
+            </label>
+            <p
+              v-if="!assignmentGroups.length"
+              class="px-4 py-8 text-center text-theme-sm text-gray-600 dark:text-gray-400"
+            >
+              Группы не найдены.
+            </p>
+          </div>
+
+          <p
+            v-if="groupAssignError"
+            class="mt-4 text-theme-sm text-error-700 dark:text-error-400"
+            role="alert"
+          >
+            {{ groupAssignError }}
+          </p>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              :class="[buttonSecondary, buttonSize.sm]"
+              :disabled="groupAssigning"
+              @click="closeGroupAssign"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              :class="[buttonPrimary, buttonSize.sm]"
+              :disabled="groupAssigning"
+            >
+              <LoaderCircle
+                v-if="groupAssigning"
+                class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Сохранить
+            </button>
+          </div>
+        </form>
+      </template>
+    </Modal>
   </AdminLayout>
 </template>
