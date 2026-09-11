@@ -43,11 +43,11 @@ import {
   th,
 } from '@/components/academy/ui'
 import {
-  assignStudentToGroup,
+  assignAcademyUser,
   createGroup,
   deleteGroup,
+  listAcademyUsers,
   listGroups,
-  listStudents,
   shiftLabel,
   SPORTS,
   updateGroup,
@@ -139,6 +139,10 @@ function groupNameOf(student: AcademyStudent): string {
   return student.assigned_group_name || student.assigned_group || ''
 }
 
+function phoneOf(student: AcademyStudent): string {
+  return student.parent_phone || ''
+}
+
 const groups = computed<GroupView[]>(() => {
   const byKey = new Map<string, GroupView>()
 
@@ -163,7 +167,6 @@ const groups = computed<GroupView[]>(() => {
     const existing = byKey.get(key)
     if (existing) {
       existing.lessons.push(lesson)
-      existing.currentCap = Math.max(existing.currentCap ?? 0, row.curr_cap ?? 0)
       existing.maxCap = row.max_cap ?? existing.maxCap
       existing.active = row.is_active ?? existing.active
       continue
@@ -174,7 +177,7 @@ const groups = computed<GroupView[]>(() => {
       groupId: key,
       name: row.group_name || 'Без названия',
       type: row.group_type || '',
-      currentCap: row.curr_cap,
+      currentCap: null,
       maxCap: row.max_cap,
       lessons: [lesson],
       ageRange: ageRangeOf(row),
@@ -195,6 +198,16 @@ const groups = computed<GroupView[]>(() => {
     group.mixedTimes = group.lessons.some(
       (lesson) => lesson.start !== first.start || lesson.end !== first.end,
     )
+    // curr_cap с бэкенда не пересчитывается при назначении/снятии ученика
+    // (проверено: остаётся 0 после подтверждённого назначения), поэтому
+    // считаем состав по тем же полям, что и ростер группы (rosterFor) —
+    // тогда счётчик обновляется сразу после assignStudent/deassign.
+    group.currentCap = students.value.filter(
+      (student) =>
+        String(student.assigned_group_id ?? '') === group.key ||
+        student.assigned_group_name === group.name ||
+        student.assigned_group === group.name,
+    ).length
   }
 
   return list.sort((a, b) => a.name.localeCompare(b.name, 'ru'))
@@ -303,7 +316,7 @@ const availableStudents = computed(() => {
     return (
       student.name.toLowerCase().includes(query) ||
       groupNameOf(student).toLowerCase().includes(query) ||
-      student.parent_phone.replace(/\D/g, '').includes(digits)
+      phoneOf(student).replace(/\D/g, '').includes(digits)
     )
   })
 })
@@ -335,10 +348,11 @@ async function load() {
   try {
     now.value = new Date()
     activeDay.value = (now.value.getDay() + 6) % 7
-    const [nextGroups, nextStudents] = await Promise.all([
-      listGroups(props.sport),
-      listStudents(props.sport),
-    ])
+    // Ростер и кандидаты на назначение берём из полного списка academy_users
+    // (без group_type): сузив по спорту, бэкенд отдаёт только тех, кто уже
+    // назначен в этом виде спорта — непроверенные и кросс-спортивные дети
+    // исчезают из списка, и назначать в группу становится некого (см. #8).
+    const [nextGroups, nextStudents] = await Promise.all([listGroups(props.sport), listAcademyUsers()])
     rawGroups.value = nextGroups
     students.value = nextStudents
     if (!nextGroups.some((group) => groupKeyOf(group) === selectedKey.value)) {
@@ -388,7 +402,7 @@ const groupForm = reactive({
 
 const assignModal = reactive({
   open: false,
-  savingId: '',
+  savingId: null as number | null,
   error: '',
 })
 
@@ -656,14 +670,16 @@ async function assignStudent(student: AcademyStudent) {
   assignModal.savingId = student.id
   assignModal.error = ''
   try {
-    await assignStudentToGroup(group.groupId, { student_id: student.id })
+    // Менеджерская ручка, а не sport-scoped: кандидаты приходят из общего
+    // списка academy_users и могут ещё не иметь записи в этом виде спорта.
+    await assignAcademyUser(student.id, { group_id: Number(group.groupId) })
     await load()
     assignModal.open = false
   } catch (e) {
     assignModal.error =
       e instanceof Error ? e.message : 'Не удалось назначить ученика. Проверьте API.'
   } finally {
-    assignModal.savingId = ''
+    assignModal.savingId = null
   }
 }
 
@@ -679,8 +695,11 @@ const tabClass = (active: boolean) =>
       : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200',
   ].join(' ')
 
+// `<button>` по умолчанию shrink-to-fit: без w-full/min-w-0 внутренний
+// truncate-span с длинным названием группы растягивает саму кнопку шире
+// колонки, и она визуально наезжает на соседний день в grid-cols-7 (#7).
 const scheduleCardClass =
-  'focus-ring rounded-lg border px-2.5 py-2 text-left transition-colors duration-150'
+  'focus-ring block w-full min-w-0 rounded-lg border px-2.5 py-2 text-left transition-colors duration-150'
 </script>
 
 <template>
@@ -1197,14 +1216,14 @@ const scheduleCardClass =
                       :birthdate="student.birthdate"
                     />
                   </td>
-                  <td :class="td"><ContactActions :phone="student.parent_phone" /></td>
+                  <td :class="td"><ContactActions :phone="phoneOf(student)" /></td>
                   <td
                     :class="[
                       td,
                       'text-right tabular-nums text-theme-sm text-gray-800 dark:text-gray-200',
                     ]"
                   >
-                    {{ student.total_trials }}
+                    {{ student.total_trials ?? 0 }}
                   </td>
                 </tr>
               </tbody>
@@ -1220,7 +1239,7 @@ const scheduleCardClass =
                   :age="student.age"
                   :birthdate="student.birthdate"
                 />
-                <ContactActions :phone="student.parent_phone" />
+                <ContactActions :phone="phoneOf(student)" />
               </li>
             </ul>
           </StateBlock>
