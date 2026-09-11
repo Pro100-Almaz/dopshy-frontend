@@ -7,9 +7,10 @@
  * идентичными страницами; любая правка в одном виде спорта не доезжала до
  * второго. Здесь один сервис и один набор страниц на оба направления.
  *
- * Мутации намеренно идут на общий `/manager/academy_*`, а чтение — на
- * `/{sport}/*`: только там бэкенд фильтрует группы по `group_type` и собирает
- * учеников из пробных.
+ * Treat student and academy_user as the same domain entity. student is only the
+ * sport-scoped API name. Do not create separate models or frontend stores for
+ * them. Use one shared AcademyUser type and apply sport filtering/validation at
+ * the API boundary.
  */
 import { apiFetch } from './api'
 
@@ -85,17 +86,58 @@ export interface AcademyGroup {
   is_active?: boolean | null
 }
 
-export interface AcademyStudent {
-  id: string
+export type AcademyUserExperience = 'Beginner' | 'Intermediate' | 'Advanced'
+export type AcademyUserSchoolShift = 'morning' | 'afternoon'
+
+export interface AcademyUser {
+  id: number
+  student_id?: number
+
   name: string
-  age: number | null
-  birthdate: string
-  parent_phone: string
-  total_trials: number
-  assigned_group: string
-  assigned_group_id: string | number | null
-  assigned_group_name: string | null
-  subscribed: boolean
+  child_name?: string
+
+  birth_year?: number | null
+  child_birth_year?: number | null
+
+  parent_phone?: string | null
+  total_trials?: number
+  subscribed?: boolean
+  experience?: AcademyUserExperience | null
+  school_shift?: AcademyUserSchoolShift | null
+
+  assigned_group_id?: number | null
+
+  // Display-only compatibility fields. The backend may include these in list
+  // responses; forms still edit only the canonical AcademyUserFormValues fields.
+  age?: number | null
+  birthdate?: string
+  assigned_group?: string
+  assigned_group_name?: string | null
+}
+
+export type Student = AcademyUser
+export type FootballStudent = AcademyUser
+export type BoxingStudent = AcademyUser
+export type AcademyStudent = AcademyUser
+
+export type AcademyUserFormValues = {
+  name: string
+  birth_year?: number | null
+  parent_phone?: string | null
+  total_trials?: number
+  subscribed?: boolean
+  experience?: AcademyUserExperience | null
+  school_shift?: AcademyUserSchoolShift | null
+}
+
+export type AcademyUserProfilePatch = Partial<AcademyUserFormValues>
+
+export type CreateSportAcademyUserPayload = AcademyUserFormValues & {
+  assigned_group_id: number
+}
+
+export type AssignAcademyUserPayload = {
+  group_id: number
 }
 
 export interface AcademyTrial {
@@ -229,6 +271,73 @@ function entityFrom<T>(data: unknown, keys: string[]): T {
   return payload as T
 }
 
+function academyUserId(record: Record<string, unknown>): number {
+  const raw = record.id ?? record.student_id
+  const id = typeof raw === 'number' ? raw : Number(raw)
+  return Number.isFinite(id) ? id : 0
+}
+
+function nullableNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function nullableString(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return String(value)
+}
+
+function normalizeAcademyUser(value: AcademyUser): AcademyUser
+function normalizeAcademyUser(value: unknown): AcademyUser
+function normalizeAcademyUser(value: unknown): AcademyUser {
+  if (!value || typeof value !== 'object') return value as AcademyUser
+
+  const record = value as Record<string, unknown>
+  const name = String(record.name ?? record.child_name ?? '')
+  const birthYear = nullableNumber(record.birth_year ?? record.child_birth_year)
+  const assignedGroupId = nullableNumber(record.assigned_group_id)
+
+  return {
+    ...(record as unknown as AcademyUser),
+    id: academyUserId(record),
+    student_id: nullableNumber(record.student_id) ?? undefined,
+    name,
+    child_name: optionalString(record.child_name),
+    birth_year: birthYear,
+    child_birth_year: nullableNumber(record.child_birth_year),
+    parent_phone: nullableString(record.parent_phone) ?? null,
+    total_trials: nullableNumber(record.total_trials) ?? 0,
+    subscribed: typeof record.subscribed === 'boolean' ? record.subscribed : undefined,
+    assigned_group_id: assignedGroupId ?? null,
+    birthdate: optionalString(record.birthdate) ?? '',
+    assigned_group: optionalString(record.assigned_group) ?? '',
+    assigned_group_name: nullableString(record.assigned_group_name) ?? null,
+  }
+}
+
+function profilePayload(values: AcademyUserProfilePatch): AcademyUserProfilePatch {
+  return {
+    ...(values.name !== undefined ? { name: values.name } : {}),
+    ...(values.birth_year !== undefined ? { birth_year: values.birth_year } : {}),
+    ...(values.parent_phone !== undefined ? { parent_phone: values.parent_phone } : {}),
+    ...(values.total_trials !== undefined ? { total_trials: values.total_trials } : {}),
+    ...(values.subscribed !== undefined ? { subscribed: values.subscribed } : {}),
+    ...(values.experience !== undefined ? { experience: values.experience } : {}),
+    ...(values.school_shift !== undefined ? { school_shift: values.school_shift } : {}),
+  }
+}
+
+function managerAcademyUsersPath(groupType?: SportKey): string {
+  return `/manager/academy_users${groupType ? `?group_type=${groupType}` : ''}`
+}
+
 // ── Чтение ──────────────────────────────────────────────────────────
 
 export async function listGroups(sport: SportKey): Promise<AcademyGroup[]> {
@@ -252,7 +361,16 @@ export async function listStudents(
     `/${sport}/students${subscribedQuery(subscribed)}`,
     academyRequest,
   )
-  return listFrom<AcademyStudent>(data, ['students', 'results', 'items'])
+  return listFrom<unknown>(data, ['students', 'academy_users', 'results', 'items']).map(
+    normalizeAcademyUser,
+  )
+}
+
+export async function listAcademyUsers(groupType?: SportKey): Promise<AcademyUser[]> {
+  const data = await apiFetch<unknown>(managerAcademyUsersPath(groupType), academyRequest)
+  return listFrom<unknown>(data, ['users', 'academy_users', 'students', 'results', 'items']).map(
+    normalizeAcademyUser,
+  )
 }
 
 // ── Мутации ─────────────────────────────────────────────────────────
@@ -290,18 +408,108 @@ export async function setTrialSubscribed(
 
 export async function setStudentSubscribed(
   sport: SportKey,
-  studentId: string,
+  studentId: number,
   subscribed: boolean,
 ): Promise<AcademyStudent> {
+  return updateStudent(sport, studentId, { subscribed })
+}
+
+export async function createAcademyUser(values: AcademyUserFormValues): Promise<AcademyUser> {
+  const data = await apiFetch<unknown>('/manager/academy_users', {
+    ...academyRequest,
+    method: 'POST',
+    body: JSON.stringify(profilePayload(values)),
+  })
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['academy_user', 'student', 'user']))
+}
+
+export async function updateAcademyUser(
+  userId: number,
+  values: AcademyUserProfilePatch,
+): Promise<AcademyUser> {
+  const data = await apiFetch<unknown>(`/manager/academy_users/${encodeURIComponent(userId)}`, {
+    ...academyRequest,
+    method: 'PATCH',
+    body: JSON.stringify(profilePayload(values)),
+  })
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['academy_user', 'student', 'user']))
+}
+
+export async function assignAcademyUser(
+  userId: number,
+  payload: AssignAcademyUserPayload,
+): Promise<AcademyUser> {
   const data = await apiFetch<unknown>(
-    `/${sport}/students/${encodeURIComponent(studentId)}/subscribed`,
+    `/manager/academy_users/${encodeURIComponent(userId)}/assignment`,
     {
       ...academyRequest,
       method: 'PATCH',
-      body: JSON.stringify({ subscribed }),
+      body: JSON.stringify(payload),
     },
   )
-  return entityFrom<AcademyStudent>(data, ['student'])
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['academy_user', 'student', 'user']))
+}
+
+export async function deassignAcademyUser(userId: number, groupType?: SportKey): Promise<void> {
+  const suffix = groupType ? `?group_type=${groupType}` : ''
+  await apiFetch<unknown>(
+    `/manager/academy_users/${encodeURIComponent(userId)}/assignment${suffix}`,
+    {
+      ...academyRequest,
+      method: 'DELETE',
+    },
+  )
+}
+
+export async function createStudent(
+  sport: SportKey,
+  values: CreateSportAcademyUserPayload,
+): Promise<AcademyStudent> {
+  const data = await apiFetch<unknown>(`/${sport}/students`, {
+    ...academyRequest,
+    method: 'POST',
+    body: JSON.stringify({
+      ...profilePayload(values),
+      assigned_group_id: values.assigned_group_id,
+    }),
+  })
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['student', 'academy_user', 'user']))
+}
+
+export async function updateStudent(
+  sport: SportKey,
+  studentId: number,
+  values: AcademyUserProfilePatch,
+): Promise<AcademyStudent> {
+  const data = await apiFetch<unknown>(`/${sport}/students/${encodeURIComponent(studentId)}`, {
+    ...academyRequest,
+    method: 'PATCH',
+    body: JSON.stringify(profilePayload(values)),
+  })
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['student', 'academy_user', 'user']))
+}
+
+export async function assignStudent(
+  sport: SportKey,
+  studentId: number,
+  payload: AssignAcademyUserPayload,
+): Promise<AcademyStudent> {
+  const data = await apiFetch<unknown>(
+    `/${sport}/students/${encodeURIComponent(studentId)}/assignment`,
+    {
+      ...academyRequest,
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+  )
+  return normalizeAcademyUser(entityFrom<unknown>(data, ['student', 'academy_user', 'user']))
+}
+
+export async function deassignStudent(sport: SportKey, studentId: number): Promise<void> {
+  await apiFetch<unknown>(`/${sport}/students/${encodeURIComponent(studentId)}/assignment`, {
+    ...academyRequest,
+    method: 'DELETE',
+  })
 }
 
 /** Правка группы — общая менеджерская ручка, вид спорта не важен. */
