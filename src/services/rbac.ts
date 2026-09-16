@@ -6,6 +6,7 @@ export type AppPermission =
   | 'academy'
   | 'academyPayments'
   | 'botContent'
+  | 'agentTest'
   | 'history'
   | 'workers'
   | 'reports'
@@ -48,6 +49,9 @@ export function hasPermission(
       return ACADEMY_ROLES.has(role)
     case 'academyPayments':
       return role === 'admin' || role === 'manager'
+    case 'agentTest':
+      // Тестовая консоль агентов — админы и менеджеры.
+      return ADMIN_ROLES.has(role)
     case 'botContent':
       return false
     case 'history':
