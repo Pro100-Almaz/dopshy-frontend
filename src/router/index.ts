@@ -131,6 +131,12 @@ const router = createRouter({
       meta: { title: 'История действий' },
     },
     {
+      path: '/agent-test',
+      name: 'AgentTest',
+      component: () => import('../views/Pages/AgentTestPage.vue'),
+      meta: { title: 'Тест агента' },
+    },
+    {
       path: '/customers',
       name: 'Customers',
       component: () => import('../views/Pages/CustomersPage.vue'),
