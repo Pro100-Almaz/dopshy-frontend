@@ -79,9 +79,9 @@ const loading = ref(true)
 const loadError = ref('')
 const actionError = ref('')
 const selectedKey = ref('')
+const isDetailOpen = ref(false)
 const scheduleSelectedKey = ref('')
 const now = ref(new Date())
-const activeDay = ref(0)
 const activeView = ref<'schedule' | 'groups'>('schedule')
 const groupFilter = ref('all')
 const activeFilter = ref<'all' | 'active' | 'disabled'>('all')
@@ -222,8 +222,8 @@ const visibleGroups = computed(() =>
   }),
 )
 
-const selectedGroup = computed<GroupView | undefined>(
-  () => groups.value.find((group) => group.key === selectedKey.value) ?? groups.value[0],
+const selectedGroup = computed<GroupView | undefined>(() =>
+  groups.value.find((group) => group.key === selectedKey.value),
 )
 
 const totalGroupPages = computed(() => Math.max(1, Math.ceil(groups.value.length / groupsPerPage)))
@@ -252,20 +252,6 @@ function entriesForDay(weekday: number): ScheduleEntry[] {
     )
 }
 
-function bucketEntries(entries: ScheduleEntry[]) {
-  const buckets = new Map<string, ScheduleEntry[]>()
-  for (const entry of entries) {
-    const key = `${entry.lesson.start}-${entry.lesson.end}`
-    buckets.set(key, [...(buckets.get(key) ?? []), entry])
-  }
-  return Array.from(buckets.entries()).map(([key, bucket]) => ({
-    key,
-    start: bucket[0].lesson.start,
-    end: bucket[0].lesson.end,
-    entries: bucket,
-  }))
-}
-
 const week = computed(() => {
   const monday = startOfWeek(now.value)
   return WEEKDAYS.map((day) => {
@@ -277,7 +263,6 @@ const week = computed(() => {
       dateLabel: formatDayMonth(date),
       today: isSameDay(date, now.value),
       entries,
-      buckets: bucketEntries(entries),
     }
   })
 })
@@ -347,7 +332,6 @@ async function load() {
   deleteTarget.value = null
   try {
     now.value = new Date()
-    activeDay.value = (now.value.getDay() + 6) % 7
     // Ростер и кандидаты на назначение берём из полного списка academy_users
     // (без group_type): сузив по спорту, бэкенд отдаёт только тех, кто уже
     // назначен в этом виде спорта — непроверенные и кросс-спортивные дети
@@ -525,26 +509,8 @@ function buildTrainingDays() {
   })
 }
 
-function applyGeneralTime() {
-  if (!validateTimePair(groupForm.generalStart, groupForm.generalEnd, 'Общее время')) return
-  for (const weekday of groupForm.selectedDays) {
-    groupForm.dayTimes[weekday] = {
-      start: groupForm.generalStart,
-      end: groupForm.generalEnd,
-    }
-  }
-  groupForm.error = ''
-}
-
 function setTimeMode(mode: 'general' | 'custom') {
   groupForm.timeMode = mode
-  if (mode === 'custom' && groupForm.generalStart && groupForm.generalEnd) {
-    for (const weekday of groupForm.selectedDays) {
-      const time = timeForDay(weekday)
-      if (!time.start) time.start = groupForm.generalStart
-      if (!time.end) time.end = groupForm.generalEnd
-    }
-  }
 }
 
 async function saveGroup() {
@@ -644,11 +610,17 @@ function viewScheduleDetails() {
   if (!group) return
   selectedKey.value = group.key
   activeView.value = 'groups'
+  isDetailOpen.value = true
 }
 
 function selectGroup(group: GroupView) {
   selectedKey.value = group.key
   deleteTarget.value = null
+  isDetailOpen.value = true
+}
+
+function closeGroupDetail() {
+  isDetailOpen.value = false
 }
 
 function openAssign(group: GroupView = selectedGroup.value as GroupView) {
@@ -695,11 +667,39 @@ const tabClass = (active: boolean) =>
       : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200',
   ].join(' ')
 
-// `<button>` по умолчанию shrink-to-fit: без w-full/min-w-0 внутренний
-// truncate-span с длинным названием группы растягивает саму кнопку шире
-// колонки, и она визуально наезжает на соседний день в grid-cols-7 (#7).
-const scheduleCardClass =
-  'focus-ring block w-full min-w-0 rounded-lg border px-2.5 py-2 text-left transition-colors duration-150'
+// Каждой группе — свой стабильный цвет плашки в расписании (по ключу
+// группы, не по спорту: страница уже отфильтрована по одному виду спорта,
+// так что цвет по спорту был бы одинаковым для всех карточек).
+const GROUP_COLOR_CLASSES = [
+  'bg-pitch-50 text-pitch-700 dark:bg-pitch-500/15 dark:text-pitch-300',
+  'bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-300',
+  'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300',
+  'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-300',
+  'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
+  'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
+  'bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
+  'bg-pink-50 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300',
+  'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
+  'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
+  'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+]
+
+function hashString(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function groupColorClass(group: GroupView): string {
+  if (group.active === false) {
+    return 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-400'
+  }
+  return GROUP_COLOR_CLASSES[hashString(group.key) % GROUP_COLOR_CLASSES.length]
+}
 </script>
 
 <template>
@@ -820,8 +820,8 @@ const scheduleCardClass =
         <div>
           <h2 :class="panelTitle">Неделя</h2>
           <p :class="panelHint">
-            {{ formatDayMonth(week[0].date) }} - {{ formatDayMonth(week[6].date) }}. Группы с
-            одинаковым временем показаны в одном временном блоке.
+            {{ formatDayMonth(week[0].date) }} - {{ formatDayMonth(week[6].date) }}. Нажмите на
+            занятие, чтобы открыть карточку группы.
           </p>
         </div>
       </div>
@@ -836,148 +836,54 @@ const scheduleCardClass =
       >
         <template #icon><CalendarDays class="h-5 w-5" aria-hidden="true" /></template>
 
-        <div class="hidden grid-cols-7 divide-x divide-gray-200 dark:divide-gray-800 lg:grid">
-          <div v-for="day in week" :key="day.index" class="min-w-0 px-3 py-4">
-            <div class="mb-3 flex items-baseline justify-between gap-1">
-              <span
-                class="text-theme-xs font-bold uppercase"
-                :class="
-                  day.today
-                    ? 'text-pitch-700 dark:text-pitch-400'
-                    : 'text-gray-700 dark:text-gray-300'
-                "
-              >
-                {{ day.short }}
-              </span>
-              <span
-                class="text-theme-xs tabular-nums"
-                :class="
-                  day.today
-                    ? 'font-semibold text-pitch-700 dark:text-pitch-400'
-                    : 'text-gray-500 dark:text-gray-400'
-                "
-              >
-                {{ day.dateLabel }}
-              </span>
+        <div class="overflow-x-auto">
+          <div class="grid min-w-[72rem] grid-cols-7">
+            <div
+              v-for="day in week"
+              :key="`head-${day.index}`"
+              class="border-b border-r border-gray-200 bg-white py-3.5 text-center text-theme-sm font-medium uppercase text-gray-500 last:border-r-0 dark:border-gray-800 dark:bg-gray-900"
+            >
+              {{ day.short }}
             </div>
 
-            <div v-if="day.buckets.length" class="space-y-3">
-              <div v-for="bucket in day.buckets" :key="bucket.key">
-                <div
-                  class="mb-1.5 flex items-center gap-1.5 text-theme-xs font-bold tabular-nums text-gray-900 dark:text-white"
-                >
-                  <Clock3 class="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-                  {{ formatTimeRange(bucket.start, bucket.end) }}
-                </div>
-                <div class="space-y-2">
-                  <button
-                    v-for="entry in bucket.entries"
-                    :key="`${entry.group.key}-${entry.lesson.dayLabel}-${entry.lesson.start}`"
-                    type="button"
-                    :aria-pressed="entry.group.key === scheduleSelectedGroup?.key"
-                    :class="[
-                      scheduleCardClass,
-                      entry.group.key === scheduleSelectedGroup?.key
-                        ? 'border-pitch-500 bg-pitch-50 dark:border-pitch-500 dark:bg-pitch-500/15'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:hover:bg-white/[0.04]',
-                      entry.group.active === false ? 'opacity-60' : '',
-                    ]"
-                    @click="selectScheduleGroup(entry.group)"
-                  >
-                    <span
-                      class="block truncate text-theme-xs font-semibold text-gray-900 dark:text-white"
-                    >
-                      {{ entry.group.name }}
-                    </span>
-                    <span class="mt-1 block">
-                      <OccupancyMeter
-                        :current="entry.group.currentCap"
-                        :max="entry.group.maxCap"
-                        :caption="false"
-                        size="sm"
-                      />
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <p v-else class="text-theme-xs text-gray-500 dark:text-gray-500">Нет занятий</p>
-          </div>
-        </div>
-
-        <div class="lg:hidden">
-          <div
-            role="tablist"
-            aria-label="День недели"
-            class="flex gap-1 overflow-x-auto border-b border-gray-200 px-5 py-3 no-scrollbar dark:border-gray-800 sm:px-6"
-          >
-            <button
+            <div
               v-for="day in week"
               :key="day.index"
-              type="button"
-              role="tab"
-              :aria-selected="activeDay === day.index"
-              class="focus-ring flex min-w-[3.25rem] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors duration-150"
-              :class="
-                activeDay === day.index
-                  ? 'bg-pitch-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.06]'
-              "
-              @click="activeDay = day.index"
+              class="min-h-[24rem] border-r border-b border-gray-100 p-4 align-top last:border-r-0 dark:border-gray-800/70"
+              :class="day.today ? 'bg-pitch-50/60 dark:bg-pitch-500/10' : ''"
             >
-              <span class="text-theme-xs font-bold">{{ day.short }}</span>
-              <span class="text-[10px] tabular-nums opacity-80">{{
-                day.entries.length || '-'
-              }}</span>
-            </button>
-          </div>
+              <div class="mb-3.5 flex justify-end">
+                <span
+                  class="grid h-10 w-10 place-items-center rounded-full font-semibold"
+                  :class="
+                    day.today ? 'bg-pitch-600 text-white' : 'text-gray-700 dark:text-gray-300'
+                  "
+                >
+                  {{ day.date.getDate() }}
+                </span>
+              </div>
 
-          <div class="divide-y divide-gray-100 dark:divide-gray-800/70">
-            <div
-              v-for="bucket in week[activeDay].buckets"
-              :key="bucket.key"
-              class="px-5 py-3.5 sm:px-6"
-            >
-              <p
-                class="mb-2 flex items-center gap-1.5 text-theme-xs font-bold tabular-nums text-gray-900 dark:text-white"
-              >
-                <Clock3 class="h-3.5 w-3.5 text-gray-500" aria-hidden="true" />
-                {{ formatTimeRange(bucket.start, bucket.end) }}
-              </p>
-              <div class="grid gap-2 sm:grid-cols-2">
+              <div v-if="day.entries.length" class="space-y-2.5">
                 <button
-                  v-for="entry in bucket.entries"
-                  :key="`${entry.group.key}-${entry.lesson.start}`"
+                  v-for="entry in day.entries"
+                  :key="`${entry.group.key}-${entry.lesson.dayLabel}-${entry.lesson.start}`"
                   type="button"
+                  :aria-pressed="entry.group.key === scheduleSelectedGroup?.key"
+                  class="focus-ring block w-full truncate rounded-lg px-4 py-2.5 text-left font-medium transition-colors"
                   :class="[
-                    scheduleCardClass,
+                    groupColorClass(entry.group),
                     entry.group.key === scheduleSelectedGroup?.key
-                      ? 'border-pitch-500 bg-pitch-50 dark:border-pitch-500 dark:bg-pitch-500/15'
-                      : 'border-gray-200 bg-white dark:border-gray-800 dark:bg-transparent',
+                      ? 'ring-2 ring-pitch-500 ring-offset-1 dark:ring-offset-gray-900'
+                      : '',
                   ]"
                   @click="selectScheduleGroup(entry.group)"
                 >
-                  <span
-                    class="block truncate text-theme-sm font-medium text-gray-900 dark:text-white"
-                  >
-                    {{ entry.group.name }}
-                  </span>
-                  <span class="mt-1 block">
-                    <OccupancyMeter
-                      :current="entry.group.currentCap"
-                      :max="entry.group.maxCap"
-                      size="sm"
-                    />
-                  </span>
+                  <span class="tabular-nums">{{ formatTime(entry.lesson.start) }}</span>
+                  {{ entry.group.name }}
                 </button>
               </div>
+              <p v-else class="text-theme-sm text-gray-400 dark:text-gray-500">Нет занятий</p>
             </div>
-            <p
-              v-if="!week[activeDay].entries.length"
-              class="px-5 py-8 text-center text-theme-sm text-gray-600 dark:text-gray-400 sm:px-6"
-            >
-              В этот день занятий нет.
-            </p>
           </div>
         </div>
 
@@ -1020,232 +926,262 @@ const scheduleCardClass =
       </div>
     </section>
 
-    <section v-else class="grid gap-6 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
-      <div :class="panel">
-        <div :class="panelHeader">
-          <div>
-            <h2 :class="panelTitle">Список групп</h2>
-            <p :class="panelHint">Выберите группу, чтобы увидеть расписание и состав.</p>
-          </div>
-          <button type="button" :class="[buttonPrimary, buttonSize.sm]" @click="openCreate">
-            <Plus class="h-3.5 w-3.5" aria-hidden="true" />
-            Создать
-          </button>
+    <section v-else :class="panel">
+      <div :class="panelHeader">
+        <div>
+          <h2 :class="panelTitle">Список групп</h2>
+          <p :class="panelHint">Нажмите на группу, чтобы увидеть расписание и состав.</p>
         </div>
-
-        <StateBlock
-          :state="state"
-          :error="loadError"
-          :rows="5"
-          empty-title="Групп пока нет"
-          empty-hint="Создайте первую группу и задайте её расписание."
-          @retry="load"
-        >
-          <template #icon><Users class="h-5 w-5" aria-hidden="true" /></template>
-          <div class="divide-y divide-gray-100 dark:divide-gray-800/70">
-            <button
-              v-for="group in paginatedGroups"
-              :key="group.key"
-              type="button"
-              class="focus-ring-inset flex w-full items-start gap-3 px-5 py-4 text-left transition-colors sm:px-6"
-              :class="
-                group.key === selectedGroup?.key
-                  ? 'bg-pitch-50 dark:bg-pitch-500/10'
-                  : 'hover:bg-gray-50 dark:hover:bg-white/[0.03]'
-              "
-              @click="selectGroup(group)"
-            >
-              <span class="min-w-0 flex-1">
-                <span
-                  class="block truncate text-theme-sm font-semibold text-gray-900 dark:text-white"
-                >
-                  {{ group.name }}
-                </span>
-                <span class="mt-1 block text-theme-xs text-gray-600 dark:text-gray-400">
-                  {{ lessonsPerWeek(group) }}
-                </span>
-                <span class="mt-2 block">
-                  <OccupancyMeter :current="group.currentCap" :max="group.maxCap" size="sm" />
-                </span>
-              </span>
-              <StatusPill v-if="group.active === false" tone="warning">Отключена</StatusPill>
-              <StatusPill v-else tone="pitch" dot>Активна</StatusPill>
-            </button>
-          </div>
-
-          <div
-            v-if="totalGroupPages > 1"
-            class="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-3 dark:border-gray-800 sm:px-6"
-          >
-            <button
-              type="button"
-              :class="[buttonSecondary, buttonSize.sm]"
-              :disabled="groupsPage === 1"
-              @click="groupsPage = Math.max(1, groupsPage - 1)"
-            >
-              Назад
-            </button>
-            <span class="text-theme-xs font-medium text-gray-600 dark:text-gray-400">
-              {{ groupsPage }} / {{ totalGroupPages }}
-            </span>
-            <button
-              type="button"
-              :class="[buttonSecondary, buttonSize.sm]"
-              :disabled="groupsPage === totalGroupPages"
-              @click="groupsPage = Math.min(totalGroupPages, groupsPage + 1)"
-            >
-              Вперёд
-            </button>
-          </div>
-        </StateBlock>
+        <button type="button" :class="[buttonPrimary, buttonSize.sm]" @click="openCreate">
+          <Plus class="h-3.5 w-3.5" aria-hidden="true" />
+          Создать
+        </button>
       </div>
 
-      <div v-if="selectedGroup" :class="panel">
-        <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div class="min-w-0">
-              <h2 class="truncate text-lg font-bold text-gray-900 dark:text-white">
-                {{ selectedGroup.name }}
-              </h2>
-              <p class="mt-0.5 text-theme-xs text-gray-600 dark:text-gray-400">
-                {{ lessonsPerWeek(selectedGroup) }}
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                :class="[buttonSecondary, buttonSize.sm]"
-                @click="openEdit(selectedGroup)"
+      <StateBlock
+        :state="state"
+        :error="loadError"
+        :rows="5"
+        empty-title="Групп пока нет"
+        empty-hint="Создайте первую группу и задайте её расписание."
+        @retry="load"
+      >
+        <template #icon><Users class="h-5 w-5" aria-hidden="true" /></template>
+        <div class="max-w-full overflow-x-auto">
+          <table class="w-full min-w-[40rem]">
+            <thead>
+              <tr class="border-b border-gray-200 dark:border-gray-800">
+                <th :class="th">Группа</th>
+                <th :class="th">Занятия</th>
+                <th :class="th">Заполненность</th>
+                <th :class="[th, 'text-right']">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="group in paginatedGroups"
+                :key="group.key"
+                class="cursor-pointer border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50 dark:border-gray-800/70 dark:hover:bg-white/[0.02]"
+                @click="selectGroup(group)"
               >
-                <Pencil class="h-3.5 w-3.5" aria-hidden="true" />
-                Изменить
-              </button>
-              <button
-                type="button"
-                :class="[buttonPrimary, buttonSize.sm]"
-                @click="openAssign(selectedGroup)"
-              >
-                <UserPlus class="h-3.5 w-3.5" aria-hidden="true" />
-                Назначить ученика
-              </button>
-              <button
-                type="button"
-                :class="[buttonDanger, buttonSize.sm]"
-                @click="openDeleteConfirm(selectedGroup)"
-              >
-                <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
-                Отключить
-              </button>
-            </div>
-          </div>
-
-          <div class="mt-3 flex flex-wrap gap-2">
-            <StatusPill v-if="selectedGroup.ageRange" tone="info">{{
-              selectedGroup.ageRange
-            }}</StatusPill>
-            <StatusPill v-if="selectedGroup.shift" tone="neutral"
-              >Смена: {{ selectedGroup.shift }}</StatusPill
-            >
-            <StatusPill v-if="selectedGroup.active === false" tone="warning">Отключена</StatusPill>
-            <StatusPill v-else tone="pitch" dot>Активна</StatusPill>
-          </div>
+                <td :class="td">
+                  <span class="flex items-center gap-2">
+                    <Eye class="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
+                    <span
+                      class="truncate text-theme-sm font-semibold text-gray-900 dark:text-white"
+                    >
+                      {{ group.name }}
+                    </span>
+                  </span>
+                </td>
+                <td :class="td">
+                  <span class="text-theme-xs text-gray-600 dark:text-gray-400">
+                    {{ lessonsPerWeek(group) }}
+                  </span>
+                </td>
+                <td :class="td">
+                  <OccupancyMeter :current="group.currentCap" :max="group.maxCap" size="sm" />
+                </td>
+                <td :class="[td, 'text-right']">
+                  <StatusPill v-if="group.active === false" tone="warning">Отключена</StatusPill>
+                  <StatusPill v-else tone="pitch" dot>Активна</StatusPill>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <div class="grid gap-5 px-5 py-4 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-          <div>
-            <p class="text-theme-xs font-semibold uppercase text-gray-600 dark:text-gray-400">
-              Заполненность
-            </p>
-            <div class="mt-2">
-              <OccupancyMeter :current="selectedGroup.currentCap" :max="selectedGroup.maxCap" />
-            </div>
-          </div>
-          <div>
-            <p class="text-theme-xs font-semibold uppercase text-gray-600 dark:text-gray-400">
-              Занятия
-            </p>
-            <ul class="mt-2 grid gap-2 sm:grid-cols-2">
-              <li
-                v-for="lesson in selectedGroup.lessons"
-                :key="`${lesson.dayLabel}-${lesson.start}`"
-                class="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-theme-sm text-gray-800 dark:border-gray-800 dark:text-gray-200"
-              >
-                <CalendarDays class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
-                <span class="min-w-0 flex-1 truncate">{{ lesson.dayLabel }}</span>
-                <Clock3 class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
-                <span class="tabular-nums">{{ formatTimeRange(lesson.start, lesson.end) }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="border-t border-gray-200 dark:border-gray-800">
-          <div :class="panelHeader">
-            <div>
-              <h3 :class="panelTitle">Ученики группы</h3>
-              <p :class="panelHint">Существующие ученики, закреплённые за этой группой.</p>
-            </div>
-            <StatusPill tone="neutral" size="md">{{ selectedRoster.length }}</StatusPill>
-          </div>
-
-          <StateBlock
-            :state="selectedRoster.length ? 'ready' : 'empty'"
-            :rows="4"
-            empty-title="В группе пока никого"
-            empty-hint="Нажмите «Назначить ученика», чтобы добавить существующего ученика."
+        <div
+          v-if="totalGroupPages > 1"
+          class="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-3 dark:border-gray-800 sm:px-6"
+        >
+          <button
+            type="button"
+            :class="[buttonSecondary, buttonSize.sm]"
+            :disabled="groupsPage === 1"
+            @click="groupsPage = Math.max(1, groupsPage - 1)"
           >
-            <template #icon><Users class="h-5 w-5" aria-hidden="true" /></template>
-            <table class="hidden w-full lg:table">
-              <thead>
-                <tr class="border-b border-gray-200 dark:border-gray-800">
-                  <th :class="th">Ребёнок</th>
-                  <th :class="th">Контакт родителя</th>
-                  <th :class="[th, 'text-right']">Пробных</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="student in selectedRoster"
-                  :key="student.id"
-                  class="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50 dark:border-gray-800/70 dark:hover:bg-white/[0.02]"
+            Назад
+          </button>
+          <span class="text-theme-xs font-medium text-gray-600 dark:text-gray-400">
+            {{ groupsPage }} / {{ totalGroupPages }}
+          </span>
+          <button
+            type="button"
+            :class="[buttonSecondary, buttonSize.sm]"
+            :disabled="groupsPage === totalGroupPages"
+            @click="groupsPage = Math.min(totalGroupPages, groupsPage + 1)"
+          >
+            Вперёд
+          </button>
+        </div>
+      </StateBlock>
+    </section>
+
+    <Modal v-if="isDetailOpen && selectedGroup" :fullScreenBackdrop="true" @close="closeGroupDetail">
+      <template #body>
+        <div
+          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900 sm:my-8"
+        >
+          <button
+            type="button"
+            class="absolute right-5 top-5 z-10 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"
+            aria-label="Закрыть"
+            @click="closeGroupDetail"
+          >
+            <X class="h-5 w-5" aria-hidden="true" />
+          </button>
+
+          <div v-if="selectedGroup">
+            <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:px-6">
+              <div class="flex flex-col gap-3 pr-8 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <h2 class="truncate text-lg font-bold text-gray-900 dark:text-white">
+                    {{ selectedGroup.name }}
+                  </h2>
+                  <p class="mt-0.5 text-theme-xs text-gray-600 dark:text-gray-400">
+                    {{ lessonsPerWeek(selectedGroup) }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    :class="[buttonSecondary, buttonSize.sm]"
+                    @click="openEdit(selectedGroup)"
+                  >
+                    <Pencil class="h-3.5 w-3.5" aria-hidden="true" />
+                    Изменить
+                  </button>
+                  <button
+                    type="button"
+                    :class="[buttonPrimary, buttonSize.sm]"
+                    @click="openAssign(selectedGroup)"
+                  >
+                    <UserPlus class="h-3.5 w-3.5" aria-hidden="true" />
+                    Назначить ученика
+                  </button>
+                  <button
+                    type="button"
+                    :class="[buttonDanger, buttonSize.sm]"
+                    @click="openDeleteConfirm(selectedGroup)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+                    Отключить
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-3 flex flex-wrap gap-2">
+                <StatusPill v-if="selectedGroup.ageRange" tone="info">{{
+                  selectedGroup.ageRange
+                }}</StatusPill>
+                <StatusPill v-if="selectedGroup.shift" tone="neutral"
+                  >Смена: {{ selectedGroup.shift }}</StatusPill
                 >
-                  <td :class="td">
+                <StatusPill v-if="selectedGroup.active === false" tone="warning"
+                  >Отключена</StatusPill
+                >
+                <StatusPill v-else tone="pitch" dot>Активна</StatusPill>
+              </div>
+            </div>
+
+            <div class="grid gap-5 px-5 py-4 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+              <div>
+                <p class="text-theme-xs font-semibold uppercase text-gray-600 dark:text-gray-400">
+                  Заполненность
+                </p>
+                <div class="mt-2">
+                  <OccupancyMeter :current="selectedGroup.currentCap" :max="selectedGroup.maxCap" />
+                </div>
+              </div>
+              <div>
+                <p class="text-theme-xs font-semibold uppercase text-gray-600 dark:text-gray-400">
+                  Занятия
+                </p>
+                <ul class="mt-2 grid gap-2 sm:grid-cols-2">
+                  <li
+                    v-for="lesson in selectedGroup.lessons"
+                    :key="`${lesson.dayLabel}-${lesson.start}`"
+                    class="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-theme-sm text-gray-800 dark:border-gray-800 dark:text-gray-200"
+                  >
+                    <CalendarDays class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+                    <span class="min-w-0 flex-1 truncate">{{ lesson.dayLabel }}</span>
+                    <Clock3 class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+                    <span class="tabular-nums">{{ formatTimeRange(lesson.start, lesson.end) }}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-200 dark:border-gray-800">
+              <div :class="panelHeader">
+                <div>
+                  <h3 :class="panelTitle">Ученики группы</h3>
+                  <p :class="panelHint">Существующие ученики, закреплённые за этой группой.</p>
+                </div>
+                <StatusPill tone="neutral" size="md">{{ selectedRoster.length }}</StatusPill>
+              </div>
+
+              <StateBlock
+                :state="selectedRoster.length ? 'ready' : 'empty'"
+                :rows="4"
+                empty-title="В группе пока никого"
+                empty-hint="Нажмите «Назначить ученика», чтобы добавить существующего ученика."
+              >
+                <template #icon><Users class="h-5 w-5" aria-hidden="true" /></template>
+                <table class="hidden w-full lg:table">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-800">
+                      <th :class="th">Ребёнок</th>
+                      <th :class="th">Контакт родителя</th>
+                      <th :class="[th, 'text-right']">Пробных</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="student in selectedRoster"
+                      :key="student.id"
+                      class="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50 dark:border-gray-800/70 dark:hover:bg-white/[0.02]"
+                    >
+                      <td :class="td">
+                        <PersonCell
+                          :name="student.name"
+                          :age="student.age"
+                          :birthdate="student.birthdate"
+                        />
+                      </td>
+                      <td :class="td"><ContactActions :phone="phoneOf(student)" /></td>
+                      <td
+                        :class="[
+                          td,
+                          'text-right tabular-nums text-theme-sm text-gray-800 dark:text-gray-200',
+                        ]"
+                      >
+                        {{ student.total_trials ?? 0 }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <ul class="divide-y divide-gray-100 dark:divide-gray-800/70 lg:hidden">
+                  <li
+                    v-for="student in selectedRoster"
+                    :key="student.id"
+                    class="flex flex-col gap-2 px-5 py-3.5 sm:px-6"
+                  >
                     <PersonCell
                       :name="student.name"
                       :age="student.age"
                       :birthdate="student.birthdate"
                     />
-                  </td>
-                  <td :class="td"><ContactActions :phone="phoneOf(student)" /></td>
-                  <td
-                    :class="[
-                      td,
-                      'text-right tabular-nums text-theme-sm text-gray-800 dark:text-gray-200',
-                    ]"
-                  >
-                    {{ student.total_trials ?? 0 }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <ul class="divide-y divide-gray-100 dark:divide-gray-800/70 lg:hidden">
-              <li
-                v-for="student in selectedRoster"
-                :key="student.id"
-                class="flex flex-col gap-2 px-5 py-3.5 sm:px-6"
-              >
-                <PersonCell
-                  :name="student.name"
-                  :age="student.age"
-                  :birthdate="student.birthdate"
-                />
-                <ContactActions :phone="phoneOf(student)" />
-              </li>
-            </ul>
-          </StateBlock>
+                    <ContactActions :phone="phoneOf(student)" />
+                  </li>
+                </ul>
+              </StateBlock>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </template>
+    </Modal>
 
     <Modal v-if="groupForm.open" :fullScreenBackdrop="true" @close="closeGroupForm">
       <template #body>
@@ -1383,18 +1319,9 @@ const scheduleCardClass =
                 </button>
               </div>
 
-              <div
-                class="mt-4 grid gap-3"
-                :class="
-                  groupForm.timeMode === 'custom'
-                    ? 'sm:grid-cols-[1fr_1fr_auto] sm:items-end'
-                    : 'sm:grid-cols-[1fr_1fr]'
-                "
-              >
+              <div v-if="groupForm.timeMode === 'general'" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr]">
                 <div>
-                  <label :class="labelClass" for="group-general-start">
-                    {{ groupForm.timeMode === 'general' ? 'Start time' : 'Copy start' }}
-                  </label>
+                  <label :class="labelClass" for="group-general-start">Start time</label>
                   <input
                     id="group-general-start"
                     v-model="groupForm.generalStart"
@@ -1403,9 +1330,7 @@ const scheduleCardClass =
                   />
                 </div>
                 <div>
-                  <label :class="labelClass" for="group-general-end">
-                    {{ groupForm.timeMode === 'general' ? 'End time' : 'Copy end' }}
-                  </label>
+                  <label :class="labelClass" for="group-general-end">End time</label>
                   <input
                     id="group-general-end"
                     v-model="groupForm.generalEnd"
@@ -1413,19 +1338,6 @@ const scheduleCardClass =
                     :class="input"
                   />
                 </div>
-                <button
-                  v-if="groupForm.timeMode === 'custom'"
-                  type="button"
-                  :class="[buttonSecondary, buttonSize.md, 'w-full sm:w-auto']"
-                  :disabled="
-                    !groupForm.selectedDays.length ||
-                    !groupForm.generalStart ||
-                    !groupForm.generalEnd
-                  "
-                  @click="applyGeneralTime"
-                >
-                  Apply
-                </button>
               </div>
             </div>
 

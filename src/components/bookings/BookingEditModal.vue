@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Loader2, X } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
 import type { Booking, BookingState, Field } from '@/types'
-import { getManagerFields, updateBooking, BOOKING_STATE_LABEL } from '@/services/booking'
+import {
+  getManagerFields,
+  updateBooking,
+  estimateBookingPrice,
+  roundTimeUpToHalfHour,
+  formatPrice,
+  BOOKING_STATE_LABEL,
+} from '@/services/booking'
 import { ApiError } from '@/services/api'
 
 const props = defineProps<{ booking: Booking }>()
@@ -40,6 +47,10 @@ const form = reactive({
   paidAvans: 0,
 })
 
+// Снимок исходного расписания брони — чтобы пересчитывать сумму только когда
+// поле/дата/время реально изменились, а не на каждое сохранение подряд.
+const original = reactive({ fieldId: '', date: '', start: '', end: '' })
+
 function fillFrom(b: Booking) {
   form.customerName = b.customerName
   form.fieldId = b.fieldId
@@ -51,9 +62,40 @@ function fillFrom(b: Booking) {
   form.paidKaspiQr = b.paidKaspiQr
   form.paidCash = b.paidCash
   form.paidAvans = b.paidAvans
+  original.fieldId = b.fieldId
+  original.date = b.date
+  original.start = b.start
+  original.end = b.end
 }
 
 watch(() => props.booking, fillFrom, { immediate: true })
+
+const scheduleChanged = computed(
+  () =>
+    form.fieldId !== original.fieldId ||
+    form.date !== original.date ||
+    form.start !== original.start ||
+    form.end !== original.end,
+)
+
+const selectedField = computed(() => fields.value.find((f) => f.id === form.fieldId))
+
+// Новая сумма — считается только пока время/поле/дата реально отличаются от
+// исходных и заполнены корректно; иначе бэкенд оставляет исходную цену.
+const recalculatedTotal = computed(() => {
+  if (!scheduleChanged.value || !selectedField.value) return null
+  if (!form.date || !form.start || !form.end || form.end <= form.start) return null
+  return estimateBookingPrice(selectedField.value, form.date, form.start, form.end)
+})
+
+// Ручной ввод времени всегда идёт целыми получасами — снапим на реальном
+// вводе пользователя (native 'change'), а не при программном fillFrom.
+function snapStart() {
+  if (form.start) form.start = roundTimeUpToHalfHour(form.start)
+}
+function snapEnd() {
+  if (form.end) form.end = roundTimeUpToHalfHour(form.end)
+}
 
 onMounted(async () => {
   try {
@@ -95,6 +137,7 @@ async function save() {
       end_date: form.date,
       status: form.status as BookingState,
       notes: form.notes.trim(),
+      ...(recalculatedTotal.value != null ? { price_total: recalculatedTotal.value } : {}),
       paid_kaspi_qr: Number(form.paidKaspiQr) || 0,
       paid_cash: Number(form.paidCash) || 0,
       paid_avans: Number(form.paidAvans) || 0,
@@ -158,7 +201,7 @@ const inputClass =
             </select>
           </div>
 
-          <!-- Date
+          <!-- Date -->
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
               Дата
@@ -166,21 +209,44 @@ const inputClass =
             <input v-model="form.date" type="date" :class="inputClass" />
           </div>
 
-          Times
+          <!-- Times -->
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Начало
               </label>
-              <input v-model="form.start" type="time" :class="inputClass" />
+              <input
+                v-model="form.start"
+                type="time"
+                step="1800"
+                :class="inputClass"
+                @change="snapStart"
+              />
             </div>
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Конец
               </label>
-              <input v-model="form.end" type="time" :class="inputClass" />
+              <input
+                v-model="form.end"
+                type="time"
+                step="1800"
+                :class="inputClass"
+                @change="snapEnd"
+              />
             </div>
-          </div> -->
+          </div>
+
+          <!-- Recalculated total: shown only while date/time/field actually differ from the original booking -->
+          <p
+            v-if="recalculatedTotal != null"
+            class="rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
+          >
+            Новая сумма: <span class="font-semibold">{{ formatPrice(recalculatedTotal) }}</span>
+            <span class="text-brand-600/70 dark:text-brand-400/70">
+              (было {{ formatPrice(booking.total) }})
+            </span>
+          </p>
 
           <!-- Status -->
           <div>
