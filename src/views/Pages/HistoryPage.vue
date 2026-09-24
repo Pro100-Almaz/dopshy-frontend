@@ -378,9 +378,7 @@ onUnmounted(() => {
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Дата</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
-                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                    Источник
-                  </p>
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Источник</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Бронь</p>
@@ -395,13 +393,18 @@ onUnmounted(() => {
               <tr
                 v-for="e in rows"
                 :key="e.id"
-                class="cursor-pointer transition-colors hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 dark:hover:bg-white/[0.02]"
-                role="button"
-                tabindex="0"
-                :aria-label="`Открыть бронь №${e.booking_id}`"
-                @click="selectedBookingId = e.booking_id"
-                @keydown.enter.prevent="selectedBookingId = e.booking_id"
-                @keydown.space.prevent="selectedBookingId = e.booking_id"
+                class="transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40"
+                :class="
+                  e.booking_id !== null
+                    ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02]'
+                    : ''
+                "
+                :role="e.booking_id !== null ? 'button' : undefined"
+                :tabindex="e.booking_id !== null ? 0 : undefined"
+                :aria-label="e.booking_id !== null ? `Открыть бронь №${e.booking_id}` : undefined"
+                @click="e.booking_id !== null && (selectedBookingId = e.booking_id)"
+                @keydown.enter.prevent="e.booking_id !== null && (selectedBookingId = e.booking_id)"
+                @keydown.space.prevent="e.booking_id !== null && (selectedBookingId = e.booking_id)"
               >
                 <!-- Date -->
                 <td class="whitespace-nowrap px-5 py-4 sm:px-6">
@@ -425,7 +428,14 @@ onUnmounted(() => {
                 <!-- Booking id -->
                 <td class="whitespace-nowrap px-5 py-4 sm:px-6">
                   <span class="text-gray-500 text-theme-sm dark:text-gray-400">
-                    #{{ e.booking_id }}
+                    <template v-if="e.booking_id !== null">#{{ e.booking_id }}</template>
+                    <template v-else-if="e.discount_id !== null"
+                      >Скидка #{{ e.discount_id }}</template
+                    >
+                    <template v-else-if="e.customer_id !== null"
+                      >Клиент #{{ e.customer_id }}</template
+                    >
+                    <template v-else>—</template>
                   </span>
                 </td>
 
@@ -445,9 +455,7 @@ onUnmounted(() => {
           v-if="!loading && !error && entries.length"
           class="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
         >
-          <p class="text-theme-xs text-gray-500 dark:text-gray-400">
-            Показано {{ rangeLabel }}
-          </p>
+          <p class="text-theme-xs text-gray-500 dark:text-gray-400">Показано {{ rangeLabel }}</p>
           <nav class="flex items-center gap-1" aria-label="Пагинация">
             <button
               type="button"

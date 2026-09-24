@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Loader2,
   Users,
@@ -9,6 +9,11 @@ import {
   TriangleAlert,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
+  UserRoundPen,
+  Ban,
+  UserPlus,
+  Trash2,
 } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
@@ -26,6 +31,12 @@ import {
 import { ApiError } from '@/services/api'
 import { hasPermission } from '@/services/rbac'
 import { useAuthStore } from '@/stores/auth'
+import {
+  createCustomer,
+  deleteCustomer,
+  findCustomerByPhone,
+  updateCustomer,
+} from '@/services/customers'
 
 const props = withDefaults(defineProps<{ botType?: BotType }>(), {
   botType: 'arena',
@@ -47,6 +58,121 @@ const query = ref('')
 const page = ref(1)
 const total = ref(0)
 const totalPages = ref(1)
+const actionContact = ref<Contact | null>(null)
+const regularSaving = ref<string | null>(null)
+const canManageRegular = computed(() => ['admin', 'super_admin'].includes(auth.role))
+const canDeleteCustomer = computed(() => auth.role === 'super_admin')
+const editingCustomer = ref(false)
+const customerEdit = reactive({ name: '', phone: '' })
+const customerSaving = ref(false)
+const registeringCustomer = ref(false)
+const deletingCustomer = ref(false)
+
+function openActions(contact: Contact) {
+  actionContact.value = contact
+  editingCustomer.value = false
+  customerEdit.name = contact.name ?? ''
+  customerEdit.phone = contact.phone
+}
+
+async function saveCustomer() {
+  if (!actionContact.value) return
+  customerSaving.value = true
+  try {
+    const customer = await findCustomerByPhone(actionContact.value.phone)
+    if (!customer) throw new Error('Клиент не найден')
+    const updated = await updateCustomer(customer.id, {
+      name: customerEdit.name || null,
+      phone: customerEdit.phone,
+    })
+    actionContact.value.name = updated.name
+    actionContact.value.phone = updated.phone
+    editingCustomer.value = false
+    actionContact.value = null
+  } catch (e) {
+    onError(e instanceof Error ? e.message : 'Не удалось сохранить клиента')
+  } finally {
+    customerSaving.value = false
+  }
+}
+
+async function registerCustomer() {
+  const contact = actionContact.value
+  if (!contact || isRegistered(contact)) return
+  registeringCustomer.value = true
+  try {
+    const created = await createCustomer({
+      name: contact.name?.trim() || undefined,
+      phone: contact.phone,
+      is_regular_customer: false,
+    })
+    contact.name = created.name
+    contact.phone = created.phone
+    contact.is_registered = true
+    contact.is_regular_customer = created.is_regular_customer
+    actionContact.value = null
+    onSuccess('Клиент зарегистрирован')
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'CONFLICT') {
+      const existing = await findCustomerByPhone(contact.phone)
+      if (existing) {
+        contact.name = existing.name
+        contact.phone = existing.phone
+        contact.is_registered = true
+        contact.is_regular_customer = existing.is_regular_customer
+        actionContact.value = null
+        onSuccess('Клиент уже был зарегистрирован')
+        return
+      }
+    }
+    onError(e instanceof Error ? e.message : 'Не удалось зарегистрировать клиента')
+  } finally {
+    registeringCustomer.value = false
+  }
+}
+
+async function removeCustomer() {
+  const contact = actionContact.value
+  if (!contact || !canDeleteCustomer.value || deletingCustomer.value) return
+  if (!window.confirm(`Удалить клиента ${displayName(contact)}?`)) return
+  deletingCustomer.value = true
+  try {
+    const customer = await findCustomerByPhone(contact.phone)
+    if (!customer) throw new Error('Клиент не найден')
+    await deleteCustomer(customer.id)
+    contact.is_registered = false
+    contact.is_regular_customer = false
+    actionContact.value = null
+    onSuccess('Клиент удалён')
+  } catch (e) {
+    onError(e instanceof Error ? e.message : 'Не удалось удалить клиента')
+  } finally {
+    deletingCustomer.value = false
+  }
+}
+
+function isRegistered(contact: Contact): boolean {
+  return contact.is_registered
+}
+function isRegular(contact: Contact): boolean {
+  return contact.is_registered ? contact.is_regular_customer : false
+}
+async function toggleRegular(contact: Contact) {
+  if (!canManageRegular.value || regularSaving.value) return
+  regularSaving.value = contact.phone
+  try {
+    const customer = await findCustomerByPhone(contact.phone)
+    if (!customer) throw new Error('Клиент не найден')
+    const updated = await updateCustomer(customer.id, {
+      is_regular_customer: !isRegular(contact),
+    })
+    contact.is_regular_customer = updated.is_regular_customer
+  } catch (e) {
+    onError(e instanceof Error ? e.message : 'Не удалось изменить статус клиента')
+  } finally {
+    regularSaving.value = null
+  }
+}
 
 type FilterKey = 'all' | 'texted' | 'booking' | 'paused'
 const filter = ref<FilterKey>('all')
@@ -65,7 +191,7 @@ const filtered = computed(() => {
     if (filter.value === 'booking' && !c.has_booking) return false
     if (filter.value === 'paused' && !c.paused) return false
     if (!q) return true
-    const nameHit = c.name.toLowerCase().includes(q)
+    const nameHit = (c.name ?? '').toLowerCase().includes(q)
     const phoneHit = digits.length > 0 && c.phone.includes(digits)
     return nameHit || phoneHit
   })
@@ -93,11 +219,11 @@ const rangeLabel = computed(() => {
 })
 
 function displayName(c: Contact): string {
-  return c.name.trim() || c.phone
+  return c.name?.trim() || c.phone
 }
 
 function initials(c: Contact): string {
-  const name = c.name.trim()
+  const name = c.name?.trim() ?? ''
   if (!name) return c.phone.slice(-2)
   return name
     .split(' ')
@@ -114,6 +240,10 @@ function onChange(contact: Contact, status: BotStatus) {
 }
 
 function onError(message: string) {
+  toast.value = message
+  window.setTimeout(() => (toast.value = ''), 4000)
+}
+function onSuccess(message: string) {
   toast.value = message
   window.setTimeout(() => (toast.value = ''), 4000)
 }
@@ -174,6 +304,9 @@ function goTo(p: number) {
   const clamped = Math.min(Math.max(1, p), totalPages.value)
   if (clamped !== page.value) page.value = clamped
 }
+function goToPage(item: number | '…') {
+  if (typeof item === 'number') goTo(item)
+}
 
 let pollId: number | undefined
 function onVisibility() {
@@ -207,7 +340,6 @@ async function loadBotEnabled(silent = false) {
     if (!silent) pending.value = false
   }
 }
-
 
 function botErrorMessage(e: unknown): string {
   if (e instanceof ApiError && e.status === 502) {
@@ -369,6 +501,11 @@ onUnmounted(() => {
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контакт</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                    Регистрация
+                  </p>
+                </th>
+                <th class="px-5 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Метки</p>
                 </th>
                 <th class="px-5 py-3 text-left sm:px-6">
@@ -402,6 +539,12 @@ onUnmounted(() => {
                     </button>
                   </div>
                 </th>
+                <th class="px-5 py-3 text-left sm:px-6">
+                  <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                    Постоянный клиент
+                  </p>
+                </th>
+                <th class="w-16 px-5 py-3"><span class="sr-only">Действия</span></th>
               </tr>
             </thead>
 
@@ -430,6 +573,18 @@ onUnmounted(() => {
                       </span>
                     </div>
                   </div>
+                </td>
+
+                <td class="px-5 py-4 sm:px-6">
+                  <span
+                    class="rounded-full px-2 py-1 text-xs font-medium"
+                    :class="
+                      isRegistered(c)
+                        ? 'bg-success-50 text-success-700'
+                        : 'bg-gray-100 text-gray-500'
+                    "
+                    >{{ isRegistered(c) ? 'Зарегистрирован' : 'Не зарегистрирован' }}</span
+                  >
                 </td>
 
                 <!-- Badges -->
@@ -470,6 +625,31 @@ onUnmounted(() => {
                     @error="onError"
                   />
                 </td>
+                <td class="px-5 py-4 sm:px-6">
+                  <button
+                    v-if="isRegistered(c)"
+                    type="button"
+                    role="switch"
+                    :aria-checked="isRegular(c)"
+                    :disabled="!canManageRegular || regularSaving === c.phone"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="isRegular(c) ? 'bg-success-500' : 'bg-gray-300'"
+                    @click="toggleRegular(c)"
+                  >
+                    <span
+                      class="h-5 w-5 rounded-full bg-white shadow transition-transform"
+                      :class="isRegular(c) ? 'translate-x-5' : 'translate-x-0.5'"
+                    ></span></button
+                  ><span v-else class="text-xs text-gray-400">—</span>
+                </td>
+                <td class="px-5 py-4 sm:px-6">
+                  <button
+                    class="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                    @click="openActions(c)"
+                  >
+                    <MoreVertical class="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -480,9 +660,7 @@ onUnmounted(() => {
           v-if="!loading && !error && contacts.length"
           class="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-6"
         >
-          <p class="text-theme-xs text-gray-500 dark:text-gray-400">
-            Показано {{ rangeLabel }}
-          </p>
+          <p class="text-theme-xs text-gray-500 dark:text-gray-400">Показано {{ rangeLabel }}</p>
           <nav class="flex items-center gap-1" aria-label="Пагинация">
             <button
               type="button"
@@ -510,7 +688,7 @@ onUnmounted(() => {
                     : 'border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]'
                 "
                 :aria-current="item === page ? 'page' : undefined"
-                @click="goTo(item as number)"
+                @click.stop="goToPage(item)"
               >
                 {{ item }}
               </button>
@@ -537,6 +715,94 @@ onUnmounted(() => {
       role="alert"
     >
       {{ toast }}
+    </div>
+
+    <div
+      v-if="actionContact"
+      class="fixed inset-0 z-999999 flex items-end justify-center bg-gray-900/45 p-4 sm:items-center"
+      @click.self="actionContact = null"
+    >
+      <div
+        class="sticky bottom-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-900"
+      >
+        <div class="mb-4">
+          <h3 class="font-semibold text-gray-900 dark:text-white">
+            {{ displayName(actionContact) }}
+          </h3>
+          <p class="text-xs text-gray-500">Управление данными клиента</p>
+        </div>
+        <form v-if="editingCustomer" class="space-y-3" @submit.prevent="saveCustomer">
+          <label class="block text-sm"
+            >Имя<input
+              v-model="customerEdit.name"
+              class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
+          /></label>
+          <label class="block text-sm"
+            >Телефон<input
+              v-model="customerEdit.phone"
+              required
+              pattern="7[0-9]+"
+              class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
+          /></label>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex-1 rounded-lg border py-2 text-sm"
+              @click="editingCustomer = false"
+            >
+              Отмена</button
+            ><button
+              :disabled="customerSaving"
+              class="flex-1 rounded-lg bg-success-600 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              Сохранить
+            </button>
+          </div>
+        </form>
+        <button
+          v-if="!editingCustomer && !isRegistered(actionContact)"
+          type="button"
+          :disabled="registeringCustomer"
+          class="mb-2 flex w-full items-center gap-3 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm font-medium text-success-700 hover:bg-success-100 disabled:opacity-50"
+          @click="registerCustomer"
+        >
+          <Loader2 v-if="registeringCustomer" class="h-4 w-4 animate-spin" />
+          <UserPlus v-else class="h-4 w-4" />Зарегистрировать клиента
+        </button>
+        <button
+          v-if="!editingCustomer"
+          :disabled="!isRegistered(actionContact)"
+          class="mb-2 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+          :class="!isRegistered(actionContact) ? 'cursor-not-allowed opacity-50' : ''"
+          @click="editingCustomer = true"
+        >
+          <UserRoundPen class="h-4 w-4" />Редактировать данные
+        </button>
+        <button
+          v-if="!editingCustomer"
+          disabled
+          class="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-400"
+        >
+          <Ban class="h-4 w-4" />Добавить в чёрный список
+        </button>
+        <button
+          v-if="!editingCustomer && canDeleteCustomer && isRegistered(actionContact)"
+          type="button"
+          :disabled="deletingCustomer"
+          class="mt-2 flex w-full items-center gap-3 rounded-lg border border-error-200 px-4 py-3 text-sm text-error-700 hover:bg-error-50 disabled:opacity-50"
+          @click="removeCustomer"
+        >
+          <Loader2 v-if="deletingCustomer" class="h-4 w-4 animate-spin" />
+          <Trash2 v-else class="h-4 w-4" />Удалить клиента
+        </button>
+        <button
+          v-if="!editingCustomer"
+          class="mt-4 w-full rounded-lg bg-gray-100 py-2.5 text-sm font-medium"
+          @click="actionContact = null"
+        >
+          Закрыть
+        </button>
+      </div>
     </div>
   </AdminLayout>
 </template>

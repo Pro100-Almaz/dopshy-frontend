@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dribbble, Instagram, Twitter, MapPin, Mail, Phone } from 'lucide-vue-next'
+import { Dribbble, Instagram, MapPin, Mail, Phone } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { ARENA, directionsUrl } from '@/services/booking'
 

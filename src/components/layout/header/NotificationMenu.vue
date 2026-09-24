@@ -105,12 +105,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
 const dropdownOpen = ref(false)
-const notifying = ref(true)
 const dropdownRef = ref(null)
 
 const notifications = ref([
@@ -196,11 +195,6 @@ const notifications = ref([
   },
   // Add more notifications here...
 ])
-
-const toggleDropdown = () => {
-  dropdownOpen.value = !dropdownOpen.value
-  notifying.value = false
-}
 
 const closeDropdown = () => {
   dropdownOpen.value = false

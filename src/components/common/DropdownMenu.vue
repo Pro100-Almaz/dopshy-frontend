@@ -30,7 +30,7 @@
             v-if="item.to"
             :key="`router-${index}`"
             :to="item.to"
-            @click.native="handleMenuItemClick(item.onClick)"
+            @click="handleMenuItemClick(item.onClick)"
             :class="itemClass"
           >
             {{ item.label }}
@@ -50,11 +50,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import vClickOutside from './v-click-outside.vue'
 
-const props = defineProps({
+defineProps({
   menuItems: {
     type: Array,
     default: () => [],
@@ -93,7 +93,7 @@ const handleMenuItemClick = (callback) => {
 }
 </script>
 
-<script>
+<script lang="ts">
 export default {
   directives: {
     clickOutside: vClickOutside,

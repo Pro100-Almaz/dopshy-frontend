@@ -14,7 +14,6 @@ export type AppPermission =
   | 'sportSwitcher'
   | 'globalBotSetting'
 
-const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
 const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
 const ACADEMY_ROLES = new Set<UserRole>([
   'super_admin',
