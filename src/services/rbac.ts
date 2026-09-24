@@ -4,6 +4,7 @@ import type { SportKey } from './academy'
 export type AppPermission =
   | 'arena'
   | 'academy'
+  | 'academyUsers'
   | 'academyPayments'
   | 'botContent'
   | 'agentTest'
@@ -14,7 +15,6 @@ export type AppPermission =
   | 'sportSwitcher'
   | 'globalBotSetting'
 
-const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
 const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
 const ACADEMY_ROLES = new Set<UserRole>([
   'super_admin',
@@ -47,6 +47,11 @@ export function hasPermission(
       return ARENA_ROLES.has(role)
     case 'academy':
       return ACADEMY_ROLES.has(role)
+    case 'academyUsers':
+      // Кросс-спортивный список — виден только тем, кто не привязан к одному
+      // направлению (football_manager/boxing_manager видят своих учеников на
+      // /{sport}/students и не нуждаются в общем списке).
+      return role === 'admin' || role === 'manager'
     case 'academyPayments':
       return role === 'admin' || role === 'manager'
     case 'agentTest':

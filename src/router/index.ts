@@ -142,6 +142,12 @@ const router = createRouter({
       component: () => import('../views/Pages/CustomersPage.vue'),
       meta: { title: 'Клиентская база' },
     },
+    {
+      path: '/discounts',
+      name: 'Discounts',
+      component: () => import('../views/Pages/DiscountsPage.vue'),
+      meta: { title: 'Скидки' },
+    },
 
     // ── Академия (футбол и бокс — один набор страниц) ──
     // Вид спорта — параметр маршрута: одни и те же компоненты обслуживают
@@ -220,9 +226,15 @@ const router = createRouter({
 
     // ── Персонал и прочее ───────────────────────────
     {
+      path: '/staff',
+      name: 'Staff',
+      component: () => import('../views/Staff/StaffPage.vue'),
+      meta: { title: 'Сотрудники' },
+    },
+    {
       path: '/workers',
       name: 'Workers',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: '/staff',
       meta: { title: 'Сотрудники' },
     },
     {
@@ -288,7 +300,8 @@ router.beforeEach((to, _from, next) => {
       path === '/field-slots' ||
       path === '/bookings' ||
       path === '/contracts' ||
-      path === '/customers'
+      path === '/customers' ||
+      path === '/discounts'
     ) {
       if (!hasPermission(role, 'arena')) return next(defaultPathForRole(role))
     }
@@ -297,11 +310,7 @@ router.beforeEach((to, _from, next) => {
       if (!hasPermission(role, 'history')) return next(defaultPathForRole(role))
     }
 
-    if (path === '/agent-test') {
-      if (!hasPermission(role, 'agentTest')) return next(defaultPathForRole(role))
-    }
-
-    if (path === '/workers') {
+    if (path === '/staff' || path === '/workers') {
       if (!hasPermission(role, 'workers')) return next(defaultPathForRole(role))
     }
 

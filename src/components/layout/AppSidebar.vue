@@ -189,6 +189,7 @@ import {
   Gauge,
   Settings,
   PersonStanding,
+  BadgePercent,
 } from 'lucide-vue-next'
 import { ChevronDownIcon, HorizontalDots } from '@/icons'
 import { useSidebar } from '@/composables/useSidebar'
@@ -248,6 +249,7 @@ const menuGroups = computed<MenuGroup[]>(() => {
         { icon: CalendarCheck, name: 'Список броней', path: '/bookings' },
         { icon: BriefcaseBusiness, name: 'Контракты', path: '/contracts' },
         { icon: PersonStanding, name: 'Клиентская база', path: '/customers' },
+        { icon: BadgePercent, name: 'Скидки', path: '/discounts' },
         ...(hasPermission(role, 'history')
           ? [{ icon: History, name: 'История действий', path: '/history' }]
           : []),
@@ -308,7 +310,7 @@ const menuGroups = computed<MenuGroup[]>(() => {
       ? [{ icon: FlaskConical, name: 'Тест агента', path: '/agent-test' }]
       : []),
     ...(hasPermission(role, 'workers')
-      ? [{ icon: HardHat, name: 'Сотрудники', path: '/workers' }]
+      ? [{ icon: HardHat, name: 'Сотрудники', path: '/staff' }]
       : []),
     ...(hasPermission(role, 'reports')
       ? [{ icon: BarChart3, name: 'Отчёты', path: '/reports' }]

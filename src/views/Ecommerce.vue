@@ -24,7 +24,7 @@
   </admin-layout>
 </template>
 
-<script>
+<script lang="ts">
 import AdminLayout from '../components/layout/AdminLayout.vue'
 import EcommerceMetrics from '../components/ecommerce/EcommerceMetrics.vue'
 import MonthlyTarget from '../components/ecommerce/MonthlySale.vue'

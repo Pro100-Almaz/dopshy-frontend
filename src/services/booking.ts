@@ -27,7 +27,7 @@ import { apiFetch, mediaUrl } from './api'
 export const ARENA = {
   address: 'Астана, ул. Сыганак 6ф',
   lat: 51.13079357137367,
-  lng:  71.36958624774051
+  lng: 71.36958624774051,
 }
 
 export function directionsUrl(): string {
@@ -220,13 +220,17 @@ function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): numbe
   return pricing[type] ?? pricing.morning_day ?? 0
 }
 
-function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
-  const hour = Math.floor(startMin / 60)
-  const perHour = field.pricing
-    ? resolvePrice(field.pricing, date, hour)
+function hourlyRate(field: Field, dateISO: string, hour: number): number {
+  return field.pricing
+    ? resolvePrice(field.pricing, dateISO, hour)
     : hour >= 18
       ? Math.round(field.pricePerHour * 1.2)
       : field.pricePerHour
+}
+
+function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
+  const hour = Math.floor(startMin / 60)
+  const perHour = hourlyRate(field, date, hour)
   // Цена слота пропорциональна его длительности (прайс задан за час).
   const price = Math.round((perHour * SLOT_MINUTES) / 60)
   const booked = field.pricing ? false : hash(`${field.id}|${date}|${startMin}`) % 10 < 3
@@ -243,6 +247,39 @@ function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot
     price,
     status,
   }
+}
+
+const BILLING_ROUND_MIN = 30 // биллинг и ручной ввод времени идут целыми получасами
+const RATE_STEP_MIN = 15 // шаг суммирования — мельче получаса, чтобы точно поймать смену тарифа внутри часа
+
+/** Округляет 'HH:mm' вверх до ближайшего получаса (10:07 → 10:30, 10:31 → 11:00, 10:30 → без изменений). */
+export function roundTimeUpToHalfHour(time: string): string {
+  const rounded = Math.ceil(toMinutes(time) / BILLING_ROUND_MIN) * BILLING_ROUND_MIN
+  return minToTime(Math.min(rounded, DAY_MINUTES - BILLING_ROUND_MIN))
+}
+
+/**
+ * Пересчёт суммы брони при ручном редактировании времени: сумма ставок за
+ * интервал [start, end). Оплата всегда идёт целыми получасами — время
+ * окончания, не попадающее на границу :00/:30, округляется вверх до
+ * ближайшего получаса (напр. 10:07 → 10:30, 10:31 → 11:00).
+ */
+export function estimateBookingPrice(
+  field: Field,
+  dateISO: string,
+  start: string,
+  end: string,
+): number {
+  const startMin = toMinutes(start)
+  const rawEndMin = toMinutes(end)
+  if (rawEndMin <= startMin) return 0
+  const endMin = Math.ceil(rawEndMin / BILLING_ROUND_MIN) * BILLING_ROUND_MIN
+  let total = 0
+  for (let m = startMin; m < endMin; m += RATE_STEP_MIN) {
+    const segment = Math.min(RATE_STEP_MIN, endMin - m)
+    total += (hourlyRate(field, dateISO, Math.floor(m / 60)) * segment) / 60
+  }
+  return Math.round(total)
 }
 
 export function getSlots(fieldId: string, date: string, now: Date = new Date()): Promise<Slot[]> {
@@ -380,7 +417,11 @@ export async function getManagerWeek(
   const days = week.days
   if (!days.length) return week
   try {
-    const week_bookings = await getBookedSlotsInRange(field.id, days[0].iso, days[days.length - 1].iso)
+    const week_bookings = await getBookedSlotsInRange(
+      field.id,
+      days[0].iso,
+      days[days.length - 1].iso,
+    )
     // Слот занимают подтверждённые брони и черновики, ожидающие оплаты.
     const allowed_states: string[] = [
       BOOKING_STATE_ENUMS.CONFIRMED,
@@ -410,17 +451,20 @@ export interface BatchSlotIn {
   // Повтор интервала. Бэкенд разворачивает вхождения сам (daily/weekly/monthly).
   repeat_mode?: RepeatMode // по умолчанию 'none'
   repeat_until?: string // 'yyyy-mm-dd', обязателен при repeat_mode !== 'none'
+  discount_id?: number | null
 }
 
 export interface BookingBatchPayload {
   slots: BatchSlotIn[]
   customer?: string
   phone?: string
+  customer_id?: number
   notes?: string
   price_total?: number
   prepayment?: number
   reserved_until?: number
   updated_by?: string
+  discount_id?: number | null
 }
 
 /**
@@ -461,11 +505,7 @@ export function createBookingsBatch(payload: BookingBatchPayload): Promise<unkno
  * `monthly` — то же число месяца (короткие месяцы без нужного числа пропускаются),
  * `none` — единственная дата старта. Ограничено GUARD от зацикливания.
  */
-export function computeOccurrences(
-  startISO: string,
-  untilISO: string,
-  mode: RepeatMode,
-): string[] {
+export function computeOccurrences(startISO: string, untilISO: string, mode: RepeatMode): string[] {
   if (mode === 'none') return [startISO]
   const [sy, sm, sd] = startISO.split('-').map(Number)
   const [uy, um, ud] = untilISO.split('-').map(Number)
@@ -518,9 +558,14 @@ export function mergeContiguousSlots(
   const out: SlotInterval[] = []
   for (const group of byKey.values()) {
     const sorted = [...group].sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
-    let cur:
-      | { fieldId: string; date: string; start: string; end: string; price: number; endMin: number }
-      | null = null
+    let cur: {
+      fieldId: string
+      date: string
+      start: string
+      end: string
+      price: number
+      endMin: number
+    } | null = null
 
     const flush = () => {
       if (!cur) return
@@ -609,10 +654,7 @@ export async function findRepeatConflicts(
  * Строит строки для `/bookings/batch` из слитных интервалов. К интервалу с правилом
  * повтора добавляет `repeat_mode`/`repeat_until`; вхождения не разворачивает — это делает бэкенд.
  */
-export function buildBatchSlots(
-  intervals: SlotInterval[],
-  rules: RepeatRule[],
-): BatchSlotIn[] {
+export function buildBatchSlots(intervals: SlotInterval[], rules: RepeatRule[]): BatchSlotIn[] {
   const ruleById = new Map(rules.map((r) => [r.id, r]))
   return intervals.map((iv) => {
     const rule = ruleById.get(iv.id)
@@ -746,7 +788,6 @@ function addDays(base: Date, days: number): Date {
   return d
 }
 
-
 const HIDDEN_BOOKING_STATES: ReadonlySet<string> = new Set(['cancelled', 'rejected', 'unpaid'])
 
 export function isVisibleBookingState(state: string): boolean {
@@ -774,6 +815,7 @@ function mapBooking(api: BookingApi): Booking {
     ref: `BK-${api.id}`,
     customerName: api.customer_name,
     customerPhone: api.phone,
+    customerId: api.customer_id ?? undefined,
     fieldId: String(api.field),
     fieldName: `Поле №${api.field}`,
     date: api.date,
@@ -790,6 +832,10 @@ function mapBooking(api: BookingApi): Booking {
     paidAvans,
     paidTotal: paidBot + paidKaspiQr + paidCash + paidAvans,
     hasContract: api.has_contract,
+    discountId: api.discount_id == null ? undefined : String(api.discount_id),
+    discountAmount: toMoney(api.discount_amount),
+    priceBeforeDiscount:
+      api.price_before_discount == null ? undefined : toMoney(api.price_before_discount),
   }
 }
 
@@ -841,16 +887,22 @@ export function getBookingDetail(id: string | number): Promise<BookingDetailApi>
 export interface BookingUpdatePayload {
   field_id?: number
   customer_name?: string
+  customer_id?: number
+  phone?: string
   time_start?: string // 'HH:mm' / 'HH:mm:ss'
   time_end?: string
   date?: string // 'yyyy-mm-dd'
   end_date?: string
   status?: BookingState
   notes?: string
+  // Пересчитанная сумма — отправляем только когда меняется время/поле/дата
+  // (см. estimateBookingPrice), иначе бэкенд оставляет исходную цену как есть.
+  price_total?: number
   // Оплаты, ₸ — редактируются менеджером. Бэкенд ожидает числа.
   paid_kaspi_qr?: number
   paid_cash?: number
   paid_avans?: number
+  discount_id?: number | null
 }
 
 /** Приводит 'HH:mm' к 'HH:mm:ss' — бэкенд ожидает datetime.time. */
@@ -947,7 +999,6 @@ export async function listBookingsInRange(
   return rows.filter((r): r is BookingApi => r != null).map(mapBooking)
 }
 
-
 export const BOOKING_STATE_ENUMS = {
   DRAFT: 'draft',
   AWAITING_PAYMENT: 'awaiting_payment',
@@ -955,7 +1006,6 @@ export const BOOKING_STATE_ENUMS = {
   CANCELLED: 'cancelled',
   UNPAID: 'unpaid',
 } as const satisfies Record<string, BookingState>
-
 
 // Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
 export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
@@ -966,7 +1016,6 @@ export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
   [BOOKING_STATE_ENUMS.UNPAID]: 'Не оплачено',
 }
 
-
 // Человекочитаемая подпись статуса брони по сырому state с бэкенда.
 // Неизвестные значения возвращаем как есть, чтобы ничего не «терялось».
 export function bookingStateLabel(state: string): string {
@@ -976,15 +1025,19 @@ export function bookingStateLabel(state: string): string {
 // Цвет бейджа статуса брони по сырому state с бэкенда. «Ожидает оплаты»
 // (awaiting_payment) — единственное состояние с предупреждающим цветом.
 const BOOKING_STATE_CLASS: Record<string, string> = {
-  [BOOKING_STATE_ENUMS.DRAFT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
-  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT] : 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
-  [BOOKING_STATE_ENUMS.CONFIRMED]: 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
-  [BOOKING_STATE_ENUMS.CANCELLED]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
-  [BOOKING_STATE_ENUMS.UNPAID]: 'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  [BOOKING_STATE_ENUMS.DRAFT]:
+    'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.AWAITING_PAYMENT]:
+    'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.CONFIRMED]:
+    'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500',
+  [BOOKING_STATE_ENUMS.CANCELLED]:
+    'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
+  [BOOKING_STATE_ENUMS.UNPAID]:
+    'bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-500',
 }
 
-const BOOKING_STATE_CLASS_DEFAULT =
-  'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+const BOOKING_STATE_CLASS_DEFAULT = 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
 
 export function bookingStateClass(state: string): string {
   return BOOKING_STATE_CLASS[state] ?? BOOKING_STATE_CLASS_DEFAULT

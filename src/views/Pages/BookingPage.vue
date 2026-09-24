@@ -145,15 +145,6 @@ function fullDateLabel(iso: string): string {
   return `${d.day} ${d.month}, ${d.weekday}`
 }
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase()
-}
-
 const editing = ref<Booking | null>(null)
 const confirmInlineEdits = ref(false)
 const savingInlineEdits = ref(false)
@@ -665,6 +656,11 @@ onUnmounted(() => {
                         </th>
                         <th class="w-32 px-4 py-2.5 text-left sm:px-5">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Скидка
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Удалённо
                           </p>
                         </th>
@@ -743,6 +739,15 @@ onUnmounted(() => {
                           <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                             {{ formatPrice(b.total) }}
                           </span>
+                        </td>
+
+                        <td class="px-4 py-4 align-top sm:px-5">
+                          <span
+                            v-if="b.discountAmount"
+                            class="font-medium text-success-700 text-theme-sm"
+                            >− {{ formatPrice(b.discountAmount) }}</span
+                          >
+                          <span v-else class="text-gray-400">—</span>
                         </td>
 
                         <td class="px-4 py-4 align-top sm:px-5">
