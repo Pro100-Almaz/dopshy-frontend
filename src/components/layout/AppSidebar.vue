@@ -184,6 +184,7 @@ import {
   Wallet,
   HardHat,
   Bot,
+  FlaskConical,
   BarChart3,
   Gauge,
   Settings,
@@ -305,6 +306,9 @@ const menuGroups = computed<MenuGroup[]>(() => {
   }
 
   const otherItems: MenuItem[] = [
+    ...(hasPermission(role, 'agentTest')
+      ? [{ icon: FlaskConical, name: 'Тест агента', path: '/agent-test' }]
+      : []),
     ...(hasPermission(role, 'workers')
       ? [{ icon: HardHat, name: 'Сотрудники', path: '/staff' }]
       : []),
