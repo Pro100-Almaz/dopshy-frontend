@@ -1,445 +1,580 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
-  X,
-  Loader2,
-  AlertTriangle,
-  CheckCircle2,
+  ArrowLeft,
   ArrowRight,
-  Wallet,
+  BadgePercent,
+  CheckCircle2,
+  Loader2,
+  Search,
+  UserRound,
+  X,
 } from 'lucide-vue-next'
 import {
   createBookingsBatch,
   formatPrice,
-  FIELD_TYPE_LABEL,
   PREPAYMENT_PER_SLOT,
-  REPEAT_MODE_LABEL,
   RESERVATION_TTL_MINUTES,
 } from '@/services/booking'
+import {
+  createDiscount as createDiscountRequest,
+  discountUsageLeft,
+  listDiscounts,
+  type Discount,
+  type DiscountStatus,
+} from '@/services/discounts'
+import {
+  createCustomer as createCustomerRequest,
+  findCustomerByPhone,
+  type Customer,
+} from '@/services/customers'
+import { ApiError } from '@/services/api'
 import { useBookingStore } from '@/stores/booking'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; created: [] }>()
-
-const store = useBookingStore()
-const auth = useAuthStore()
-
-// Роль сотрудника (админ / супер-админ / менеджер) — от неё зависят служебные
-// возможности модалки (напр. ручная цена одиночной брони).
-const isManager = computed(() => auth.isStaff)
-
-const dialog = ref<HTMLDialogElement | null>(null)
-
-type Step = 'review' | 'payment'
-const step = ref<Step>('review')
-const status = ref<'idle' | 'processing' | 'error'>('idle')
-const errorMessage = ref('')
-
-const form = reactive({ customer: '', phone: '', notes: '', price: '', prepayment: '' })
-
-// ── Редактируемая цена одиночной брони ──────────────
-// «Одиночная бронь» = ровно один интервал без повтора (создаётся одна бронь).
-// Только в этом случае менеджер может вручную переопределить расчётную цену.
-const singleInterval = computed(() => (store.intervals.length === 1 ? store.intervals[0] : null))
-const isSingleBooking = computed(
-  () => !!singleInterval.value && store.occurrenceCount(singleInterval.value.id) === 1,
-)
-const canEditPrice = computed(() => isManager.value && isSingleBooking.value)
-
-// Расчётная (дефолтная) цена одиночной брони.
-const calculatedPrice = computed(() => singleInterval.value?.price ?? 0)
-
-// Введённая цена как число (null, если недоступно/пусто/некорректно) — уходит как price_total.
-const priceOverride = computed(() => {
-  if (!canEditPrice.value) return null
-  const n = Number(form.price)
-  return form.price !== '' && Number.isFinite(n) && n >= 0 ? n : null
+const store = useBookingStore(),
+  auth = useAuthStore()
+const dialog = ref<HTMLDialogElement | null>(null),
+  customerDialog = ref<HTMLDialogElement | null>(null),
+  discountDialog = ref<HTMLDialogElement | null>(null),
+  step = ref<1 | 2 | 3>(1),
+  busy = ref(false),
+  error = ref('')
+const form = reactive({ phone: '', notes: '', prepayment: '' })
+const customer = ref<Customer | null>(null),
+  checked = ref(false),
+  customerModal = ref(false),
+  customerName = ref(''),
+  customerCreating = ref(false)
+const discountModal = ref(false),
+  discountCreated = ref(false),
+  discountCreating = ref(false),
+  discountError = ref(''),
+  discounts = ref<Discount[]>([]),
+  selected = ref<(number | null)[]>([])
+const draft = reactive({
+  amount: 10000,
+  usageLimit: 5,
+  condition: '',
+  status: 'pending' as DiscountStatus,
 })
-
-// Итог: ручная цена (одиночная бронь) либо расчётная сумма по всем интервалам.
-const effectiveTotal = computed(() =>
-  priceOverride.value != null ? priceOverride.value : store.projectedTotal,
+const isSuper = computed(() => auth.role === 'super_admin')
+const canCreateDiscount = computed(() => ['admin', 'super_admin'].includes(auth.role))
+const discountDraftValid = computed(
+  () =>
+    Number(draft.amount) > 0 &&
+    Number.isInteger(Number(draft.usageLimit)) &&
+    Number(draft.usageLimit) > 0,
 )
-
-// ── Аванс ───────────────────────────────────────────
-// Расчётный аванс: PREPAYMENT_PER_SLOT за каждую разовую бронь (без повтора).
-const calculatedPrepayment = computed(() => store.prepaymentTotal)
-
-// Бронь от менеджера — аванс вводится вручную (предзаполнен расчётным).
-// Бронь с лендинга — уходит расчётная сумма, поля ввода нет.
-const canEditPrepayment = computed(() => isManager.value)
-
-// Введённый аванс как число (null, если недоступно/пусто/некорректно).
-const prepaymentOverride = computed(() => {
-  if (!canEditPrepayment.value) return null
-  const n = Number(form.prepayment)
-  return form.prepayment !== '' && Number.isFinite(n) && n >= 0 ? n : null
-})
-
-// Итог: ручной аванс (менеджер) либо расчётный.
+const canCheckPhone = computed(() => form.phone.replace(/\D/g, '').length > 0)
+// A match from /manager/customers is authoritative: contacts/booking rows are
+// never used to infer registration in this flow.
+const customerReady = computed(() => customer.value !== null)
+const rows = computed(() => store.batchSlots)
+const selectedRows = computed(() =>
+  selected.value.map((id) => discounts.value.find((d) => d.id === id)),
+)
+const discountTotal = computed(() =>
+  rows.value.reduce((sum, _, i) => {
+    const interval = store.intervals[i]
+    const occurrences = interval ? store.occurrenceCount(interval.id) : 1
+    const perOccurrence = Math.min(
+      interval?.price ?? 0,
+      selectedRows.value[i]?.discount_amount ?? 0,
+    )
+    return sum + perOccurrence * occurrences
+  }, 0),
+)
+const finalTotal = computed(() => Math.max(0, store.projectedTotal - discountTotal.value))
 const prepayment = computed(() =>
-  prepaymentOverride.value != null ? prepaymentOverride.value : calculatedPrepayment.value,
+  Math.min(finalTotal.value, Math.max(0, Number(form.prepayment) || 0)),
 )
-const hasRepeating = computed(() => store.repeatRules.length > 0)
 
-// Телефон обязателен и должен содержать не менее 8 символов.
-const PHONE_MIN_LENGTH = 8
-const phoneError = computed(() =>
-  form.phone.trim().length < PHONE_MIN_LENGTH
-    ? `Номер телефона должен содержать не менее ${PHONE_MIN_LENGTH} символов`
-    : '',
-)
-// Ошибку показываем только после попытки отправки — чтобы не пугать пустым полем сразу.
-const phoneTouched = ref(false)
-
-function resetState() {
-  step.value = 'review'
-  status.value = 'idle'
-  errorMessage.value = ''
-  form.customer = ''
+function reset() {
+  step.value = 1
+  busy.value = false
+  error.value = ''
   form.phone = ''
   form.notes = ''
-  // Одиночная бронь — предзаполняем расчётной ценой, чтобы менеджер правил от неё.
-  form.price = isSingleBooking.value ? String(calculatedPrice.value) : ''
-  // Аванс — тоже от расчётного, менеджер меняет при необходимости.
-  form.prepayment = canEditPrepayment.value ? String(calculatedPrepayment.value) : ''
-  phoneTouched.value = false
+  form.prepayment = ''
+  customer.value = null
+  checked.value = false
+  discounts.value = []
+  selected.value = []
+  customerModal.value = false
+  customerName.value = ''
+  discountModal.value = false
+  discountCreated.value = false
+  discountError.value = ''
 }
-
-async function createDraft() {
-  if (!store.field || store.count === 0) return
-  phoneTouched.value = true
-  if (phoneError.value) return
-  status.value = 'processing'
-  errorMessage.value = ''
+async function loadDiscounts() {
+  if (!customer.value) return
+  discounts.value = await listDiscounts({ phone: customer.value.phone, available_only: true })
+}
+async function checkCustomer() {
+  busy.value = true
+  error.value = ''
   try {
-    // Ручная цена одиночной брони уходит как price_total на самом слоте (иначе бэкенд считает сам).
-    const slots =
-      priceOverride.value != null
-        ? store.batchSlots.map((s) => ({ ...s, price_total: priceOverride.value! }))
-        : store.batchSlots
-    await createBookingsBatch({
-      slots,
-      customer: form.customer.trim() || undefined,
-      phone: form.phone.trim() || undefined,
-      notes: form.notes.trim() || undefined,
-      // Менеджер: уходит введённая сумма (в т.ч. 0 — «без предоплаты»).
-      // Лендинг: расчётная сумма по разовым броням; 0 не отправляем — бэкенд подставит дефолт.
-      prepayment: prepaymentOverride.value ?? (prepayment.value || undefined),
-      reserved_until: RESERVATION_TTL_MINUTES,
-      updated_by: auth.user?.name || auth.user?.email || undefined,
-    })
-    status.value = 'idle'
-    step.value = 'payment'
-    // Черновик создан — сообщаем родителю (страница перезагрузится при закрытии,
-    // чтобы сетка сразу отразила занятый слот).
-    emit('created')
+    customer.value = await findCustomerByPhone(form.phone)
+    checked.value = true
+    if (customerReady.value) await loadDiscounts()
   } catch (e) {
-    status.value = 'error'
-    errorMessage.value = e instanceof Error ? e.message : 'Не удалось создать бронь'
+    error.value = e instanceof Error ? e.message : 'Не удалось найти клиента'
+  } finally {
+    busy.value = false
   }
 }
-
+function clearCustomerCheck() {
+  customer.value = null
+  checked.value = false
+}
+async function createCustomer() {
+  if (!canCheckPhone.value || customerCreating.value) return
+  customerCreating.value = true
+  error.value = ''
+  try {
+    customer.value = await createCustomerRequest({
+      name: customerName.value || undefined,
+      phone: form.phone,
+      is_regular_customer: false,
+    })
+    customerModal.value = false
+    customerName.value = ''
+    await loadDiscounts()
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'CONFLICT') {
+      customer.value = await findCustomerByPhone(form.phone)
+      customerModal.value = false
+      if (customer.value) await loadDiscounts()
+    } else error.value = e instanceof Error ? e.message : 'Не удалось создать клиента'
+  } finally {
+    customerCreating.value = false
+  }
+}
+function goNext() {
+  if (!customerReady.value) return
+  step.value = 2
+  form.prepayment = String(Math.min(PREPAYMENT_PER_SLOT, finalTotal.value))
+}
+function discountAvailable(d: Discount, i: number) {
+  const assignedElsewhere = selected.value.reduce((count, id, index) => {
+    if (index === i || id !== d.id) return count
+    const interval = store.intervals[index]
+    return count + (interval ? store.occurrenceCount(interval.id) : 1)
+  }, 0)
+  const interval = store.intervals[i]
+  const neededHere = interval ? store.occurrenceCount(interval.id) : 1
+  return discountUsageLeft(d) - assignedElsewhere >= neededHere
+}
+function recalcPrepayment() {
+  form.prepayment = String(Math.min(PREPAYMENT_PER_SLOT, finalTotal.value))
+}
+async function createDiscount() {
+  if (!customer.value || !canCreateDiscount.value || !discountDraftValid.value) return
+  discountCreating.value = true
+  discountError.value = ''
+  try {
+    await createDiscountRequest({
+      customer_id: customer.value.id,
+      discount_amount: Number(draft.amount),
+      usage_limit: Number(draft.usageLimit),
+      condition: draft.condition.trim() || null,
+      status: isSuper.value ? draft.status : 'pending',
+    })
+    discountModal.value = false
+    discountCreated.value = true
+    await loadDiscounts()
+    window.setTimeout(() => (discountCreated.value = false), 3500)
+  } catch (e) {
+    discountError.value = e instanceof Error ? e.message : 'Не удалось создать скидку'
+  } finally {
+    discountCreating.value = false
+  }
+}
+function openDiscountModal() {
+  draft.amount = 10000
+  draft.usageLimit = 5
+  draft.condition = ''
+  draft.status = 'pending'
+  discountError.value = ''
+  discountModal.value = true
+}
+async function submit() {
+  if (!customerReady.value || !customer.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    await createBookingsBatch({
+      slots: rows.value.map((row, i) => ({
+        ...row,
+        discount_id: selected.value[i] ?? null,
+      })),
+      customer: customer.value.name || undefined,
+      customer_id: customer.value.id,
+      phone: customer.value.phone,
+      notes: form.notes || undefined,
+      prepayment: prepayment.value,
+      reserved_until: RESERVATION_TTL_MINUTES,
+    })
+    step.value = 3
+    emit('created')
+  } catch (e) {
+    if (
+      e instanceof ApiError &&
+      ['DISCOUNT_NOT_FOUND', 'DISCOUNT_CUSTOMER_MISMATCH', 'DISCOUNT_UNAVAILABLE'].includes(
+        e.code ?? '',
+      )
+    ) {
+      selected.value = rows.value.map(() => null)
+      await loadDiscounts()
+    }
+    if (
+      e instanceof ApiError &&
+      [
+        'CUSTOMER_REQUIRED',
+        'INVALID_CUSTOMER',
+        'CUSTOMER_NOT_FOUND',
+        'CUSTOMER_PHONE_MISMATCH',
+      ].includes(e.code ?? '')
+    ) {
+      step.value = 1
+      customer.value = null
+      checked.value = false
+      discounts.value = []
+    }
+    error.value = e instanceof Error ? e.message : 'Не удалось создать бронь'
+  } finally {
+    busy.value = false
+  }
+}
 function finish() {
-  emit('created')
   store.clearSlots()
   emit('close')
 }
-
 watch(
   () => props.open,
-  (isOpen) => {
-    if (isOpen) {
-      resetState()
+  (open) => {
+    if (open) {
+      reset()
       dialog.value?.showModal()
-    } else {
-      dialog.value?.close()
-    }
+    } else dialog.value?.close()
   },
 )
-
-function onDialogClose() {
-  if (props.open) emit('close')
-}
-function onBackdropClick(e: MouseEvent) {
-  if (e.target === dialog.value) emit('close')
-}
+watch(
+  discountModal,
+  (open) => {
+    if (open && !discountDialog.value?.open) discountDialog.value?.showModal()
+    if (!open && discountDialog.value?.open) discountDialog.value.close()
+  },
+  { flush: 'post' },
+)
+watch(
+  customerModal,
+  (open) => {
+    if (open && !customerDialog.value?.open) customerDialog.value?.showModal()
+    if (!open && customerDialog.value?.open) customerDialog.value.close()
+  },
+  { flush: 'post' },
+)
 </script>
 
 <template>
   <dialog
     ref="dialog"
-    class="booking-dialog m-auto w-[min(34rem,94vw)] max-h-[90vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
-    aria-labelledby="booking-modal-title"
-    @close="onDialogClose"
-    @click="onBackdropClick"
+    class="booking-dialog m-auto w-[min(38rem,94vw)] max-h-[92vh] rounded-2xl bg-white p-0 text-gray-800 shadow-xl"
+    @close="props.open && emit('close')"
   >
-    <div class="flex max-h-[90vh] flex-col">
-      <!-- Header -->
-      <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-        <div class="min-w-0">
-          <h2 id="booking-modal-title" class="text-lg font-bold text-gray-900">
-            {{ step === 'review' ? 'Новая бронь' : 'Оплата' }}
+    <div class="flex max-h-[92vh] flex-col">
+      <header class="flex items-center justify-between border-b px-6 py-4">
+        <div>
+          <h2 class="text-lg font-bold">
+            {{ step === 1 ? 'Клиент' : step === 2 ? 'Детали брони' : 'Готово' }}
           </h2>
-          <p v-if="store.field" class="mt-0.5 flex items-center gap-2 text-sm text-gray-500">
-            <span
-              class="rounded-full bg-success-600 px-2 py-0.5 text-[11px] font-bold leading-none text-white"
-              >{{ FIELD_TYPE_LABEL[store.field.type] }}</span
-            >
-            {{ store.field.name }}
-          </p>
+          <p class="text-sm text-gray-500">{{ store.field?.name }}</p>
         </div>
-        <button
-          type="button"
-          class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-          aria-label="Закрыть"
-          @click="emit('close')"
-        >
-          <X class="h-5 w-5" aria-hidden="true" />
+        <button class="rounded-full p-2 hover:bg-gray-100" @click="emit('close')">
+          <X class="h-5 w-5" />
         </button>
+      </header>
+      <div v-if="step < 3" class="flex gap-2 px-6 pt-4">
+        <i class="h-1 flex-1 rounded bg-success-600"></i
+        ><i class="h-1 flex-1 rounded" :class="step === 2 ? 'bg-success-600' : 'bg-gray-200'"></i>
       </div>
-
-      <!-- Body -->
-      <div class="flex-1 overflow-auto px-5 py-4">
-        <!-- Step 1: review + contact -->
-        <template v-if="step === 'review'">
-          <div class="space-y-4">
-            <div v-for="g in store.intervalGroups" :key="g.date">
-              <div class="mb-1.5 flex items-baseline justify-between">
-                <p class="text-xs font-semibold uppercase text-gray-500">{{ g.label }}</p>
-                <p class="text-xs text-gray-500">{{ formatPrice(g.subtotal) }}</p>
-              </div>
-              <ul class="space-y-1.5">
-                <li
-                  v-for="iv in g.intervals"
-                  :key="iv.id"
-                  class="flex items-center justify-between gap-2 border-b border-gray-100 pb-1.5 text-sm"
-                >
-                  <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-gray-700">
-                    {{ iv.start }}–{{ iv.end }}
-                    <span
-                      v-if="store.ruleFor(iv.id)"
-                      class="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold text-success-700"
-                    >
-                      {{ REPEAT_MODE_LABEL[store.ruleFor(iv.id)!.mode] }} · до
-                      {{ store.ruleFor(iv.id)!.until }} · ×{{ iv.count }}
-                    </span>
-                  </span>
-                  <span class="shrink-0 text-right text-gray-600">
-                    {{ formatPrice(iv.lineTotal) }}
-                    <span v-if="iv.count > 1" class="block text-[10px] text-gray-400">
-                      {{ formatPrice(iv.price) }} × {{ iv.count }}
-                    </span>
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="mt-5 grid gap-3">
-            <input
-              v-model="form.customer"
-              placeholder="Имя клиента"
-              class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
-            />
-            <div>
+      <main class="flex-1 overflow-y-auto p-6">
+        <section v-if="step === 1" class="space-y-5">
+          <div>
+            <label class="mb-1 block text-sm font-medium">Номер телефона</label>
+            <div class="flex gap-2">
               <input
                 v-model="form.phone"
                 type="tel"
-                placeholder="Телефон"
-                :aria-invalid="phoneTouched && !!phoneError"
-                class="w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1"
-                :class="
-                  phoneTouched && phoneError
-                    ? 'border-error-400 focus:border-error-500 focus:ring-error-500'
-                    : 'border-gray-300 focus:border-success-600 focus:ring-success-600'
-                "
-                @blur="phoneTouched = true"
-              />
-              <p v-if="phoneTouched && phoneError" class="mt-1 text-xs text-error-500">
-                {{ phoneError }}
-              </p>
+                placeholder="+7 701 555 12 12"
+                class="h-11 flex-1 rounded-lg border px-4"
+                @input="clearCustomerCheck"
+              /><button
+                :disabled="!canCheckPhone || busy"
+                class="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 text-sm text-white disabled:opacity-40"
+                @click="checkCustomer"
+              >
+                <Search class="h-4 w-4" />Проверить
+              </button>
             </div>
-            <textarea
+            <p v-if="form.phone && !canCheckPhone" class="mt-1 text-xs text-error-600">
+              Введите номер телефона
+            </p>
+            <p v-else-if="error" class="mt-1 text-xs text-error-600">{{ error }}</p>
+          </div>
+          <div
+            v-if="customerReady"
+            class="flex items-center gap-3 rounded-xl border border-success-200 bg-success-50 p-4"
+          >
+            <UserRound class="h-8 w-8 rounded-full bg-white p-1.5 text-success-700" />
+            <div>
+              <b>{{ customer.name }}</b>
+              <p class="text-sm text-gray-500">+{{ customer.phone }}</p>
+            </div>
+            <CheckCircle2 class="ml-auto h-5 w-5 text-success-600" />
+          </div>
+          <div v-else-if="checked" class="rounded-xl border border-dashed p-5 text-center">
+            <p class="text-sm text-gray-600">
+              {{ customer ? 'Клиент ещё не зарегистрирован' : 'Клиент не найден' }}
+            </p>
+            <button
+              type="button"
+              class="mt-3 rounded-lg bg-success-600 px-4 py-2 text-sm text-white"
+              @click="customerModal = true"
+            >
+              Создать клиента
+            </button>
+          </div>
+        </section>
+        <section v-else-if="step === 2" class="space-y-5">
+          <div class="rounded-xl border">
+            <h3 class="border-b px-4 py-3 text-sm font-semibold">Выбранные записи</h3>
+            <div
+              v-for="(row, i) in rows"
+              :key="`${row.date}-${row.time_start}`"
+              class="grid gap-3 border-b p-4 last:border-0 sm:grid-cols-[1fr_250px]"
+            >
+              <div>
+                <b class="text-sm">{{ row.date }} · {{ row.time_start }}–{{ row.time_end }}</b>
+                <p class="text-xs text-gray-500">
+                  {{ formatPrice(store.intervals[i]?.price ?? 0) }}
+                </p>
+              </div>
+              <label class="text-xs text-gray-500"
+                >Скидка<select
+                  v-model="selected[i]"
+                  class="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm"
+                  @change="recalcPrepayment"
+                >
+                  <option :value="null">Без скидки</option>
+                  <option
+                    v-for="d in discounts"
+                    :key="d.id"
+                    :value="d.id"
+                    :disabled="!discountAvailable(d, i)"
+                  >
+                    {{ formatPrice(d.discount_amount) }} · осталось {{ discountUsageLeft(d)
+                    }}{{ d.condition ? ` · ${d.condition}` : '' }}
+                  </option>
+                </select></label
+              >
+            </div>
+          </div>
+          <div class="flex justify-between">
+            <span></span
+            ><button
+              v-if="canCreateDiscount"
+              class="inline-flex items-center gap-1 text-sm font-medium text-success-700"
+              @click="openDiscountModal"
+            >
+              <BadgePercent class="h-4 w-4" />Создать скидку
+            </button>
+          </div>
+          <p
+            v-if="discountCreated"
+            class="flex items-center gap-2 rounded-lg bg-success-50 p-3 text-sm text-success-700"
+          >
+            <CheckCircle2 class="h-4 w-4" />Заявка создана
+          </p>
+          <label class="block text-sm font-medium"
+            >Предоплата<input
+              v-model="form.prepayment"
+              type="number"
+              min="0"
+              :max="finalTotal"
+              class="mt-1 h-11 w-full rounded-lg border px-4"
+            /><small class="text-gray-500"
+              >По умолчанию: до {{ formatPrice(PREPAYMENT_PER_SLOT) }}</small
+            ></label
+          >
+          <label class="block text-sm font-medium"
+            >Заметка<textarea
               v-model="form.notes"
               rows="2"
-              placeholder="Заметка (необязательно)"
-              class="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
-            />
-            <!-- Аванс вводит менеджер вручную; с лендинга уходит расчётная сумма -->
-            <div v-if="canEditPrepayment">
-              <label
-                for="booking-prepayment"
-                class="mb-1 block text-xs font-semibold uppercase text-gray-500"
-                >Предоплата</label
-              >
-              <input
-                id="booking-prepayment"
-                v-model="form.prepayment"
-                type="number"
-                min="0"
-                step="1000"
-                inputmode="numeric"
-                :placeholder="String(calculatedPrepayment)"
-                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"
-              />
-              <p class="mt-1 text-xs text-gray-400">
-                Расчётная предоплата: {{ formatPrice(calculatedPrepayment) }}
-                <template v-if="store.prepaidIntervalCount > 0">
-                  ({{ formatPrice(PREPAYMENT_PER_SLOT) }} × {{ store.prepaidIntervalCount }})
-                </template>
-              </p>
+              class="mt-1 w-full rounded-lg border px-4 py-2"
+            ></textarea>
+          </label>
+          <dl class="space-y-2 rounded-xl bg-gray-50 p-4 text-sm">
+            <div class="flex justify-between">
+              <dt>Стоимость</dt>
+              <dd>{{ formatPrice(store.projectedTotal) }}</dd>
             </div>
-            <!--Todo: A booking's total price editing modal for the future-->
-            <!--            <div v-if="canEditPrice">-->
-            <!--              <label-->
-            <!--                for="booking-price"-->
-            <!--                class="mb-1 block text-xs font-semibold uppercase text-gray-500"-->
-            <!--                >Цена брони</label-->
-            <!--              >-->
-            <!--              <input-->
-            <!--                id="booking-price"-->
-            <!--                v-model="form.price"-->
-            <!--                type="number"-->
-            <!--                min="0"-->
-            <!--                step="1"-->
-            <!--                inputmode="numeric"-->
-            <!--                :placeholder="String(calculatedPrice)"-->
-            <!--                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600"-->
-            <!--              />-->
-            <!--              <p class="mt-1 text-[11px] text-gray-400">-->
-            <!--                Расчётная цена: {{ formatPrice(calculatedPrice) }}-->
-            <!--              </p>-->
-            <!--            </div>-->
-          </div>
-
-          <!-- Итог: сумма брони + аванс (ручной у менеджера, расчётный с лендинга) -->
-          <div class="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <dl class="space-y-2 text-sm">
-              <div class="flex items-baseline justify-between gap-3">
-                <dt class="text-gray-500">Сумма брони</dt>
-                <dd class="font-medium text-gray-800">{{ formatPrice(effectiveTotal) }}</dd>
-              </div>
-              <div class="flex items-baseline justify-between gap-3">
-                <dt class="text-gray-500">
-                  Предоплата
-                  <span
-                    v-if="prepaymentOverride == null && prepayment > 0"
-                    class="text-xs text-gray-400"
-                  >
-                    {{ formatPrice(PREPAYMENT_PER_SLOT) }} × {{ store.prepaidIntervalCount }}
-                  </span>
-                </dt>
-                <dd class="font-semibold text-gray-900">{{ formatPrice(prepayment) }}</dd>
-              </div>
-            </dl>
-
-            <p
-              v-if="hasRepeating && prepaymentOverride == null"
-              class="mt-2 text-xs text-gray-500"
-            >
-              Повторяющиеся брони предоплатой не облагаются.
-            </p>
-
-            <p
-              v-if="prepayment > 0"
-              class="mt-3 flex items-start gap-2 border-t border-gray-200 pt-3 text-sm text-gray-600"
-            >
-              <Wallet class="mt-0.5 h-4 w-4 shrink-0 text-success-600" aria-hidden="true" />
-              <span>
-                Счёт на предоплату {{ formatPrice(prepayment) }} придёт в Kaspi на указанный номер
-                телефона. Оплатите его в течении 20 минут, чтобы бронь подтвердилась.
-              </span>
-            </p>
-          </div>
-
-          <div
-            v-if="status === 'error'"
-            role="alert"
-            class="mt-4 flex items-start gap-2 rounded-lg border border-error-200 bg-error-50 px-3 py-2.5 text-sm"
-          >
-            <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-error-500" aria-hidden="true" />
-            <span class="text-gray-700">{{ errorMessage }}</span>
-          </div>
-        </template>
-
-        <!-- Step 2: payment (mock) -->
-        <template v-else>
-          <div class="flex flex-col items-center gap-3 py-4 text-center">
-            <div class="grid h-12 w-12 place-items-center rounded-full bg-success-50">
-              <CheckCircle2 class="h-7 w-7 text-success-600" aria-hidden="true" />
+            <div class="flex justify-between text-success-700">
+              <dt>Скидка</dt>
+              <dd>− {{ formatPrice(discountTotal) }}</dd>
             </div>
-            <p class="font-semibold text-gray-900">Бронь создана</p>
-            <p class="max-w-xs text-sm text-gray-500">
-              <template v-if="prepayment > 0">
-                Счёт на предоплату
-                <span class="font-semibold text-gray-900">{{ formatPrice(prepayment) }}</span>
-                будет отправлен в Kaspi на номер
-                <span class="font-semibold text-gray-900">{{ form.phone }}</span
-                >. Оплатите его в течении 20 минут, чтобы бронь подтвердилась.
-              </template>
-              <template v-else>
-                Предоплата по этой брони не требуется — оплата на месте.
-              </template>
-            </p>
-          </div>
-        </template>
-      </div>
-
-      <!-- Footer -->
-      <div class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
-        <div>
-          <p class="text-xs text-gray-500">Итого</p>
-          <p class="text-xl font-bold text-gray-900">{{ formatPrice(effectiveTotal) }}</p>
-          <p v-if="prepayment > 0" class="text-xs text-gray-500">
-            предоплата {{ formatPrice(prepayment) }}
-          </p>
-        </div>
-
-        <button
-          v-if="step === 'review'"
-          type="button"
-          :disabled="store.count === 0 || status === 'processing'"
-          class="flex items-center justify-center gap-2 rounded-full bg-success-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
-          @click="createDraft"
+            <div class="flex justify-between border-t pt-2 text-base font-bold">
+              <dt>Итого</dt>
+              <dd>{{ formatPrice(finalTotal) }}</dd>
+            </div>
+          </dl>
+          <p v-if="error" class="text-sm text-error-600">{{ error }}</p>
+        </section>
+        <section v-else class="py-10 text-center">
+          <CheckCircle2 class="mx-auto h-14 w-14 text-success-600" />
+          <h3 class="mt-3 text-xl font-bold">Бронь создана</h3>
+          <p class="text-sm text-gray-500">Предоплата {{ formatPrice(prepayment) }}</p>
+        </section>
+      </main>
+      <footer class="flex justify-between border-t px-6 py-4">
+        <button v-if="step === 2" class="inline-flex items-center gap-2 text-sm" @click="step = 1">
+          <ArrowLeft class="h-4 w-4" />Назад</button
+        ><span v-else></span
+        ><button
+          v-if="step === 1"
+          :disabled="!customerReady"
+          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 font-semibold text-white disabled:bg-gray-200"
+          @click="goNext"
         >
-          <Loader2 v-if="status === 'processing'" class="h-5 w-5 animate-spin" aria-hidden="true" />
-          <template v-else
-            >Создать бронь <ArrowRight class="h-5 w-5" aria-hidden="true"
-          /></template>
-        </button>
-
-        <button
+          Далее<ArrowRight class="h-4 w-4" /></button
+        ><button
+          v-else-if="step === 2"
+          :disabled="busy"
+          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 font-semibold text-white"
+          @click="submit"
+        >
+          <Loader2 v-if="busy" class="h-4 w-4 animate-spin" />Создать бронь</button
+        ><button
           v-else
-          type="button"
-          class="rounded-full bg-success-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-success-700"
+          class="rounded-full bg-success-600 px-6 py-3 font-semibold text-white"
           @click="finish"
         >
           Готово
         </button>
-      </div>
+      </footer>
     </div>
   </dialog>
+  <dialog
+    ref="customerDialog"
+    class="nested-dialog m-auto w-[min(27rem,92vw)] rounded-2xl bg-white p-6 shadow-2xl"
+    @close="customerModal = false"
+    @cancel.prevent="customerModal = false"
+  >
+    <form @submit.prevent="createCustomer">
+      <h3 class="text-lg font-bold">Новый клиент</h3>
+      <label class="block text-sm"
+        >Имя (необязательно)<input
+          v-model="customerName"
+          class="mt-1 h-11 w-full rounded-lg border px-4" /></label
+      ><label class="mt-3 block text-sm"
+        >Телефон<input
+          :value="form.phone"
+          disabled
+          class="mt-1 h-11 w-full rounded-lg border bg-gray-50 px-4"
+      /></label>
+      <p v-if="error" class="mt-3 text-sm text-error-600">{{ error }}</p>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-lg border px-4 py-2" @click="customerModal = false">
+          Отмена</button
+        ><button
+          :disabled="customerCreating || !canCheckPhone"
+          class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2 text-white disabled:opacity-50"
+        >
+          <Loader2 v-if="customerCreating" class="h-4 w-4 animate-spin" />Создать
+        </button>
+      </div>
+    </form>
+  </dialog>
+  <dialog
+    ref="discountDialog"
+    class="nested-dialog m-auto w-[min(28rem,92vw)] rounded-2xl bg-white p-6 shadow-2xl"
+    @close="discountModal = false"
+    @cancel.prevent="discountModal = false"
+  >
+    <form @submit.prevent="createDiscount">
+      <h3 class="text-lg font-bold">Новая скидка</h3>
+      <label class="block text-sm"
+        >Клиент<input
+          :value="customer?.name"
+          disabled
+          class="mt-1 h-11 w-full rounded-lg border bg-gray-50 px-4" /></label
+      ><label class="mt-3 block text-sm"
+        >Сумма<input
+          v-model.number="draft.amount"
+          type="number"
+          min="1"
+          class="mt-1 h-11 w-full rounded-lg border px-4" /></label
+      ><label class="mt-3 block text-sm"
+        >Условие<textarea
+          v-model="draft.condition"
+          rows="2"
+          class="mt-1 w-full rounded-lg border px-4 py-2"
+        ></textarea></label
+      ><label class="mt-3 block text-sm"
+        >Использований<input
+          v-model.number="draft.usageLimit"
+          type="number"
+          min="1"
+          class="mt-1 h-11 w-full rounded-lg border px-4" /></label
+      ><label class="mt-3 block text-sm"
+        >Статус<select
+          v-model="draft.status"
+          :disabled="!isSuper"
+          class="mt-1 h-11 w-full rounded-lg border px-4 disabled:bg-gray-50"
+        >
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select></label
+      >
+      <p v-if="!isSuper" class="mt-2 text-xs text-error-600">
+        Только главный админ может менять статус
+      </p>
+      <p v-if="discountError" class="mt-3 text-sm text-error-600">{{ discountError }}</p>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-lg border px-4 py-2" @click="discountModal = false">
+          Отмена</button
+        ><button
+          :disabled="discountCreating || !discountDraftValid"
+          class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Loader2 v-if="discountCreating" class="h-4 w-4 animate-spin" />Создать
+        </button>
+      </div>
+    </form>
+  </dialog>
 </template>
-
 <style scoped>
-.booking-dialog::backdrop {
-  background: color-mix(in srgb, var(--color-gray-900) 55%, transparent);
+.booking-dialog::backdrop,
+.nested-dialog::backdrop {
+  background: rgb(17 24 39/0.55);
   backdrop-filter: blur(2px);
 }
-.booking-dialog[open] {
-  animation: booking-dialog-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+.booking-dialog[open],
+.nested-dialog[open] {
+  animation: modal-in 0.2s ease-out;
 }
-@keyframes booking-dialog-in {
+.nested-dialog {
+  z-index: 1000001;
+}
+@keyframes modal-in {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.98);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .booking-dialog[open] {
-    animation: none;
   }
 }
 </style>

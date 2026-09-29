@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { MapPin, Navigation, SearchX, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import { SearchX, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import type { Field, FieldType } from '@/types'
-import { getManagerFields, toISO, ARENA, directionsUrl } from '@/services/booking'
+import { getManagerFields, toISO } from '@/services/booking'
 import BookingHeader from './components/BookingHeader.vue'
 import FieldCard from './components/FieldCard.vue'
 

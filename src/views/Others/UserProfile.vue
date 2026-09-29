@@ -97,11 +97,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { LogOut, X } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { LogOut } from 'lucide-vue-next'
 import AdminLayout from '../../components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import Modal from '../../components/profile/Modal.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types'
 
@@ -135,9 +134,6 @@ const userInitials = computed(() => {
     .slice(0, 2)
     .toUpperCase()
 })
-
-const isEditOpen = ref(false)
-const form = reactive({ name: '', phone: '' })
 
 function handleLogout() {
   authStore.logout()

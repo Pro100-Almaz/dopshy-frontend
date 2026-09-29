@@ -95,8 +95,8 @@ async function handleSubmit() {
   try {
     await authService.forgotPassword(email.value)
     sent.value = true
-  } catch (e: any) {
-    error.value = e.message
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Не удалось отправить ссылку'
   } finally {
     loading.value = false
   }

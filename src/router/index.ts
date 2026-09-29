@@ -142,6 +142,12 @@ const router = createRouter({
       component: () => import('../views/Pages/CustomersPage.vue'),
       meta: { title: 'Клиентская база' },
     },
+    {
+      path: '/discounts',
+      name: 'Discounts',
+      component: () => import('../views/Pages/DiscountsPage.vue'),
+      meta: { title: 'Скидки' },
+    },
 
     // ── Академия (футбол и бокс — один набор страниц) ──
     // Вид спорта — параметр маршрута: одни и те же компоненты обслуживают
@@ -294,7 +300,8 @@ router.beforeEach((to, _from, next) => {
       path === '/field-slots' ||
       path === '/bookings' ||
       path === '/contracts' ||
-      path === '/customers'
+      path === '/customers' ||
+      path === '/discounts'
     ) {
       if (!hasPermission(role, 'arena')) return next(defaultPathForRole(role))
     }
