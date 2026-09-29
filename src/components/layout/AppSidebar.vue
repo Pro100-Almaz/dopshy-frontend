@@ -308,7 +308,7 @@ const menuGroups = computed<MenuGroup[]>(() => {
       ? [{ icon: FlaskConical, name: 'Тест агента', path: '/agent-test' }]
       : []),
     ...(hasPermission(role, 'workers')
-      ? [{ icon: HardHat, name: 'Сотрудники', path: '/workers' }]
+      ? [{ icon: HardHat, name: 'Сотрудники', path: '/staff' }]
       : []),
     ...(hasPermission(role, 'reports')
       ? [{ icon: BarChart3, name: 'Отчёты', path: '/reports' }]

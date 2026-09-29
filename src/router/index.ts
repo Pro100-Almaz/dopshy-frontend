@@ -220,9 +220,15 @@ const router = createRouter({
 
     // ── Персонал и прочее ───────────────────────────
     {
+      path: '/staff',
+      name: 'Staff',
+      component: () => import('../views/Staff/StaffPage.vue'),
+      meta: { title: 'Сотрудники' },
+    },
+    {
       path: '/workers',
       name: 'Workers',
-      component: () => import('../views/Pages/BlankPage.vue'),
+      redirect: '/staff',
       meta: { title: 'Сотрудники' },
     },
     {
@@ -297,11 +303,7 @@ router.beforeEach((to, _from, next) => {
       if (!hasPermission(role, 'history')) return next(defaultPathForRole(role))
     }
 
-    if (path === '/agent-test') {
-      if (!hasPermission(role, 'agentTest')) return next(defaultPathForRole(role))
-    }
-
-    if (path === '/workers') {
+    if (path === '/staff' || path === '/workers') {
       if (!hasPermission(role, 'workers')) return next(defaultPathForRole(role))
     }
 

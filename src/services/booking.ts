@@ -220,13 +220,17 @@ function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): numbe
   return pricing[type] ?? pricing.morning_day ?? 0
 }
 
-function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
-  const hour = Math.floor(startMin / 60)
-  const perHour = field.pricing
-    ? resolvePrice(field.pricing, date, hour)
+function hourlyRate(field: Field, dateISO: string, hour: number): number {
+  return field.pricing
+    ? resolvePrice(field.pricing, dateISO, hour)
     : hour >= 18
       ? Math.round(field.pricePerHour * 1.2)
       : field.pricePerHour
+}
+
+function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
+  const hour = Math.floor(startMin / 60)
+  const perHour = hourlyRate(field, date, hour)
   // Цена слота пропорциональна его длительности (прайс задан за час).
   const price = Math.round((perHour * SLOT_MINUTES) / 60)
   const booked = field.pricing ? false : hash(`${field.id}|${date}|${startMin}`) % 10 < 3
@@ -243,6 +247,39 @@ function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot
     price,
     status,
   }
+}
+
+const BILLING_ROUND_MIN = 30 // биллинг и ручной ввод времени идут целыми получасами
+const RATE_STEP_MIN = 15 // шаг суммирования — мельче получаса, чтобы точно поймать смену тарифа внутри часа
+
+/** Округляет 'HH:mm' вверх до ближайшего получаса (10:07 → 10:30, 10:31 → 11:00, 10:30 → без изменений). */
+export function roundTimeUpToHalfHour(time: string): string {
+  const rounded = Math.ceil(toMinutes(time) / BILLING_ROUND_MIN) * BILLING_ROUND_MIN
+  return minToTime(Math.min(rounded, DAY_MINUTES - BILLING_ROUND_MIN))
+}
+
+/**
+ * Пересчёт суммы брони при ручном редактировании времени: сумма ставок за
+ * интервал [start, end). Оплата всегда идёт целыми получасами — время
+ * окончания, не попадающее на границу :00/:30, округляется вверх до
+ * ближайшего получаса (напр. 10:07 → 10:30, 10:31 → 11:00).
+ */
+export function estimateBookingPrice(
+  field: Field,
+  dateISO: string,
+  start: string,
+  end: string,
+): number {
+  const startMin = toMinutes(start)
+  const rawEndMin = toMinutes(end)
+  if (rawEndMin <= startMin) return 0
+  const endMin = Math.ceil(rawEndMin / BILLING_ROUND_MIN) * BILLING_ROUND_MIN
+  let total = 0
+  for (let m = startMin; m < endMin; m += RATE_STEP_MIN) {
+    const segment = Math.min(RATE_STEP_MIN, endMin - m)
+    total += (hourlyRate(field, dateISO, Math.floor(m / 60)) * segment) / 60
+  }
+  return Math.round(total)
 }
 
 export function getSlots(fieldId: string, date: string, now: Date = new Date()): Promise<Slot[]> {
@@ -847,6 +884,9 @@ export interface BookingUpdatePayload {
   end_date?: string
   status?: BookingState
   notes?: string
+  // Пересчитанная сумма — отправляем только когда меняется время/поле/дата
+  // (см. estimateBookingPrice), иначе бэкенд оставляет исходную цену как есть.
+  price_total?: number
   // Оплаты, ₸ — редактируются менеджером. Бэкенд ожидает числа.
   paid_kaspi_qr?: number
   paid_cash?: number

@@ -10,11 +10,16 @@ import { SPORTS, type SportKey } from '@/services/academy'
 import { useAcademyStore } from '@/stores/academy'
 import SportSwitcher from './SportSwitcher.vue'
 
-const props = defineProps<{
-  sport: SportKey
-  title: string
-  subtitle?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    sport: SportKey
+    title: string
+    subtitle?: string
+    /** Скрыть переключатель направления — когда экран сам решает, как менять вид спорта. */
+    hideSportSwitcher?: boolean
+  }>(),
+  { hideSportSwitcher: false },
+)
 
 const academy = useAcademyStore()
 
@@ -39,7 +44,7 @@ watchEffect(() => academy.setSport(props.sport))
 
     <div class="flex shrink-0 flex-wrap items-center gap-3">
       <slot name="actions" />
-      <SportSwitcher :sport="sport" />
+      <SportSwitcher v-if="!hideSportSwitcher" :sport="sport" />
     </div>
   </header>
 </template>
