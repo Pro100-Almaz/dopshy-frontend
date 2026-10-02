@@ -1,11 +1,11 @@
 import router from '@/router'
 
 const LOCAL_CHANGES = import.meta.env.LOCAL_CHANGES === 'true'
-export const API_BASE = LOCAL_CHANGES ? 'http://localhost:8000/api' : 'https://api.dopsy.kz/api'
+export const API_BASE = LOCAL_CHANGES ? 'http://localhost:8002/api' : 'https://api.dopsy.kz/api'
 
 // Base URL for backend-served media. LOCAL_CHANGES=true points the app at the
 // local backend; otherwise the production API/media host is used.
-const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8000/media' : 'https://api.dopsy.kz/media'
+const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8002/media' : 'https://api.dopsy.kz/media'
 
 /** Build a URL for a file stored in the backend media folder, e.g. mediaUrl('img.png'). */
 export function mediaUrl(name: string): string {
@@ -15,10 +15,14 @@ export function mediaUrl(name: string): string {
 /** Error carrying the HTTP status so callers can branch on it (e.g. 502 → сервис недоступен). */
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  code?: string
+  details?: Record<string, unknown>
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
+    this.details = details
   }
 }
 
@@ -54,8 +58,7 @@ async function handleSessionExpired(): Promise<void> {
 }
 
 export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): Promise<T> {
-  const token =
-    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const token = localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
   const { skipSessionExpiredRedirect, ...fetchOptions } = options ?? {}
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -79,7 +82,12 @@ export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): 
     const body = await res.json().catch(() => ({}))
     // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
     const detail = typeof body.detail === 'string' ? body.detail : undefined
-    throw new ApiError(res.status, detail || body.message || `API error ${res.status}`)
+    throw new ApiError(
+      res.status,
+      detail || body.message || `API error ${res.status}`,
+      typeof body.code === 'string' ? body.code : undefined,
+      body,
+    )
   }
 
   return res.json()

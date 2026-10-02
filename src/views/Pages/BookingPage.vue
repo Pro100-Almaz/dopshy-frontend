@@ -145,15 +145,6 @@ function fullDateLabel(iso: string): string {
   return `${d.day} ${d.month}, ${d.weekday}`
 }
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase()
-}
-
 const editing = ref<Booking | null>(null)
 const confirmInlineEdits = ref(false)
 const savingInlineEdits = ref(false)
@@ -665,6 +656,11 @@ onUnmounted(() => {
                         </th>
                         <th class="w-32 px-4 py-2.5 text-left sm:px-5">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                            Скидка
+                          </p>
+                        </th>
+                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                          <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Удалённо
                           </p>
                         </th>
@@ -739,74 +735,99 @@ onUnmounted(() => {
                           </span>
                         </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
-                          <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                            {{ formatPrice(b.total) }}
-                          </span>
-                        </td>
+                        <!-- Брони по договору: деньги ведутся на договоре, а не на брони. -->
+                        <template v-if="b.hasContract">
+                          <td
+                            v-for="n in 6"
+                            :key="n"
+                            class="px-4 py-4 align-top text-gray-400 sm:px-5"
+                          >
+                            —
+                          </td>
+                        </template>
+                        <template v-else>
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <span
+                              class="font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                            >
+                              {{ formatPrice(b.total) }}
+                            </span>
+                          </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
-                          <span class="font-medium text-gray-700 text-theme-sm dark:text-gray-300">
-                            {{ formatPrice(b.paidBot) }}
-                          </span>
-                        </td>
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <span
+                              v-if="b.discountAmount"
+                              class="font-medium text-success-700 text-theme-sm"
+                              >− {{ formatPrice(b.discountAmount) }}</span
+                            >
+                            <span v-else class="text-gray-400">—</span>
+                          </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
-                          <input
-                            type="number"
-                            min="0"
-                            :max="MAX_PAYMENT"
-                            step="1"
-                            inputmode="numeric"
-                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                            :value="inlineValue(b, 'paidCash')"
-                            @input="
-                              setInlineValue(
-                                b,
-                                'paidCash',
-                                ($event.target as HTMLInputElement).value,
-                              )
-                            "
-                          />
-                        </td>
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <span
+                              class="font-medium text-gray-700 text-theme-sm dark:text-gray-300"
+                            >
+                              {{ formatPrice(b.paidBot) }}
+                            </span>
+                          </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
-                          <input
-                            type="number"
-                            min="0"
-                            :max="MAX_PAYMENT"
-                            step="1"
-                            inputmode="numeric"
-                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                            :value="inlineValue(b, 'paidKaspiQr')"
-                            @input="
-                              setInlineValue(
-                                b,
-                                'paidKaspiQr',
-                                ($event.target as HTMLInputElement).value,
-                              )
-                            "
-                          />
-                        </td>
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <input
+                              type="number"
+                              min="0"
+                              :max="MAX_PAYMENT"
+                              step="1"
+                              inputmode="numeric"
+                              class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                              :value="inlineValue(b, 'paidCash')"
+                              @input="
+                                setInlineValue(
+                                  b,
+                                  'paidCash',
+                                  ($event.target as HTMLInputElement).value,
+                                )
+                              "
+                            />
+                          </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
-                          <input
-                            type="number"
-                            min="0"
-                            :max="MAX_PAYMENT"
-                            step="1"
-                            inputmode="numeric"
-                            class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                            :value="inlineValue(b, 'paidAvans')"
-                            @input="
-                              setInlineValue(
-                                b,
-                                'paidAvans',
-                                ($event.target as HTMLInputElement).value,
-                              )
-                            "
-                          />
-                        </td>
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <input
+                              type="number"
+                              min="0"
+                              :max="MAX_PAYMENT"
+                              step="1"
+                              inputmode="numeric"
+                              class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                              :value="inlineValue(b, 'paidKaspiQr')"
+                              @input="
+                                setInlineValue(
+                                  b,
+                                  'paidKaspiQr',
+                                  ($event.target as HTMLInputElement).value,
+                                )
+                              "
+                            />
+                          </td>
+
+                          <td class="px-4 py-4 align-top sm:px-5">
+                            <input
+                              type="number"
+                              min="0"
+                              :max="MAX_PAYMENT"
+                              step="1"
+                              inputmode="numeric"
+                              class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-2.5 text-theme-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                              :value="inlineValue(b, 'paidAvans')"
+                              @input="
+                                setInlineValue(
+                                  b,
+                                  'paidAvans',
+                                  ($event.target as HTMLInputElement).value,
+                                )
+                              "
+                            />
+                          </td>
+                        </template>
 
                         <td class="px-4 py-4 align-top sm:px-5">
                           <select

@@ -7,8 +7,6 @@ defineProps<{
   field: Field
   activePhoto: number
 }>()
-
-const emit = defineEmits<{ 'update:activePhoto': [value: number] }>()
 </script>
 
 <template>

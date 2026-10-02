@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { Loader2, Users, Ruler, Check, X, ArrowRight, AlertTriangle } from 'lucide-vue-next'
+import { Loader2, Users, Check, X, ArrowRight, AlertTriangle } from 'lucide-vue-next'
 import type { Field } from '@/types'
 import { getManagerField, formatPrice } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'

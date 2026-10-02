@@ -13,7 +13,6 @@ import {
   getManagerWeek,
   toISO,
   formatPrice,
-  FIELD_TYPE_LABEL,
   REPEAT_MODE_LABEL,
   type WeekSlots,
 } from '@/services/booking'

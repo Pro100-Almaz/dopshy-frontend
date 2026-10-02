@@ -272,31 +272,18 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 import FullScreenLayout from '@/components/layout/FullScreenLayout.vue'
-import AuthRoleTabs from '@/components/auth/AuthRoleTabs.vue'
 import AuthInput from '@/components/auth/AuthInput.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const roles = [
-  { label: 'СУПЕР АДМИН', value: 'super_admin' },
-  { label: 'МЕНЕДЖЕР', value: 'manager' },
-  { label: 'ТРЕНЕР', value: 'coach' },
-]
-
-const selectedRole = ref('super_admin')
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const stayLoggedIn = ref(false)
 
 const errors = reactive({ email: '', password: '' })
-
-function fillDemo() {
-  email.value = 'admin@dopsyarena.kz'
-  password.value = 'demo123'
-}
 
 function validate(): boolean {
   let valid = true
