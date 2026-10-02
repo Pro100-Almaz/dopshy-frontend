@@ -12,10 +12,8 @@ const route = useRoute()
 
 // landing.css is scoped to html.lv6 so the admin panel keeps its own look.
 onMounted(() => document.documentElement.classList.add('lv6'))
-onBeforeUnmount(() => document.documentElement.classList.remove('lv6', 'lv6-booking'))
+onBeforeUnmount(() => document.documentElement.classList.remove('lv6'))
 watchEffect(() => {
-  // Booking views share admin components; lv6-booking repaints their palette (landing.css).
-  document.documentElement.classList.toggle('lv6-booking', !!route.meta.booking)
   const key = route.meta.landing as LandingRoute | undefined
   if (key) document.title = t.value.meta[key]
 })

@@ -14,7 +14,7 @@ export const to = (route: LandingRoute, section?: string) => ({
   hash: section ? `#${section}` : '',
 })
 
-// Real booking flow (views/Booking) replaces the design's demo slot grid.
-export const BOOKING_PATH = '/booking'
+// Booking lives on the Arena page (components/Booking.vue), as in the design.
+export const BOOKING_PATH = to('arena', 'booking')
 
 export const ASSETS = '/landing/'
