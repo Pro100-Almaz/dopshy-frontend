@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { MapPin, Navigation, SearchX, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import type { Field, FieldType } from '@/types'
 import { getManagerFields, toISO, ARENA, directionsUrl } from '@/services/booking'
-import BookingHeader from './components/BookingHeader.vue'
 import FieldCard from './components/FieldCard.vue'
 
 const fields = ref<Field[]>([])
@@ -56,16 +55,13 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 text-gray-800" style="font-family: Rubik, sans-serif">
-    <BookingHeader :back="{ to: '/', label: 'На главную' }" />
-
-    <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+  <div class="min-h-screen pt-[68px] text-fg">
+    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
       <!-- Page head -->
       <div class="mb-8 max-w-2xl">
-        <h1 class="text-3xl font-bold text-gray-900">
-          Бронирование <span class="text-success-600">полей</span>
-        </h1>
-        <p class="mt-3 text-gray-500">
+        <p class="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-acid">Бронирование</p>
+        <h1 class="font-display text-4xl text-fg sm:text-5xl">Выберите поле</h1>
+        <p class="mt-4 text-fg-muted">
           Выберите поле и удобное время. Оплата онлайн, подтверждение — сразу после брони.
         </p>
       </div>
@@ -181,6 +177,6 @@ onMounted(load)
         <FieldCard v-for="f in filtered" :key="f.id" :field="f" :date="date" />
       </div>
 
-    </main>
+    </div>
   </div>
 </template>

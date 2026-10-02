@@ -18,7 +18,7 @@ const embedSrc = computed(() => {
         :src="embedSrc"
         loading="lazy"
         referrerpolicy="no-referrer-when-downgrade"
-        class="h-full w-full border-0"
+        class="map-dark h-full w-full border-0"
       />
     </div>
     <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">

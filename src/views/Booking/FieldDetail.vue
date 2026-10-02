@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { Loader2, Users, Ruler, Check, X, ArrowRight, AlertTriangle } from 'lucide-vue-next'
+import { Loader2, Users, Check, X, ArrowRight, AlertTriangle, ChevronLeft } from 'lucide-vue-next'
 import type { Field } from '@/types'
 import { getManagerField, formatPrice } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
-import BookingHeader from './components/BookingHeader.vue'
 import LocationMap from './components/LocationMap.vue'
 import WeekSchedulePanel from './components/WeekSchedulePanel.vue'
 import CreateBookingModal from './components/CreateBookingModal.vue'
@@ -55,8 +54,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 text-gray-800" style="font-family: Rubik, sans-serif">
-    <BookingHeader :back="{ to: '/booking', label: 'Все поля' }" />
+  <div class="min-h-screen pt-[68px] text-fg">
+    <RouterLink
+      to="/booking"
+      class="mx-auto mt-6 flex max-w-[96rem] items-center gap-1 px-4 text-sm font-semibold text-fg-muted hover:text-fg sm:px-6 lg:px-8 2xl:px-10"
+    >
+      <ChevronLeft class="h-4 w-4" aria-hidden="true" /> Все поля
+    </RouterLink>
 
     <!-- Loading -->
     <div v-if="fieldLoading" class="flex min-h-[60vh] items-center justify-center">
@@ -79,7 +83,7 @@ onMounted(async () => {
       </RouterLink>
     </div>
 
-    <main
+    <div
       v-else-if="field"
       class="mx-auto max-w-[96rem] px-4 py-8 pb-32 sm:px-6 lg:px-8 lg:pb-14 2xl:px-10"
     >
@@ -92,7 +96,7 @@ onMounted(async () => {
 
           <!-- Title + meta -->
           <div class="mt-6 lg:mt-0">
-            <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
+            <h1 class="font-display text-3xl text-fg sm:text-4xl">
               {{ field.name }}
             </h1>
             <p v-if="field.description" class="mt-3 max-w-prose text-gray-600">
@@ -120,7 +124,7 @@ onMounted(async () => {
 
           <!-- Schedule -->
           <section class="mt-10">
-            <h2 class="mb-4 text-lg font-bold text-gray-900">Выберите время</h2>
+            <h2 class="mb-4 font-display text-2xl text-fg">Выберите время</h2>
             <WeekSchedulePanel :field="field" />
 
             <!-- Selected preview (grouped by day) -->
@@ -153,7 +157,7 @@ onMounted(async () => {
 
           <!-- Map -->
           <section class="mt-10">
-            <h2 class="mb-4 text-lg font-bold text-gray-900">Как добраться</h2>
+            <h2 class="mb-4 font-display text-2xl text-fg">Как добраться</h2>
             <LocationMap />
           </section>
         </div>
@@ -163,7 +167,7 @@ onMounted(async () => {
           <div class="sticky top-24 space-y-4">
             <FieldPhotoGallery v-model:active-photo="activePhoto" :field="field" />
             <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
-              <h2 class="text-lg font-bold text-gray-900">Ваш выбор</h2>
+              <h2 class="font-display text-2xl text-fg">Ваш выбор</h2>
               <p class="mt-1 text-sm text-gray-500">{{ field.name }}</p>
 
               <div v-if="store.count === 0" class="mt-6 text-sm text-gray-500">
@@ -210,12 +214,12 @@ onMounted(async () => {
           </div>
         </aside>
       </div>
-    </main>
+    </div>
 
     <!-- Sticky summary bar (mobile) -->
     <div
       v-if="field && !notFound && store.count > 0"
-      class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_-2px_rgba(16,24,40,0.08)] backdrop-blur-lg lg:hidden"
+      class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-ink/95 px-4 py-3 backdrop-blur-lg lg:hidden"
     >
       <div class="mx-auto flex max-w-[96rem] items-center justify-between gap-4">
         <div>

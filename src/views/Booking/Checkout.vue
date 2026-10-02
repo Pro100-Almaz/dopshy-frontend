@@ -21,7 +21,6 @@ import {
   FIELD_TYPE_LABEL,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
-import BookingHeader from './components/BookingHeader.vue'
 
 const router = useRouter()
 const store = useBookingStore()
@@ -101,20 +100,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 text-gray-800" style="font-family: Rubik, sans-serif">
-    <BookingHeader
-      :back="store.field ? { to: `/booking/${store.field.id}`, label: 'Назад к выбору' } : undefined"
-    />
+  <div class="min-h-screen pt-[68px] text-fg">
 
     <!-- Success -->
-    <main
+    <div
       v-if="status === 'success' && confirmation"
       class="mx-auto flex max-w-lg flex-col items-center px-4 py-16 text-center"
     >
       <div class="flex h-16 w-16 items-center justify-center rounded-full bg-success-50 ring-1 ring-success-500/30">
         <CheckCircle2 class="h-9 w-9 text-success-600" aria-hidden="true" />
       </div>
-      <h1 class="mt-6 text-2xl font-bold text-gray-900">Бронь подтверждена</h1>
+      <h1 class="mt-6 font-display text-4xl text-fg">Бронь подтверждена</h1>
       <p class="mt-2 text-gray-500">
         Номер брони <span class="font-semibold text-gray-900">{{ confirmation.ref }}</span>. Мы отправили
         детали на WhatsApp — приходите за 15 минут до начала.
@@ -160,11 +156,11 @@ onBeforeUnmount(() => {
           Забронировать ещё
         </button>
       </div>
-    </main>
+    </div>
 
     <!-- Checkout form -->
-    <main v-else-if="store.field && store.count > 0" class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-      <h1 class="mb-8 text-3xl font-bold text-gray-900">Оформление</h1>
+    <div v-else-if="store.field && store.count > 0" class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+      <h1 class="mb-8 font-display text-4xl text-fg">Оформление</h1>
 
       <div class="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
         <!-- Forms -->
@@ -348,11 +344,11 @@ onBeforeUnmount(() => {
           </div>
         </aside>
       </div>
-    </main>
+    </div>
 
     <!-- Redirecting placeholder (empty draft) -->
-    <main v-else class="flex min-h-[60vh] items-center justify-center px-4 text-center">
+    <div v-else class="flex min-h-[60vh] items-center justify-center px-4 text-center">
       <p class="text-gray-500">Нет активной брони. Перенаправляем к выбору поля…</p>
-    </main>
+    </div>
   </div>
 </template>
