@@ -159,7 +159,7 @@ function goNext() {
   form.prepayment = String(Math.min(PREPAYMENT_PER_SLOT, finalTotal.value))
 }
 function discountAvailable(d: Discount, i: number) {
-  const assignedElsewhere = selected.value.reduce((count, id, index) => {
+  const assignedElsewhere = selected.value.reduce<number>((count, id, index) => {
     if (index === i || id !== d.id) return count
     const interval = store.intervals[index]
     return count + (interval ? store.occurrenceCount(interval.id) : 1)
@@ -327,7 +327,7 @@ watch(
             <p v-else-if="error" class="mt-1 text-xs text-error-600">{{ error }}</p>
           </div>
           <div
-            v-if="customerReady"
+            v-if="customer"
             class="flex items-center gap-3 rounded-xl border border-success-200 bg-success-50 p-4"
           >
             <UserRound class="h-8 w-8 rounded-full bg-white p-1.5 text-success-700" />

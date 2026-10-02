@@ -51,12 +51,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, type PropType } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import vClickOutside from './v-click-outside.vue'
+
+interface MenuItem {
+  label: string
+  to?: RouteLocationRaw
+  onClick?: () => void
+}
 
 defineProps({
   menuItems: {
-    type: Array,
+    type: Array as PropType<MenuItem[]>,
     default: () => [],
   },
   buttonClass: {
@@ -85,7 +92,7 @@ const closeDropdown = () => {
   open.value = false
 }
 
-const handleMenuItemClick = (callback) => {
+const handleMenuItemClick = (callback?: () => void) => {
   if (typeof callback === 'function') {
     callback() // Execute the provided callback function
   }
