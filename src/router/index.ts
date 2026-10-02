@@ -45,16 +45,25 @@ function lastSport(): SportKey {
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  scrollBehavior(_to, _from, savedPosition) {
-    return savedPosition || { left: 0, top: 0 }
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    // Landing section links (/arena#booking); top offset clears the fixed landing nav.
+    if (to.hash) return new Promise((resolve) => setTimeout(() => resolve({ el: to.hash, top: 84, behavior: 'smooth' }), 250))
+    return { left: 0, top: 0 }
   },
   routes: [
     // ── Лендинг (публичный) ────────────────────
     {
       path: '/',
-      name: 'Landing',
-      component: () => import('../views/Landing/landing.vue'),
-      meta: { title: 'Dopsy Arena', public: true },
+      component: () => import('../views/Landing/v6/LandingLayout.vue'),
+      meta: { public: true },
+      children: [
+        { path: '', name: 'Landing', component: () => import('../views/Landing/v6/pages/Home.vue'), meta: { landing: 'home' } },
+        { path: 'arena', name: 'LandingArena', component: () => import('../views/Landing/v6/pages/Arena.vue'), meta: { landing: 'arena' } },
+        { path: 'school', name: 'LandingSchool', component: () => import('../views/Landing/v6/pages/School.vue'), meta: { landing: 'school' } },
+        { path: 'boxy', name: 'LandingBoxing', component: () => import('../views/Landing/v6/pages/Boxing.vue'), meta: { landing: 'boxing' } },
+        { path: 'contacts', name: 'LandingContacts', component: () => import('../views/Landing/v6/pages/Contacts.vue'), meta: { landing: 'contacts' } },
+      ],
     },
 
     // ── Публичное бронирование ─────────────────

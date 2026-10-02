@@ -13,6 +13,27 @@ layer(base);
   --font-rubik: Rubik, sans-serif;
   --font-rubik-mono-one: 'Rubik Mono One', sans-serif;
 
+  /* Public landing (views/Landing/v6) */
+  --font-display: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  --font-wordmark: 'Inter', system-ui, sans-serif;
+  --color-ink: #0a0a0b;
+  --color-ink-2: #101012;
+  --color-surface: #16161a;
+  --color-surface-2: #1d1d22;
+  --color-line: #26262c;
+  --color-line-2: #34343c;
+  --color-fg: #f7f7f8;
+  --color-fg-muted: #a8a8b3;
+  --color-fg-dim: #82828c;
+  --color-acid: #3be477;
+  --color-acid-soft: #7cf0a4;
+  --color-acid-deep: #14b84f;
+  --color-acid-ink: #04140a;
+  --color-busy: #4a4a55;
+  --color-boxy: #d11a24;
+  --color-boxy-soft: #ff7a80;
+  --color-prime: #ffb84d;
+
   --breakpoint-*: initial;
   --breakpoint-2xsm: 375px;
   --breakpoint-xsm: 425px;
