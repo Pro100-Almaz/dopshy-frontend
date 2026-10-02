@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   AlertTriangle,
   CalendarX,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Edit3,
@@ -11,33 +12,34 @@ import {
   Plus,
   Search,
   Trash2,
+  Wallet,
   X,
 } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
-import WeekGrid from '@/views/Booking/components/WeekGrid.vue'
+import ContractCreateDialog from '@/components/contracts/ContractCreateDialog.vue'
+import ContractPaymentsDialog from '@/components/contracts/ContractPaymentsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingStore } from '@/stores/booking'
-import type { ContractListRow, ContractStatus } from '@/services/contracts'
-import {
-  CONTRACT_STATUS_LABEL,
-  contractStatusClass,
-  contractStatusLabel,
-  createContract,
-  deleteContract,
-  listContracts,
-  toContractSlots,
-  updateContract,
+import type {
+  ContractListRow,
+  ContractStatus,
+  CreateContractResult,
 } from '@/services/contracts'
 import {
-  formatDateTime,
-  formatPrice,
-  getManagerFields,
-  getManagerWeek,
-  toISO,
-  type WeekSlots,
-} from '@/services/booking'
+  CONTRACT_STATUS_LABEL,
+  PAYMENT_CHANNEL_LABEL,
+  contractErrorMessage,
+  contractStatusClass,
+  contractStatusLabel,
+  deleteContract,
+  listContracts,
+  paymentStatusClass,
+  paymentStatusLabel,
+  updateContract,
+} from '@/services/contracts'
+import { formatDateTime, formatPrice, getManagerFields, toISO } from '@/services/booking'
 import type { Field } from '@/types'
 
 const currentPageTitle = 'Контракты'
@@ -52,12 +54,16 @@ const loading = ref(true)
 const saving = ref(false)
 const deletingId = ref<number | null>(null)
 const errorMessage = ref('')
+const successMessage = ref('')
+const editError = ref('')
 const search = ref('')
 const page = ref(1)
 const atEnd = ref(false)
 const createOpen = ref(false)
 const editOpen = ref(false)
 const editing = ref<ContractListRow | null>(null)
+const paymentsOpen = ref(false)
+const paymentsContract = ref<ContractListRow | null>(null)
 const actionOpen = ref<number | null>(null)
 
 const hasPrev = computed(() => page.value > 1)
@@ -86,7 +92,7 @@ async function goToPage(target: number) {
     page.value = target
     atEnd.value = false
   } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : 'Не удалось загрузить контракты'
+    errorMessage.value = contractErrorMessage(e, 'Не удалось загрузить контракты')
   } finally {
     loading.value = false
   }
@@ -128,6 +134,23 @@ function nextPage() {
   if (hasNext.value) goToPage(page.value + 1)
 }
 
+function openPayments(contract: ContractListRow) {
+  paymentsContract.value = contract
+  actionOpen.value = null
+  paymentsOpen.value = true
+}
+
+// Статус оплаты в строке списка обновляется при закрытии диалога платежей.
+let paymentsChanged = false
+function onPaymentsChanged() {
+  paymentsChanged = true
+}
+watch(paymentsOpen, (isOpen) => {
+  if (isOpen || !paymentsChanged) return
+  paymentsChanged = false
+  goToPage(page.value)
+})
+
 function openEdit(contract: ContractListRow) {
   editing.value = contract
   actionOpen.value = null
@@ -144,7 +167,7 @@ async function onDelete(contract: ContractListRow) {
     await deleteContract(contract.id)
     await goToPage(page.value)
   } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : 'Не удалось отменить контракт'
+    errorMessage.value = contractErrorMessage(e, 'Не удалось отменить контракт')
   } finally {
     deletingId.value = null
   }
@@ -169,7 +192,7 @@ function emptyForm(): ContractForm {
     start_date: today,
     end_date: today,
     price: '',
-    status: 'awaiting_payment',
+    status: 'confirmed',
     notes: '',
     source: 'manager',
   }
@@ -201,7 +224,9 @@ const formError = computed(() => {
   if (!form.end_date) return 'Укажите дату окончания'
   if (form.end_date < form.start_date) return 'Дата окончания не может быть раньше начала'
   const price = Number(form.price)
-  if (form.price === '' || !Number.isFinite(price) || price < 0) return 'Укажите сумму контракта'
+  if (form.price === '' || !Number.isFinite(price) || price < 1) return 'Укажите сумму контракта'
+  if (editing.value?.payment_status && editing.value.payment_status !== 'none' && !Number.isInteger(price))
+    return 'При онлайн-оплате сумма — в целых тенге'
   return ''
 })
 
@@ -219,115 +244,19 @@ function contractPayload() {
   }
 }
 
-const createDialog = ref<HTMLDialogElement | null>(null)
 const editDialog = ref<HTMLDialogElement | null>(null)
-const createStep = ref<'details' | 'slots'>('details')
-const selectedFieldId = ref('')
-const week = ref<WeekSlots>({ days: [], rows: [] })
-const weekLoading = ref(false)
-const pageOffset = ref(0)
-const dayCount = 7
-const horizonDays = 28
-const maxOffset = Math.floor((horizonDays - dayCount) / dayCount)
-
-const selectedField = computed(
-  () => fields.value.find((field) => field.id === selectedFieldId.value) ?? null,
-)
-
-const rangeLabel = computed(() => {
-  const days = week.value.days
-  if (!days.length) return ''
-  const first = days[0].label
-  const last = days[days.length - 1].label
-  return first.month === last.month
-    ? `${first.day}-${last.day} ${first.month}`
-    : `${first.day} ${first.month} - ${last.day} ${last.month}`
-})
-
-function startISO(offset: number): string {
-  const base = new Date()
-  base.setHours(0, 0, 0, 0)
-  base.setDate(base.getDate() + offset * dayCount)
-  return toISO(base)
-}
-
-async function loadWeek() {
-  if (!selectedField.value) {
-    week.value = { days: [], rows: [] }
-    return
-  }
-  weekLoading.value = true
-  try {
-    week.value = await getManagerWeek(
-      selectedField.value,
-      startISO(pageOffset.value),
-      new Date(),
-      dayCount,
-    )
-  } finally {
-    weekLoading.value = false
-  }
-}
-
-watch(selectedField, (field) => {
-  if (!field || createStep.value !== 'slots') return
-  bookingStore.setField(field)
-  pageOffset.value = 0
-  loadWeek()
-})
 
 function openCreate() {
-  fillForm()
-  createStep.value = 'details'
-  selectedFieldId.value = fields.value[0]?.id ?? ''
-  bookingStore.clear()
+  successMessage.value = ''
   createOpen.value = true
 }
 
-function nextCreateStep() {
-  formTouched.value = true
-  if (formError.value) return
-  createStep.value = 'slots'
-  if (!selectedFieldId.value) selectedFieldId.value = fields.value[0]?.id ?? ''
-  if (selectedField.value) bookingStore.setField(selectedField.value)
-  pageOffset.value = 0
-  loadWeek()
-}
-
-function prevWeek() {
-  if (pageOffset.value <= 0) return
-  pageOffset.value--
-  loadWeek()
-}
-
-function nextWeek() {
-  if (pageOffset.value >= maxOffset) return
-  pageOffset.value++
-  loadWeek()
-}
-
-async function submitCreate() {
-  formTouched.value = true
-  if (formError.value) return
-  if (bookingStore.batchSlots.length === 0) {
-    errorMessage.value = 'Выберите хотя бы один слот для контракта'
-    return
-  }
-  saving.value = true
-  errorMessage.value = ''
-  try {
-    await createContract({
-      ...contractPayload(),
-      slots: toContractSlots(bookingStore.batchSlots),
-    })
-    createOpen.value = false
-    bookingStore.clear()
-    await goToPage(1)
-  } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : 'Не удалось создать контракт'
-  } finally {
-    saving.value = false
-  }
+async function onCreated(result: CreateContractResult) {
+  const channel = result.payment_plan?.payment_channel
+  successMessage.value =
+    `Контракт #${result.contract_id} создан, броней: ${result.created_count}.` +
+    (channel ? ` Оплата: ${PAYMENT_CHANNEL_LABEL[channel].toLowerCase()}.` : '')
+  await goToPage(1)
 }
 
 async function submitEdit() {
@@ -335,36 +264,28 @@ async function submitEdit() {
   formTouched.value = true
   if (formError.value) return
   saving.value = true
-  errorMessage.value = ''
+  editError.value = ''
   try {
     await updateContract(editing.value.id, contractPayload())
     editOpen.value = false
     editing.value = null
     await goToPage(page.value)
   } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : 'Не удалось сохранить контракт'
+    editError.value = contractErrorMessage(e, 'Не удалось сохранить контракт')
   } finally {
     saving.value = false
   }
 }
 
-watch(createOpen, (isOpen) => {
-  if (isOpen) createDialog.value?.showModal()
-  else createDialog.value?.close()
-})
-
 watch(editOpen, (isOpen) => {
   if (isOpen) {
     fillForm(editing.value)
+    editError.value = ''
     editDialog.value?.showModal()
   } else {
     editDialog.value?.close()
   }
 })
-
-function onCreateClose() {
-  if (createOpen.value) createOpen.value = false
-}
 
 function onEditClose() {
   if (editOpen.value) editOpen.value = false
@@ -381,6 +302,21 @@ function onEditClose() {
     >
       <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-error-500" aria-hidden="true" />
       <span>{{ errorMessage }}</span>
+    </div>
+    <div
+      v-if="successMessage"
+      class="mb-4 flex items-start gap-2 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm text-gray-700"
+    >
+      <CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-success-600" aria-hidden="true" />
+      <span class="flex-1">{{ successMessage }}</span>
+      <button
+        type="button"
+        class="text-gray-400 hover:text-gray-700"
+        aria-label="Скрыть"
+        @click="successMessage = ''"
+      >
+        <X class="h-4 w-4" aria-hidden="true" />
+      </button>
     </div>
 
     <div
@@ -454,6 +390,9 @@ function onEditClose() {
               <th class="px-5 py-3 text-left sm:px-6">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Статус</p>
               </th>
+              <th class="px-5 py-3 text-left sm:px-6">
+                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Оплата</p>
+              </th>
               <th class="px-5 py-3 text-right sm:px-6">
                 <span class="sr-only">Действия</span>
               </th>
@@ -520,6 +459,16 @@ function onEditClose() {
                   {{ contractStatusLabel(contract.status) }}
                 </span>
               </td>
+              <td class="px-5 py-4 sm:px-6">
+                <button
+                  type="button"
+                  class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium hover:opacity-80"
+                  :class="paymentStatusClass(contract.payment_status)"
+                  @click="openPayments(contract)"
+                >
+                  {{ paymentStatusLabel(contract.payment_status) }}
+                </button>
+              </td>
               <td class="px-5 py-4 text-right sm:px-6">
                 <div class="relative inline-flex">
                   <button
@@ -534,6 +483,14 @@ function onEditClose() {
                     v-if="actionOpen === contract.id"
                     class="absolute right-0 top-full z-40 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
                   >
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                      @click="openPayments(contract)"
+                    >
+                      <Wallet class="h-4 w-4" aria-hidden="true" />
+                      Платежи
+                    </button>
                     <button
                       type="button"
                       class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
@@ -591,196 +548,13 @@ function onEditClose() {
       </div>
     </div>
 
-    <dialog
-      ref="createDialog"
-      class="contract-dialog m-auto w-[min(72rem,96vw)] max-h-[92vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
-      @close="onCreateClose"
-    >
-      <div class="flex max-h-[92vh] flex-col">
-        <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-          <div>
-            <h2 class="text-lg font-bold text-gray-900">Новый контракт</h2>
-            <p class="mt-0.5 text-sm text-gray-500">
-              {{ createStep === 'details' ? 'Данные договора' : 'Слоты договора' }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-            aria-label="Закрыть"
-            @click="createOpen = false"
-          >
-            <X class="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
+    <ContractCreateDialog v-model:open="createOpen" :fields="fields" @created="onCreated" />
 
-        <div class="min-h-0 flex-1 overflow-auto px-5 py-4">
-          <div class="mb-5 grid grid-cols-2 gap-2 text-sm">
-            <div
-              class="rounded-lg px-3 py-2 font-medium"
-              :class="
-                createStep === 'details'
-                  ? 'bg-success-50 text-success-700'
-                  : 'bg-gray-50 text-gray-500'
-              "
-            >
-              1. Данные
-            </div>
-            <div
-              class="rounded-lg px-3 py-2 font-medium"
-              :class="
-                createStep === 'slots'
-                  ? 'bg-success-50 text-success-700'
-                  : 'bg-gray-50 text-gray-500'
-              "
-            >
-              2. Время
-            </div>
-          </div>
-
-          <div v-if="createStep === 'details'" class="grid gap-4 lg:grid-cols-2">
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Клиент или компания
-              <input v-model="form.customer_name" class="contract-input" />
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Телефон
-              <input v-model="form.phone" type="tel" class="contract-input" />
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Начало
-              <input v-model="form.start_date" type="date" class="contract-input" />
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Окончание
-              <input v-model="form.end_date" type="date" class="contract-input" />
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Сумма договора
-              <input v-model="form.price" type="number" min="0" step="1" class="contract-input" />
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-              Статус
-              <select v-model="form.status" class="contract-input">
-                <option
-                  v-for="(label, status) in CONTRACT_STATUS_LABEL"
-                  :key="status"
-                  :value="status"
-                >
-                  {{ label }}
-                </option>
-              </select>
-            </label>
-            <label class="grid gap-1.5 text-sm font-medium text-gray-700 lg:col-span-2">
-              Заметка
-              <textarea v-model="form.notes" rows="3" class="contract-input resize-none" />
-            </label>
-          </div>
-
-          <div v-else class="grid min-h-[34rem] gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-            <aside class="space-y-4">
-              <label class="grid gap-1.5 text-sm font-medium text-gray-700">
-                Поле
-                <select v-model="selectedFieldId" class="contract-input">
-                  <option v-for="field in fields" :key="field.id" :value="field.id">
-                    {{ field.name }}
-                  </option>
-                </select>
-              </label>
-
-              <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p class="text-xs text-gray-500">Выбрано интервалов</p>
-                <p class="mt-1 text-2xl font-bold text-gray-900">
-                  {{ bookingStore.intervals.length }}
-                </p>
-                <p class="mt-1 text-sm text-gray-500">
-                  {{ bookingStore.count }} получасовых слотов
-                </p>
-                <button
-                  v-if="bookingStore.count > 0"
-                  type="button"
-                  class="mt-3 text-sm font-semibold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
-                  @click="bookingStore.clearSlots"
-                >
-                  Очистить
-                </button>
-              </div>
-            </aside>
-
-            <section class="flex min-w-0 flex-col gap-3">
-              <div class="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  class="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  :disabled="pageOffset <= 0"
-                  aria-label="Предыдущая неделя"
-                  @click="prevWeek"
-                >
-                  <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-                </button>
-                <p class="text-sm font-semibold text-gray-700">{{ rangeLabel }}</p>
-                <button
-                  type="button"
-                  class="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  :disabled="pageOffset >= maxOffset"
-                  aria-label="Следующая неделя"
-                  @click="nextWeek"
-                >
-                  <ChevronRight class="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              <WeekGrid
-                :week="week"
-                :loading="weekLoading"
-                allow-repeat
-                hide-booking-details
-                hide-slot-prices
-                fill
-              />
-            </section>
-          </div>
-
-          <p v-if="formTouched && formError" class="mt-4 text-sm text-error-500">{{ formError }}</p>
-        </div>
-
-        <div class="flex items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
-          <div>
-            <p class="text-xs text-gray-500">Сумма договора</p>
-            <p class="text-xl font-bold text-gray-900">
-              {{ formatPrice(Number(form.price) || 0) }}
-            </p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              v-if="createStep === 'slots'"
-              type="button"
-              class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              @click="createStep = 'details'"
-            >
-              Назад
-            </button>
-            <button
-              v-if="createStep === 'details'"
-              type="button"
-              class="rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700"
-              @click="nextCreateStep"
-            >
-              Выбрать время
-            </button>
-            <button
-              v-else
-              type="button"
-              class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50"
-              :disabled="saving || bookingStore.batchSlots.length === 0"
-              @click="submitCreate"
-            >
-              <Loader2 v-if="saving" class="h-4 w-4 animate-spin" aria-hidden="true" />
-              Создать контракт
-            </button>
-          </div>
-        </div>
-      </div>
-    </dialog>
+    <ContractPaymentsDialog
+      v-model:open="paymentsOpen"
+      :contract="paymentsContract"
+      @changed="onPaymentsChanged"
+    />
 
     <dialog
       ref="editDialog"
@@ -822,7 +596,7 @@ function onEditClose() {
             <div class="grid gap-4 sm:grid-cols-2">
               <label class="grid gap-1.5 text-sm font-medium text-gray-700">
                 Сумма договора
-                <input v-model="form.price" type="number" min="0" step="1" class="contract-input" />
+                <input v-model="form.price" type="number" min="1" step="1" class="contract-input" />
               </label>
               <label class="grid gap-1.5 text-sm font-medium text-gray-700">
                 Статус
@@ -843,6 +617,7 @@ function onEditClose() {
             </label>
           </div>
           <p v-if="formTouched && formError" class="mt-4 text-sm text-error-500">{{ formError }}</p>
+          <p v-if="editError" class="mt-4 text-sm text-error-500">{{ editError }}</p>
         </div>
         <div class="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
           <button
@@ -871,21 +646,5 @@ function onEditClose() {
 .contract-dialog::backdrop {
   background: color-mix(in srgb, var(--color-gray-900) 55%, transparent);
   backdrop-filter: blur(2px);
-}
-
-.contract-input {
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid var(--color-gray-300);
-  background: white;
-  padding: 0.625rem 0.875rem;
-  font-size: 0.875rem;
-  color: var(--color-gray-800);
-  outline: none;
-}
-
-.contract-input:focus {
-  border-color: var(--color-success-600);
-  box-shadow: 0 0 0 1px var(--color-success-600);
 }
 </style>

@@ -36,7 +36,6 @@ import {
   panel,
   select,
   td,
-  th,
 } from '@/components/academy/ui'
 import { useBotHandoff } from '@/composables/useBotHandoff'
 import {
@@ -449,19 +448,22 @@ const tabClass = (active: boolean) =>
 
             <!-- Таблица: десктоп -->
             <table class="hidden w-full lg:table">
-              <thead class="sr-only">
+              <!-- Заголовки только для скринридеров. sr-only на самом <thead>
+                   выносит секцию таблицы из потока (position: absolute), и Chrome
+                   из-за этого не отрисовывал страницу целиком до ресайза. -->
+              <thead>
                 <tr>
-                  <th :class="th">Ребёнок</th>
-                  <th :class="th">Контакт</th>
-                  <th :class="th">Занятие</th>
-                  <th :class="th">Статус</th>
-                  <th :class="th">Действия</th>
+                  <th class="p-0"><span class="sr-only">Ребёнок</span></th>
+                  <th class="p-0"><span class="sr-only">Контакт</span></th>
+                  <th class="p-0"><span class="sr-only">Занятие</span></th>
+                  <th class="p-0"><span class="sr-only">Статус</span></th>
+                  <th class="p-0"><span class="sr-only">Действия</span></th>
                 </tr>
               </thead>
               <tbody>
                 <tr
                   v-for="row in day.rows"
-                  :key="row.trial.id"
+                  :key="row.trial.trial_id"
                   class="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50 dark:border-gray-800/70 dark:hover:bg-white/[0.02]"
                 >
                   <td :class="[td, 'w-[24%]']">
@@ -548,7 +550,7 @@ const tabClass = (active: boolean) =>
 
             <!-- Карточки: планшет и мобильный -->
             <ul class="divide-y divide-gray-100 dark:divide-gray-800/70 lg:hidden">
-              <li v-for="row in day.rows" :key="row.trial.id" class="px-5 py-4 sm:px-6">
+              <li v-for="row in day.rows" :key="row.trial.trial_id" class="px-5 py-4 sm:px-6">
                 <div class="flex items-start justify-between gap-3">
                   <PersonCell
                     :name="row.trial.child_name"

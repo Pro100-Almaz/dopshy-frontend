@@ -15,6 +15,7 @@ const props = defineProps<{
   open: boolean
   interval: SlotInterval | null
   anchor: { x: number; y: number }
+  maxUntil?: string
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -47,7 +48,7 @@ watch(
     checking.value = false
     const existing = store.ruleFor(props.interval.id)
     mode.value = existing?.mode ?? 'none'
-    until.value = existing?.until ?? defaultUntil(props.interval.date)
+    until.value = existing?.until ?? props.maxUntil ?? defaultUntil(props.interval.date)
   },
   { immediate: true },
 )
@@ -77,6 +78,8 @@ async function confirm() {
     emit('close')
     return
   }
+
+  if (props.maxUntil && until.value > props.maxUntil) until.value = props.maxUntil
 
   const rule: RepeatRule = {
     id: interval.id,
@@ -198,6 +201,7 @@ async function confirm() {
               v-model="until"
               type="date"
               :min="interval.date"
+              :max="maxUntil"
               class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:border-success-600 focus:outline-none focus:ring-1 focus:ring-success-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
             />
             <p class="mt-2 text-xs text-gray-500">

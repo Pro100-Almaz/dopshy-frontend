@@ -15,7 +15,8 @@ export type AppPermission =
   | 'sportSwitcher'
   | 'globalBotSetting'
 
-const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
+const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
+const ARENA_ROLES =new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
 const ACADEMY_ROLES = new Set<UserRole>([
   'super_admin',
   'admin',
@@ -67,7 +68,8 @@ export function hasPermission(
     case 'sportSwitcher':
       return role === 'admin' || role === 'manager'
     case 'globalBotSetting':
-      return false
+      // Глобальный выключатель бота (страница клиентов) — админы, менеджеры и менеджеры арены.
+      return ARENA_ROLES.has(role)
   }
 }
 
