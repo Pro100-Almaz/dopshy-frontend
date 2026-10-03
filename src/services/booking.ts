@@ -432,6 +432,51 @@ export async function getManagerWeek(
   }
 }
 
+// ── Публичная занятость: GET /api/bookings/availability/{from}/{to}?field= ──
+// Без авторизации — только интервалы времени, без данных клиента. Для лендинга.
+interface PublicBookedSlotApi {
+  field: number | null
+  date: string | null
+  time_start: string | null
+  time_end: string | null
+}
+
+/** Недельная сетка для лендинга: цены из прайса + обезличенная занятость. */
+export async function getPublicWeek(
+  field: Field,
+  startISO: string,
+  now: Date = new Date(),
+  dayCount = 7,
+): Promise<WeekSlots> {
+  const week = await getWeekSlots(field, startISO, now, dayCount)
+  const days = week.days
+  if (!days.length) return week
+  let rows: PublicBookedSlotApi[]
+  try {
+    rows = await apiFetch<PublicBookedSlotApi[]>(
+      `/bookings/availability/${days[0].iso}/${days[days.length - 1].iso}?field=${field.id}`,
+    )
+  } catch {
+    // ponytail: fallback while the backend endpoint isn't deployed yet; drop once it is.
+    return getManagerWeek(field, startISO, now, dayCount)
+  }
+  // Every returned interval already holds the slot (awaiting_payment / confirmed).
+  return overlayBookings(
+    week,
+    rows.map((r) => ({
+      ...r,
+      id: 0,
+      phone: null,
+      state: BOOKING_STATE_ENUMS.CONFIRMED,
+      source: '',
+      notes: null,
+      reserved_until: null,
+      created_at: null,
+      updated_at: null,
+    })),
+  )
+}
+
 export interface BookingPayload extends BookingDraft {
   cardNumber: string
 }

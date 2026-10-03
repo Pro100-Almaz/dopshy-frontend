@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Moon, RotateCcw, Users, X } from 'lucide-vue-next'
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Moon,
+  RotateCcw,
+  Users,
+  X,
+} from 'lucide-vue-next'
 import type { Field, Slot } from '@/types'
 import {
   FIELD_TYPE_LABEL,
   getManagerFields,
-  getManagerWeek,
+  getPublicWeek,
   toISO,
   type WeekSlots,
 } from '@/services/booking'
@@ -43,6 +54,7 @@ const weekLoading = ref(false)
 const showNight = ref(false)
 const focus = ref<[number, number]>([0, 0])
 const checkout = ref(false)
+const conflict = ref(false) // someone took part of the selection during checkout
 
 const field = computed<Field | undefined>(() => fields.value[fieldIdx.value])
 // Backend names carry the format ("Поле 1 (6x6)"); the design shows it as a separate badge.
@@ -72,7 +84,7 @@ async function loadWeek() {
   start.setHours(0, 0, 0, 0)
   start.setDate(start.getDate() + week.value * DAYS)
   try {
-    const w = await getManagerWeek(field.value, toISO(start), new Date(), DAYS)
+    const w = await getPublicWeek(field.value, toISO(start), new Date(), DAYS)
     if (id === req) data.value = w
   } finally {
     if (id === req) weekLoading.value = false
@@ -132,9 +144,7 @@ const dateOf = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d)
 }
-const summary = computed(() =>
-  store.sortedSlots.map((s) => ({ slot: s, date: dateOf(s.date) })),
-)
+const summary = computed(() => store.sortedSlots.map((s) => ({ slot: s, date: dateOf(s.date) })))
 const lines = computed(() =>
   store.intervals.map((iv) => {
     const d = dateOf(iv.date)
@@ -159,14 +169,30 @@ function onKeyDown(e: KeyboardEvent) {
   const maxR = rows.value.length - 1
   let next: [number, number] | null = null
   switch (e.key) {
-    case 'ArrowUp': next = [Math.max(0, r - 1), c]; break
-    case 'ArrowDown': next = [Math.min(maxR, r + 1), c]; break
-    case 'ArrowLeft': next = [r, Math.max(0, c - 1)]; break
-    case 'ArrowRight': next = [r, Math.min(DAYS - 1, c + 1)]; break
-    case 'Home': next = e.ctrlKey ? [0, 0] : [r, 0]; break
-    case 'End': next = e.ctrlKey ? [maxR, DAYS - 1] : [r, DAYS - 1]; break
-    case 'PageUp': next = [Math.max(0, r - 8), c]; break
-    case 'PageDown': next = [Math.min(maxR, r + 8), c]; break
+    case 'ArrowUp':
+      next = [Math.max(0, r - 1), c]
+      break
+    case 'ArrowDown':
+      next = [Math.min(maxR, r + 1), c]
+      break
+    case 'ArrowLeft':
+      next = [r, Math.max(0, c - 1)]
+      break
+    case 'ArrowRight':
+      next = [r, Math.min(DAYS - 1, c + 1)]
+      break
+    case 'Home':
+      next = e.ctrlKey ? [0, 0] : [r, 0]
+      break
+    case 'End':
+      next = e.ctrlKey ? [maxR, DAYS - 1] : [r, DAYS - 1]
+      break
+    case 'PageUp':
+      next = [Math.max(0, r - 8), c]
+      break
+    case 'PageDown':
+      next = [Math.min(maxR, r + 8), c]
+      break
     case ' ':
     case 'Enter': {
       e.preventDefault()
@@ -179,7 +205,9 @@ function onKeyDown(e: KeyboardEvent) {
   }
   e.preventDefault()
   focus.value = next
-  nextTick(() => gridRef.value?.querySelector<HTMLElement>(`[data-cell="${next![0]}-${next![1]}"]`)?.focus())
+  nextTick(() =>
+    gridRef.value?.querySelector<HTMLElement>(`[data-cell="${next![0]}-${next![1]}"]`)?.focus(),
+  )
 }
 
 // ── First load: scroll the grid so the evening is in view ──
@@ -218,15 +246,34 @@ function onDone() {
   store.clearSlots()
   loadWeek() // только что созданная бронь должна стать «занято»
 }
+
+// SLOT_TAKEN / TIME_IN_PAST: the selection may span weeks, so recheck every selected
+// date (not just the visible week) and drop exactly the slots that are no longer free.
+async function onConflict() {
+  checkout.value = false
+  conflict.value = true
+  const f = field.value
+  if (f && store.count) {
+    const dates = store.sortedSlots.map((s) => s.date)
+    const span =
+      (dateOf(dates[dates.length - 1]).getTime() - dateOf(dates[0]).getTime()) / 864e5 + 1
+    const fresh = await getPublicWeek(f, dates[0], new Date(), Math.round(span))
+    const free = new Set(
+      fresh.rows.flatMap((r) => r.cells.filter((c) => c.status === 'available').map((c) => c.id)),
+    )
+    for (const s of [...store.selectedSlots]) if (!free.has(s.id)) store.toggleSlot(s)
+  }
+  loadWeek()
+}
+watch(
+  () => store.count,
+  (n, prev) => n > prev && (conflict.value = false),
+) // picking again clears the notice
 </script>
 
 <template>
   <Section id="booking" :kicker="b.kicker" :title="b.title" :lead="b.lead">
-    <div
-      v-if="fieldsState === 'loading'"
-      class="mb-6 grid gap-3 sm:grid-cols-3"
-      aria-busy="true"
-    >
+    <div v-if="fieldsState === 'loading'" class="mb-6 grid gap-3 sm:grid-cols-3" aria-busy="true">
       <div v-for="i in 3" :key="i" class="min-h-24 animate-pulse rounded-2xl bg-surface" />
     </div>
 
@@ -290,6 +337,15 @@ function onDone() {
         </div>
       </Reveal>
 
+      <p
+        v-if="conflict"
+        role="alert"
+        class="mb-6 flex items-start gap-3 rounded-2xl border border-prime/40 bg-prime/10 px-4 py-3 text-sm text-fg"
+      >
+        <AlertTriangle class="mt-0.5 size-4 shrink-0 text-prime" aria-hidden="true" />
+        {{ b.conflict }}
+      </p>
+
       <div ref="areaRef" class="grid gap-6 pb-28 lg:grid-cols-[1fr_22rem] lg:items-start lg:pb-0">
         <Reveal class="min-w-0">
           <div class="overflow-hidden rounded-[1.5rem] border border-line bg-surface">
@@ -345,7 +401,10 @@ function onDone() {
                 {{ b.busy }}
               </li>
               <li class="flex items-center gap-2">
-                <span class="flex size-4 items-center justify-center rounded bg-acid" aria-hidden="true">
+                <span
+                  class="flex size-4 items-center justify-center rounded bg-acid"
+                  aria-hidden="true"
+                >
                   <Check class="size-3 text-acid-ink" :stroke-width="3" />
                 </span>
                 {{ b.selected }}
@@ -389,7 +448,10 @@ function onDone() {
                       {{ b.weekdays[d.date.getDay()] }}
                     </span>
                     <span
-                      :class="['font-display text-lg', d.iso === todayISO ? 'text-acid' : 'text-fg']"
+                      :class="[
+                        'font-display text-lg',
+                        d.iso === todayISO ? 'text-acid' : 'text-fg',
+                      ]"
                     >
                       {{ d.date.getDate() }}
                     </span>
@@ -414,7 +476,9 @@ function onDone() {
                       >
                         <Moon class="size-4" aria-hidden="true" />
                         {{ t.prices.zones.night }}
-                        <span class="font-normal text-fg-dim tabular-nums">{{ ZONE_HOURS.night }}</span>
+                        <span class="font-normal text-fg-dim tabular-nums">{{
+                          ZONE_HOURS.night
+                        }}</span>
                         <ChevronDown
                           :class="['size-4 transition-transform', showNight ? 'rotate-180' : '']"
                           aria-hidden="true"
@@ -485,7 +549,10 @@ function onDone() {
                           class="size-3.5 opacity-60"
                           aria-hidden="true"
                         />
-                        <span v-else-if="cell.status === 'available'" class="tabular-nums opacity-80">
+                        <span
+                          v-else-if="cell.status === 'available'"
+                          class="tabular-nums opacity-80"
+                        >
                           {{ Math.round((cell.price * 2) / 1000) }}K
                         </span>
                       </div>
@@ -534,13 +601,17 @@ function onDone() {
             >
               <span class="text-xs text-fg-muted lg:text-sm">{{ b.total }}</span>
               <span class="block lg:text-right" aria-live="polite">
-                <span class="block font-display text-3xl whitespace-nowrap text-acid tabular-nums lg:text-4xl">
+                <span
+                  class="block font-display text-3xl whitespace-nowrap text-acid tabular-nums lg:text-4xl"
+                >
                   {{ money(store.total, lang) }}
                 </span>
                 <span class="block text-xs text-fg-dim">
                   {{ fmt(b.slots, { n: store.count }) }}
                   <template v-if="store.prepaymentTotal > 0">
-                    <span class="hidden lg:inline">· {{ b.prepayment }} {{ money(store.prepaymentTotal, lang) }}</span>
+                    <span class="hidden lg:inline"
+                      >· {{ b.prepayment }} {{ money(store.prepaymentTotal, lang) }}</span
+                    >
                   </template>
                 </span>
               </span>
@@ -574,6 +645,7 @@ function onDone() {
         :lines="lines"
         @close="checkout = false"
         @done="onDone"
+        @conflict="onConflict"
       />
     </template>
   </Section>

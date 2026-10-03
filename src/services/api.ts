@@ -15,10 +15,13 @@ export function mediaUrl(name: string): string {
 /** Error carrying the HTTP status so callers can branch on it (e.g. 502 → сервис недоступен). */
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Machine-readable reason from the bot service (e.g. 'SLOT_TAKEN', 'NO_KASPI'), when present. */
+  code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -79,7 +82,8 @@ export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): 
     const body = await res.json().catch(() => ({}))
     // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
     const detail = typeof body.detail === 'string' ? body.detail : undefined
-    throw new ApiError(res.status, detail || body.message || `API error ${res.status}`)
+    const code = typeof body.code === 'string' ? body.code : undefined
+    throw new ApiError(res.status, detail || body.message || `API error ${res.status}`, code)
   }
 
   return res.json()
