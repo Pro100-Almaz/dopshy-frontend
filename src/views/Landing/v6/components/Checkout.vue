@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft, CalendarPlus, Check, CreditCard, Loader2 } from 'lucide-vue-next'
+import { ApiError } from '@/services/api'
 import { createBookingsBatch, RESERVATION_TTL_MINUTES } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
 import { useLang, fmt, money } from '../i18n'
 import Modal from './Modal.vue'
 
 const props = defineProps<{ open: boolean; fieldLabel: string; lines: string[] }>()
-const emit = defineEmits<{ close: []; done: [] }>()
+// conflict: some selected time was taken meanwhile — the parent rechecks the grid.
+const emit = defineEmits<{ close: []; done: []; conflict: [] }>()
 
 const { t, lang } = useLang()
 const c = computed(() => t.value.checkout)
@@ -20,6 +22,9 @@ const team = ref('')
 const touched = ref(false)
 const sending = ref(false)
 const failed = ref(false)
+// Bot rejected the number (NO_KASPI); cleared as soon as the phone is edited.
+const noKaspi = ref(false)
+watch(phone, () => (noKaspi.value = false))
 
 watch(
   () => props.open,
@@ -28,6 +33,7 @@ watch(
     step.value = 0
     touched.value = false
     failed.value = false
+    noKaspi.value = false
   },
 )
 
@@ -48,11 +54,13 @@ const phoneComplete = (v: string) => v.replace(/\D/g, '').length === 11
 
 const nameErr = computed(() => (touched.value && !name.value.trim() ? c.value.required : ''))
 const phoneErr = computed(() =>
-  touched.value && !phoneComplete(phone.value)
-    ? phone.value
-      ? c.value.phoneInvalid
-      : c.value.required
-    : '',
+  noKaspi.value
+    ? c.value.noKaspi
+    : touched.value && !phoneComplete(phone.value)
+      ? phone.value
+        ? c.value.phoneInvalid
+        : c.value.required
+      : '',
 )
 
 function toPayment() {
@@ -75,15 +83,22 @@ async function confirm() {
       reserved_until: RESERVATION_TTL_MINUTES,
     })
     step.value = 2
-  } catch {
-    failed.value = true
+  } catch (e) {
+    const code = e instanceof ApiError ? e.code : undefined
+    // Nothing was created in either case (the bot batch is all-or-nothing), so retrying is safe.
+    if (code === 'SLOT_TAKEN' || code === 'TIME_IN_PAST') emit('conflict')
+    else if (code === 'NO_KASPI') {
+      noKaspi.value = true
+      step.value = 0
+    } else failed.value = true
   } finally {
     sending.value = false
   }
 }
 
 function downloadIcs() {
-  const stamp = (date: string, time: string) => `${date.replace(/-/g, '')}T${time.replace(':', '')}00`
+  const stamp = (date: string, time: string) =>
+    `${date.replace(/-/g, '')}T${time.replace(':', '')}00`
   const now = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
   const events = store.intervals.map(
     (iv, i) =>
@@ -174,7 +189,12 @@ const btnPrimary =
       </label>
       <label class="block">
         <span class="mb-1.5 block text-sm font-medium text-fg-muted">{{ c.team }}</span>
-        <input v-model="team" :class="inputCls" :placeholder="c.teamPh" autocomplete="organization" />
+        <input
+          v-model="team"
+          :class="inputCls"
+          :placeholder="c.teamPh"
+          autocomplete="organization"
+        />
       </label>
       <button type="submit" :class="[btnPrimary, 'w-full']">{{ c.next }}</button>
     </form>
