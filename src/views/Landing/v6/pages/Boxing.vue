@@ -46,7 +46,7 @@ const photos = [
           class="inline-flex min-h-13 items-center gap-2 rounded-full border border-line-2 px-7 font-semibold text-fg hover:border-fg-dim"
         >
           <Phone class="size-4" aria-hidden="true" />
-          {{ CONTACTS.phone }}
+          +7 700 555 6000
         </a>
       </div>
     </PageHero>
