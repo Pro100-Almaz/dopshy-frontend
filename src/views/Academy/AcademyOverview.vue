@@ -42,7 +42,6 @@ import {
   type AcademyTrial,
   type SportKey,
 } from '@/services/academy'
-import { useAcademyStore } from '@/stores/academy'
 import {
   formatTime,
   formatTimeRange,
@@ -55,7 +54,6 @@ import { setPending, type PendingMap } from '@/utils/pending'
 
 const props = defineProps<{ sport: SportKey }>()
 
-const academy = useAcademyStore()
 
 const groups = ref<AcademyGroup[]>([])
 const trials = ref<AcademyTrial[]>([])
@@ -165,10 +163,7 @@ const unmarked = computed(() =>
   trials.value
     .filter(
       (trial) =>
-        trialOutcome(trial, {
-          markedMissed: academy.isMarkedMissed(props.sport, trial.trial_id),
-          now: now.value,
-        }).outcome === 'unmarked',
+        trialOutcome(trial, { now: now.value }).outcome === 'unmarked',
     )
     .map((trial) => ({ trial, timing: trialTiming(trial, now.value) }))
     .sort((a, b) => (b.timing.date?.getTime() ?? 0) - (a.timing.date?.getTime() ?? 0)),
@@ -224,7 +219,7 @@ async function mark(trial: AcademyTrial, attended: boolean) {
   try {
     await setTrialAttended(props.sport, trial.trial_id, attended)
     trial.attended = attended
-    academy.setMarkedMissed(props.sport, trial.trial_id, !attended)
+    trial.attendance_state = attended ? 'attended' : 'missed'
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Не удалось сохранить отметку'
   } finally {

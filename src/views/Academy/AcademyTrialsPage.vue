@@ -115,10 +115,7 @@ function groupNameOf(trial: AcademyTrial): string {
 
 const rows = computed<TrialRow[]>(() =>
   trials.value.map((trial) => {
-    const meta = trialOutcome(trial, {
-      markedMissed: academy.isMarkedMissed(props.sport, trial.trial_id),
-      now: now.value,
-    })
+    const meta = trialOutcome(trial, { now: now.value })
     const timing = trialTiming(trial, now.value)
 
     return {
@@ -229,9 +226,7 @@ async function mark(trial: AcademyTrial, attended: boolean) {
   try {
     await setTrialAttended(props.sport, trial.trial_id, attended)
     trial.attended = attended
-    // Явное «не пришёл» помним локально: в API это то же `attended: false`,
-    // что и «ещё не смотрели», и без этого строка вернулась бы в очередь.
-    academy.setMarkedMissed(props.sport, trial.trial_id, !attended)
+    trial.attendance_state = attended ? 'attended' : 'missed'
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Не удалось сохранить отметку'
   } finally {
@@ -245,7 +240,6 @@ async function subscribe(trial: AcademyTrial) {
   try {
     await setTrialSubscribed(props.sport, trial.trial_id, true)
     trial.subscribed = true
-    academy.setMarkedMissed(props.sport, trial.trial_id, false)
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Не удалось оформить абонемент'
   } finally {
