@@ -5,6 +5,7 @@ import { useLang } from './i18n'
 import type { LandingRoute } from './routes'
 import Nav from './components/Nav.vue'
 import Footer from './components/Footer.vue'
+import { Analytics } from '@vercel/analytics/vue'
 import './landing.css'
 
 const { t } = useLang()
@@ -30,6 +31,7 @@ const focusMain = () => document.getElementById('main')?.focus()
     >
       {{ t.nav.skip }}
     </a>
+    <Analytics />
     <Nav />
     <main id="main" tabindex="-1" class="outline-none">
       <RouterView v-slot="{ Component }">
