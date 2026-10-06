@@ -2,7 +2,7 @@
 import { Phone } from 'lucide-vue-next'
 import { useLang } from '../i18n'
 import { to } from '../routes'
-import { CONTACTS } from '../data/site'
+import { DIVISION_PHONES } from '../data/site'
 import PageHero from '../components/PageHero.vue'
 import Facts from '../components/Facts.vue'
 import Section from '../components/Section.vue'
@@ -42,11 +42,11 @@ const photos = [
           {{ t.boxing.enroll }}
         </RouterLink>
         <a
-          :href="CONTACTS.phoneHref"
+          :href="DIVISION_PHONES.boxing.phoneHref"
           class="inline-flex min-h-13 items-center gap-2 rounded-full border border-line-2 px-7 font-semibold text-fg hover:border-fg-dim"
         >
           <Phone class="size-4" aria-hidden="true" />
-          +7 700 555 6000
+          {{ DIVISION_PHONES.boxing.phone }}
         </a>
       </div>
     </PageHero>

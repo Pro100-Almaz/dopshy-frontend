@@ -7,6 +7,10 @@ export const CONTACTS = {
   twogisReviews: 'https://2gis.kz/astana/firm/70000001074875383/tab/reviews',
   coords: [51.130325, 71.369512] as [number, number],
 } as const
+export const DIVISION_PHONES = {
+  boxing: { phone: '+7 700 555 2202', phoneHref: 'tel:+77005552202' },
+  school: { phone: '+7 700 555 6006', phoneHref: 'tel:+77005556006' },
+} as const
 export const RATING = {
   score: 4.9,
   ratings: 2615,

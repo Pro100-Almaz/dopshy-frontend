@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowUpRight, Phone } from 'lucide-vue-next'
-import { CONTACTS, INSTAGRAM } from '../data/site'
+import { DIVISION_PHONES, INSTAGRAM } from '../data/site'
 import InstagramIcon from './InstagramIcon.vue'
 
 defineProps<{ kind: 'school' | 'boxing' }>()
@@ -8,9 +8,9 @@ defineProps<{ kind: 'school' | 'boxing' }>()
 
 <template>
   <div class="flex flex-wrap items-center gap-4">
-    <a :href="CONTACTS.phoneHref" class="v6-button v6-button--primary">
+    <a :href="DIVISION_PHONES[kind].phoneHref" class="v6-button v6-button--primary">
       <Phone :size="16" aria-hidden="true" />
-      {{ CONTACTS.phone }}
+      {{ DIVISION_PHONES[kind].phone }}
     </a>
     <a
       :href="INSTAGRAM[kind].url"
