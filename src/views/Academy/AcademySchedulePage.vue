@@ -44,10 +44,12 @@ import {
 } from '@/components/academy/ui'
 import {
   assignAcademyUser,
+  assignStudent as assignSportStudent,
   createGroup,
   deleteGroup,
   listAcademyUsers,
   listGroups,
+  listStudents,
   shiftLabel,
   SPORTS,
   updateGroup,
@@ -69,9 +71,15 @@ import {
   WEEKDAYS,
   weekdayLong,
 } from '@/utils/schedule'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from '@/stores/auth'
 import { pluralize } from '@/utils/plural'
 
 const props = defineProps<{ sport: SportKey }>()
+
+const auth = useAuthStore()
+/** football/boxing_manager не видят общий /manager/academy_users (403). */
+const canViewAllSports = computed(() => hasPermission(auth.role, 'academyUsers'))
 
 const rawGroups = ref<AcademyGroup[]>([])
 const students = ref<AcademyStudent[]>([])
@@ -336,7 +344,12 @@ async function load() {
     // (без group_type): сузив по спорту, бэкенд отдаёт только тех, кто уже
     // назначен в этом виде спорта — непроверенные и кросс-спортивные дети
     // исчезают из списка, и назначать в группу становится некого (см. #8).
-    const [nextGroups, nextStudents] = await Promise.all([listGroups(props.sport), listAcademyUsers()])
+    // Менеджеры одного направления (football/boxing_manager) не имеют доступа к
+    // /manager/academy_users (403) — для них берём /{sport}/students.
+    const [nextGroups, nextStudents] = await Promise.all([
+      listGroups(props.sport),
+      canViewAllSports.value ? listAcademyUsers() : listStudents(props.sport),
+    ])
     rawGroups.value = nextGroups
     students.value = nextStudents
     if (!nextGroups.some((group) => groupKeyOf(group) === selectedKey.value)) {
@@ -642,9 +655,11 @@ async function assignStudent(student: AcademyStudent) {
   assignModal.savingId = student.id
   assignModal.error = ''
   try {
-    // Менеджерская ручка, а не sport-scoped: кандидаты приходят из общего
-    // списка academy_users и могут ещё не иметь записи в этом виде спорта.
-    await assignAcademyUser(student.id, { group_id: Number(group.groupId) })
+    // Админы назначают через общую менеджерскую ручку (кандидаты из полного
+    // списка academy_users); менеджеры направления — через /{sport}/students.
+    const payload = { group_id: Number(group.groupId) }
+    if (canViewAllSports.value) await assignAcademyUser(student.id, payload)
+    else await assignSportStudent(props.sport, student.id, payload)
     await load()
     assignModal.open = false
   } catch (e) {

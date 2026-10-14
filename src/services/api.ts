@@ -1,11 +1,11 @@
 import router from '@/router'
 
 const LOCAL_CHANGES = import.meta.env.LOCAL_CHANGES === 'true'
-export const API_BASE = LOCAL_CHANGES ? 'http://localhost:8000/api' : 'https://api.dopsy.kz/api'
+export const API_BASE = LOCAL_CHANGES ? 'http://localhost:8002/api' : 'https://api.dopsy.kz/api'
 
 // Base URL for backend-served media. LOCAL_CHANGES=true points the app at the
 // local backend; otherwise the production API/media host is used.
-const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8000/media' : 'https://api.dopsy.kz/media'
+const MEDIA_BASE = LOCAL_CHANGES ? 'http://localhost:8002/media' : 'https://api.dopsy.kz/media'
 
 /** Build a URL for a file stored in the backend media folder, e.g. mediaUrl('img.png'). */
 export function mediaUrl(name: string): string {

@@ -424,6 +424,20 @@ export async function listStudents(
   )
 }
 
+/** GET /{sport}/groups/{id}/students — состав одной группы. */
+export async function listGroupStudents(
+  sport: SportKey,
+  groupId: string | number,
+): Promise<AcademyStudent[]> {
+  const data = await apiFetch<unknown>(
+    `/${sport}/groups/${encodeURIComponent(groupId)}/students`,
+    academyRequest,
+  )
+  return listFrom<unknown>(data, ['students', 'academy_users', 'results', 'items']).map(
+    normalizeAcademyUser,
+  )
+}
+
 export async function listAcademyUsers(groupType?: SportKey): Promise<AcademyUser[]> {
   const data = await apiFetch<unknown>(managerAcademyUsersPath(groupType), academyRequest)
   return listFrom<unknown>(data, ['users', 'academy_users', 'students', 'results', 'items']).map(
