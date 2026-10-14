@@ -64,6 +64,7 @@ const router = createRouter({
         { path: 'boxy', name: 'LandingBoxing', component: () => import('../views/Landing/v6/pages/Boxing.vue'), meta: { landing: 'boxing' } },
         { path: 'contacts', name: 'LandingContacts', component: () => import('../views/Landing/v6/pages/Contacts.vue'), meta: { landing: 'contacts' } },
         { path: 'privacy', name: 'LandingPrivacy', component: () => import('../views/Landing/v6/pages/Privacy.vue'), meta: { landing: 'privacy' } },
+        { path: 'offer', name: 'LandingOffer', component: () => import('../views/Landing/v6/pages/Offer.vue'), meta: { landing: 'offer' } },
         // Бронирование — секция на странице аренды; старые адреса ведут туда.
         { path: 'booking/:rest(.*)*', name: 'Booking', redirect: { path: '/arena', hash: '#booking' } },
       ],

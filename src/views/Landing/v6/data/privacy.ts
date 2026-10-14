@@ -1,5 +1,6 @@
 import type { Lang } from '../i18n'
 import { CONTACTS } from './site'
+import type { LegalDoc } from './legal'
 
 /**
  * Политика конфиденциальности. Исходник — казахский текст от заказчика;
@@ -7,34 +8,14 @@ import { CONTACTS } from './site'
  */
 export const PRIVACY_EMAIL = 'privacy@dopsy.kz'
 
-export type PrivacyBlock = { p: string } | { ul: string[] }
-
-export interface PrivacyClause {
-  title: string
-  blocks: PrivacyBlock[]
-  /** Дописать строку «куда направлять обращения» с адресом почты. */
-  requestsEmail?: boolean
-}
-
-export interface PrivacyDoc {
-  title: string
-  updatedLabel: string
-  updated: string
-  clauses: PrivacyClause[]
-  requestsLabel: string
-  contactsTitle: string
-  contacts: { label: string; value: string; href?: string }[]
-}
-
 const SITE = { value: 'https://dopsy.kz', href: 'https://dopsy.kz' }
 const EMAIL = { value: PRIVACY_EMAIL, href: `mailto:${PRIVACY_EMAIL}` }
 const PHONE = { value: CONTACTS.phone, href: CONTACTS.phoneHref }
 
-const kk: PrivacyDoc = {
+const kk: LegalDoc = {
   title: 'Құпиялылық саясаты',
-  updatedLabel: 'Соңғы жаңартылған күні',
-  updated: '14 қазан 2026 жыл',
-  requestsLabel: 'Өтініштер мына мекенжайға жіберіледі:',
+  updated: 'Соңғы жаңартылған күні: 14 қазан 2026 жыл',
+  requests: { label: 'Өтініштер мына мекенжайға жіберіледі:', email: PRIVACY_EMAIL },
   contactsTitle: 'Байланыс деректері',
   contacts: [
     { label: 'Оператор', value: 'ЖК «DOPSHY»' },
@@ -193,11 +174,10 @@ const kk: PrivacyDoc = {
   ],
 }
 
-const ru: PrivacyDoc = {
+const ru: LegalDoc = {
   title: 'Политика конфиденциальности',
-  updatedLabel: 'Дата последнего обновления',
-  updated: '14 октября 2026 года',
-  requestsLabel: 'Обращения направляются по адресу:',
+  updated: 'Дата последнего обновления: 14 октября 2026 года',
+  requests: { label: 'Обращения направляются по адресу:', email: PRIVACY_EMAIL },
   contactsTitle: 'Контактные данные',
   contacts: [
     { label: 'Оператор', value: 'ИП «DOPSHY»' },
@@ -356,4 +336,4 @@ const ru: PrivacyDoc = {
   ],
 }
 
-export const PRIVACY: Record<Lang, PrivacyDoc> = { kk, ru }
+export const PRIVACY: Record<Lang, LegalDoc> = { kk, ru }

@@ -1,4 +1,4 @@
-export type LandingRoute = 'home' | 'arena' | 'school' | 'boxing' | 'contacts' | 'privacy'
+export type LandingRoute = 'home' | 'arena' | 'school' | 'boxing' | 'contacts' | 'privacy' | 'offer'
 
 // `/boxing` is taken by the admin academy section, so the public boxing page lives at `/boxy`.
 export const PATHS: Record<LandingRoute, string> = {
@@ -8,6 +8,7 @@ export const PATHS: Record<LandingRoute, string> = {
   boxing: '/boxy',
   contacts: '/contacts',
   privacy: '/privacy',
+  offer: '/offer',
 }
 
 export const to = (route: LandingRoute, section?: string) => ({
