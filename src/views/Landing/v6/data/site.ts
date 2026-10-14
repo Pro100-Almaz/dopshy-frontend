@@ -8,6 +8,7 @@ export const CONTACTS = {
   coords: [51.130325, 71.369512] as [number, number],
 } as const
 export const DIVISION_PHONES = {
+  arena: { phone: CONTACTS.phone, phoneHref: CONTACTS.phoneHref },
   boxing: { phone: '+7 700 555 2202', phoneHref: 'tel:+77005552202' },
   school: { phone: '+7 700 555 6006', phoneHref: 'tel:+77005556006' },
 } as const
@@ -18,12 +19,6 @@ export const RATING = {
 } as const
 export type Zone = 'night' | 'day' | 'prime' | 'evening'
 export const ZONE_ORDER: Zone[] = ['night', 'day', 'prime', 'evening']
-export const ZONE_PRICE: Record<Zone, number> = {
-  night: 12000,
-  day: 14000,
-  prime: 15000,
-  evening: 14000,
-}
 export const ZONE_HOURS: Record<Zone, string> = {
   night: '00:00–06:59',
   day: '07:00–18:59',
@@ -36,8 +31,6 @@ export function zoneAt(hour: number): Zone {
   if (hour < 22) return 'prime'
   return 'evening'
 }
-export const priceAt = (hour: number) => ZONE_PRICE[zoneAt(hour)]
-export const MIN_PRICE = Math.min(...Object.values(ZONE_PRICE))
 export const FIELDS = [
   {
     id: 'f1',
@@ -64,8 +57,8 @@ export const FIELDS = [
 export const SCHOOL = {
   ageFrom: 5,
   ageTo: 15,
-  month: 25000,
-  threeMonths: 70000,
+  month: 28000,
+  threeMonths: 75000,
 } as const
 export const BOXING = {
   kidsFrom: 7,

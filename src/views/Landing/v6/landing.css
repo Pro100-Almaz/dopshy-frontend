@@ -391,7 +391,17 @@ html.lv6 #lv6-root > header [role='group'] {
 }
 html.lv6 #lv6-root > header nav ul a {
   padding-inline: 14px;
-  font-size: 13px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+@media (max-width: 1279px) {
+  html.lv6 #lv6-root > header nav ul a {
+    padding-inline: 8px;
+    font-size: 15px;
+  }
+  html.lv6 #lv6-root > header nav > div > a {
+    padding-inline: 14px;
+  }
 }
 html.lv6 #lv6-root > header nav > div > a {
   padding-inline: 20px;
@@ -417,6 +427,17 @@ html.lv6 #lv6-root > header nav > div > a {
 .v6-client-logo__name {
   width: 146px;
   height: 22px;
+}
+/* Client asked for a 36px logo; phones keep the compact size so the nav still fits. */
+@media (min-width: 768px) {
+  .v6-client-logo__mark {
+    width: 61px;
+    height: 36px;
+  }
+  .v6-client-logo__name {
+    width: 202px;
+    height: 30px;
+  }
 }
 .v6-client-logo__sub {
   color: var(--color-fg-dim);
@@ -542,8 +563,9 @@ html.lv6 #lv6-root > header nav > div > a {
 }
 .v6-hero__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
   margin-top: 24px;
 }
 .v6-hero__bottom {
@@ -696,6 +718,13 @@ html.lv6 #lv6-root > header nav > div > a {
   font-size: 12px;
   line-height: 1.65;
   color: #c7c7cf;
+}
+.v6-direction__price {
+  display: block;
+  margin-top: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .v6-direction__link {
   display: flex;
@@ -857,6 +886,12 @@ html.lv6 #lv6-root > header nav > div > a {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.025em;
+}
+.v6-rates dd small {
+  color: var(--color-fg-dim);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .v6-rate--prime dd {
   color: var(--color-prime);
@@ -1036,6 +1071,20 @@ html.lv6 #instagram a > span.flex-1 > span:last-child {
   color: var(--color-fg-muted);
   margin-top: 9px;
 }
+.v6-footer__phones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.v6-footer__phones li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.v6-footer__phones span {
+  font-size: 12px;
+  color: var(--color-fg-muted);
+}
 .v6-footer__grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr;
@@ -1212,12 +1261,15 @@ html.lv6 .dopsy-pin__dot {
     font-size: 14px;
   }
   .v6-hero__actions {
-    flex-wrap: wrap;
-    gap: 6px 20px;
+    gap: 8px;
     margin-top: 23px;
   }
   .v6-hero__actions .v6-button {
+    flex: 1 1 auto;
     padding-inline: 18px;
+  }
+  .v6-hero__actions .v6-button--primary {
+    flex-basis: 100%;
   }
   .v6-hero__facts {
     gap: 12px;
@@ -1342,6 +1394,9 @@ html.lv6 .dopsy-pin__dot {
   }
   .v6-footer__contact h2 {
     font-size: 28px;
+  }
+  .v6-footer__phones {
+    flex-direction: column;
   }
   .v6-footer__grid {
     grid-template-columns: 1fr 1fr;

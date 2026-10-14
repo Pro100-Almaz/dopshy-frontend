@@ -21,7 +21,7 @@ import {
   type WeekSlots,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
-import { useLang, fmt, money } from '../i18n'
+import { useLang, fmt, fromPrice, money, num } from '../i18n'
 import { ZONE_HOURS, zoneAt, type Zone } from '../data/site'
 import Section from './Section.vue'
 import Reveal from './Reveal.vue'
@@ -30,6 +30,8 @@ import Checkout from './Checkout.vue'
 
 const DAYS = 7
 const MAX_WEEK = 3 // горизонт бронирования ~4 недели
+const SLOT_MIN = 30
+const MIN_BOOKING_MIN = 60 // бронь — минимум час
 const START_HOUR = 18 // сетка открывается на вечере — его бронируют чаще всего
 const GROUPS: Zone[] = ['day', 'prime', 'evening', 'night']
 const RAIL: Record<Zone, string> = {
@@ -134,10 +136,30 @@ function zonePrice(z: Zone): number {
 
 const busy = (cell: Slot) => cell.status !== 'available' && !store.isSelected(cell.id)
 
+const cellById = computed(() => new Map(data.value.rows.flatMap((r) => r.cells.map((c) => [c.id, c]))))
+const toMin = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+const neighbour = (cell: Slot, d: number) =>
+  cellById.value.get(`${cell.fieldId}__${cell.date}__${toMin(cell.start) + d * SLOT_MIN}`)
+
 function toggle(cell: Slot) {
   if (busy(cell)) return
+  const starting = !store.isSelected(cell.id)
   store.toggleSlot(cell)
+  if (!starting) return
+  // A fresh pick is a whole hour: take the next half-hour, or the previous one if the next is taken.
+  const [next, prev] = [neighbour(cell, 1), neighbour(cell, -1)]
+  if ((next && store.isSelected(next.id)) || (prev && store.isSelected(prev.id))) return
+  const pair = [next, prev].find((c) => c && c.status === 'available')
+  if (pair) store.toggleSlot(pair)
 }
+
+// Every continuous block must last at least an hour; the backend should enforce it too.
+const tooShort = computed(() =>
+  store.intervals.some((iv) => toMin(iv.end) - toMin(iv.start) < MIN_BOOKING_MIN),
+)
 
 const dayLabel = (d: Date) => `${b.value.weekdays[d.getDay()]} ${d.getDate()}`
 const dateOf = (iso: string) => {
@@ -495,7 +517,7 @@ watch(
                           z === 'prime' ? 'bg-prime/15 text-prime' : 'bg-surface-2 text-fg-muted',
                         ]"
                       >
-                        {{ b.from }} {{ money(zonePrice(z), lang) }}{{ t.prices.perHour }}
+                        {{ fromPrice(money(zonePrice(z), lang) + t.prices.perHour, lang) }}
                       </span>
                     </div>
                   </div>
@@ -571,12 +593,24 @@ watch(
             areaInView || store.count > 0 ? 'translate-y-0' : 'translate-y-full',
           ]"
         >
+          <p
+            v-if="tooShort"
+            role="status"
+            class="mx-auto mb-3 flex max-w-7xl items-center gap-2 text-sm text-prime lg:mb-0 lg:hidden"
+          >
+            <AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
+            {{ b.minHour }}
+          </p>
           <div class="mx-auto flex max-w-7xl items-center gap-4 lg:block">
             <div class="hidden lg:block">
               <h3 class="font-display text-2xl text-fg">{{ b.yourChoice }}</h3>
               <p class="text-sm text-fg-dim">{{ fieldLabel }}</p>
               <div class="mt-4 min-h-24 border-t border-line pt-4">
                 <p v-if="store.count === 0" class="text-sm text-fg-dim">{{ b.empty }}</p>
+                <p v-else-if="tooShort" role="status" class="mb-3 flex items-start gap-2 text-sm text-prime">
+                  <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  {{ b.minHour }}
+                </p>
                 <TransitionGroup
                   v-else
                   tag="ul"
@@ -607,7 +641,7 @@ watch(
                   {{ money(store.total, lang) }}
                 </span>
                 <span class="block text-xs text-fg-dim">
-                  {{ fmt(b.slots, { n: store.count }) }}
+                  {{ fmt(b.slots, { n: num((store.count * SLOT_MIN) / 60, lang) }) }}
                   <template v-if="store.prepaymentTotal > 0">
                     <span class="hidden lg:inline"
                       >· {{ b.prepayment }} {{ money(store.prepaymentTotal, lang) }}</span
@@ -628,7 +662,7 @@ watch(
               </button>
               <button
                 type="button"
-                :disabled="store.count === 0"
+                :disabled="store.count === 0 || tooShort"
                 class="min-h-13 flex-1 rounded-full bg-acid px-6 font-semibold text-acid-ink transition-colors hover:bg-acid-soft disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-dim lg:w-full"
                 @click="checkout = true"
               >

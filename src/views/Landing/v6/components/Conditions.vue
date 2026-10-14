@@ -34,8 +34,8 @@ const { t } = useLang()
       </Reveal>
 
       <div class="grid gap-4 lg:col-span-7">
-        <div class="grid gap-4 sm:grid-cols-3">
-          <Reveal v-for="(k, i) in ['light', 'heat', 'open'] as Key[]" :key="k" :delay="0.05 * i">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Reveal v-for="(k, i) in ['light', 'heat'] as Key[]" :key="k" :delay="0.05 * i">
             <ConditionItem :k="k" />
           </Reveal>
         </div>
@@ -56,23 +56,26 @@ const { t } = useLang()
           <div class="grid gap-4">
             <Reveal :delay="0.05"><ConditionItem k="store" /></Reveal>
             <Reveal :delay="0.1"><ConditionItem k="parking" /></Reveal>
-            <Reveal :delay="0.15">
-              <div class="grid grid-cols-2 gap-4">
-                <Picture
-                  name="dryer"
-                  alt="Фен в раздевалке"
-                  sizes="200px"
-                  class="aspect-square w-full rounded-2xl border border-line object-cover"
-                />
-                <Picture
-                  name="shower"
-                  alt="Душевая кабина"
-                  sizes="200px"
-                  class="aspect-square w-full rounded-2xl border border-line object-cover"
-                />
-              </div>
-            </Reveal>
           </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <Reveal class="col-span-2 sm:col-span-1"><ConditionItem k="open" /></Reveal>
+          <Reveal :delay="0.05">
+            <Picture
+              name="dryer"
+              alt="Фен в раздевалке"
+              sizes="200px"
+              class="aspect-square w-full rounded-2xl border border-line object-cover"
+            />
+          </Reveal>
+          <Reveal :delay="0.1">
+            <Picture
+              name="shower"
+              alt="Душевая кабина"
+              sizes="200px"
+              class="aspect-square w-full rounded-2xl border border-line object-cover"
+            />
+          </Reveal>
         </div>
       </div>
     </div>
