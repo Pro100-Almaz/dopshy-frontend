@@ -65,6 +65,7 @@ const year = new Date().getFullYear()
       </div>
       <div class="v6-footer__bottom">
         <span>© {{ year }} DOPȘÝ ARENA</span>
+        <RouterLink :to="to('privacy')">{{ t.footer.privacy }}</RouterLink>
       </div>
     </div>
   </footer>
