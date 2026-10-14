@@ -1116,6 +1116,11 @@ html.lv6 #instagram a > span.flex-1 > span:last-child {
   margin-top: 18px;
   color: var(--color-fg-dim);
 }
+.v6-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
 .v6-footer__bottom a:hover {
   color: var(--color-fg);
 }
