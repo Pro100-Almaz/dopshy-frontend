@@ -554,7 +554,7 @@ async function saveGroup() {
         shift: groupForm.shift || undefined,
         is_active: groupForm.active,
       }
-      await createGroup(payload)
+      await createGroup(props.sport, payload)
     } else {
       const group = selectedGroup.value
       if (!group) return
@@ -576,7 +576,7 @@ async function saveGroup() {
         payload.start_time = firstTraining.start_time
         payload.end_time = firstTraining.end_time
       }
-      await updateGroup(group.groupId, payload)
+      await updateGroup(props.sport, group.groupId, payload)
     }
     await load()
     groupForm.open = false
@@ -604,7 +604,7 @@ async function disableGroup() {
   deleteSaving.value = true
   deleteError.value = ''
   try {
-    await deleteGroup(group.groupId)
+    await deleteGroup(props.sport, group.groupId)
     await load()
   } catch (e) {
     deleteError.value =

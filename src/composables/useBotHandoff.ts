@@ -9,10 +9,12 @@
  * Статусы забираем одним запросом `/bot-status/contacts` на страницу, а не по
  * строке: у списка пробных это разница между одним запросом и сотней.
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { ApiError } from '@/services/api'
 import { listContacts, normalizePhone, pauseBot, resumeBot } from '@/services/customer'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from '@/stores/auth'
 import type { PausedReason } from '@/types'
 import { setPending, type PendingMap } from '@/utils/pending'
 
@@ -25,6 +27,9 @@ export function useBotHandoff() {
   const byPhone = ref<Record<string, HandoffState>>({})
   const pending = ref<PendingMap<string>>({})
   const error = ref('')
+  const auth = useAuthStore()
+  /** Менеджеры академии видят паузу, но переключать её бэкенд им не даёт (403). */
+  const canToggle = computed(() => hasPermission(auth.role, 'botHandoff'))
 
   async function load() {
     try {
@@ -54,7 +59,7 @@ export function useBotHandoff() {
   /** Пауза = менеджер забрал диалог; снятие паузы = вернул боту. */
   async function toggle(phone: string) {
     const key = normalizePhone(phone)
-    if (!key || pending.value[key]) return
+    if (!key || pending.value[key] || !canToggle.value) return
 
     const current = byPhone.value[key]?.paused ?? false
     pending.value = { ...pending.value, [key]: true }
@@ -78,5 +83,5 @@ export function useBotHandoff() {
     }
   }
 
-  return { load, stateFor, isPending, toggle, error }
+  return { load, stateFor, isPending, toggle, error, canToggle }
 }

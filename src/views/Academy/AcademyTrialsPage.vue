@@ -65,6 +65,7 @@ const {
   isPending: handoffPending,
   toggle: toggleHandoff,
   error: handoffError,
+  canToggle: canHandoff,
 } = useBotHandoff()
 
 const trials = ref<AcademyTrial[]>([])
@@ -479,6 +480,7 @@ const tabClass = (active: boolean) =>
                       :language="normalizeLanguage(row.trial.language)"
                       :handoff="handoffFor(row.trial.phone)"
                       :handoff-pending="handoffPending(row.trial.phone)"
+                      :can-handoff="canHandoff"
                       @handoff="toggleHandoff(row.trial.phone)"
                     />
                   </td>
@@ -567,6 +569,7 @@ const tabClass = (active: boolean) =>
                         :language="normalizeLanguage(row.trial.language)"
                         :handoff="handoffFor(row.trial.phone)"
                         :handoff-pending="handoffPending(row.trial.phone)"
+                        :can-handoff="canHandoff"
                         @handoff="toggleHandoff(row.trial.phone)"
                       />
                     </dd>

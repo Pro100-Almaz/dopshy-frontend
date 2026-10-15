@@ -91,6 +91,7 @@ const {
   isPending: handoffPending,
   toggle: toggleHandoff,
   error: handoffError,
+  canToggle: canHandoff,
 } = useBotHandoff()
 
 /** Виден только тем, кому не привязан один вид спорта (см. rbac.ts). */
@@ -416,6 +417,11 @@ async function saveCreate() {
 
   const groupValue = showAllSports.value ? '' : String(createForm.value.groupId).trim()
   const groupId = Number(groupValue)
+  // Ученик без группы создаётся только общей ручкой /manager/academy_users (админы).
+  if (!groupValue && !canViewAllSports.value) {
+    createError.value = 'Выберите группу.'
+    return
+  }
 
   createSaving.value = true
   createError.value = ''
@@ -829,6 +835,7 @@ const tabClass = (active: boolean) =>
                   :phone="phoneOf(student)"
                   :handoff="handoffFor(phoneOf(student))"
                   :handoff-pending="handoffPending(phoneOf(student))"
+                  :can-handoff="canHandoff"
                   @handoff="toggleHandoff(phoneOf(student))"
                 />
               </td>
@@ -885,6 +892,7 @@ const tabClass = (active: boolean) =>
                 :phone="phoneOf(student)"
                 :handoff="handoffFor(phoneOf(student))"
                 :handoff-pending="handoffPending(phoneOf(student))"
+                :can-handoff="canHandoff"
                 @handoff="toggleHandoff(phoneOf(student))"
               />
             </div>
@@ -971,7 +979,9 @@ const tabClass = (active: boolean) =>
               <label :class="labelClass" for="academy-user-group">Группа</label>
               <div class="relative">
                 <select id="academy-user-group" v-model="createForm.groupId" :class="select">
-                  <option value="">Без группы</option>
+                  <option value="" :disabled="!canViewAllSports">
+                    {{ canViewAllSports ? 'Без группы' : 'Выберите группу' }}
+                  </option>
                   <option
                     v-for="group in currentSportGroupOptions"
                     :key="group.id"

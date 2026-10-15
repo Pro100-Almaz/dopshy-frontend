@@ -24,7 +24,7 @@ import {
   type BotType,
 } from '@/services/customer'
 import { ApiError } from '@/services/api'
-import { hasPermission } from '@/services/rbac'
+import { canSwitchBot } from '@/services/rbac'
 import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(defineProps<{ botType?: BotType }>(), {
@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<{ botType?: BotType }>(), {
 })
 const currentPageTitle = 'Клиентская база'
 const auth = useAuthStore()
-const canManageGlobalBot = computed(() => hasPermission(auth.role, 'globalBotSetting'))
+const canManageGlobalBot = computed(() => canSwitchBot(auth.role, props.botType))
 const PAGE_SIZE = 20
 
 // Держим экран свежим: авто-пауза и новые контакты появляются на бэкенде без
