@@ -243,8 +243,8 @@ async function confirmDelete() {
       <table v-else class="hidden w-full lg:table">
         <thead>
           <tr class="border-b border-gray-200 dark:border-gray-800">
-            <th :class="th">Username</th>
-            <th :class="th">Email</th>
+            <th :class="th">Логин</th>
+            <th :class="th">Эл. почта</th>
             <th :class="th">Роль</th>
             <th :class="th">Статус</th>
             <th :class="[th, 'text-right']">Действия</th>
@@ -272,7 +272,7 @@ async function confirmDelete() {
                 <StatusPill :tone="user.isActive ? 'pitch' : 'warning'">
                   {{ user.isActive ? 'Активен' : 'Отключён' }}
                 </StatusPill>
-                <StatusPill v-if="user.isVerified" tone="info">Verified</StatusPill>
+                <StatusPill v-if="user.isVerified" tone="info">Подтверждён</StatusPill>
               </div>
             </td>
             <td :class="td">
@@ -346,11 +346,11 @@ async function confirmDelete() {
 
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
-              <label :class="labelClass" for="staff-username">Username</label>
+              <label :class="labelClass" for="staff-username">Логин</label>
               <input id="staff-username" v-model="form.username" type="text" :class="input" />
             </div>
             <div>
-              <label :class="labelClass" for="staff-email">Email</label>
+              <label :class="labelClass" for="staff-email">Эл. почта</label>
               <input id="staff-email" v-model="form.email" type="email" :class="input" />
             </div>
             <div>
@@ -385,7 +385,7 @@ async function confirmDelete() {
                 type="checkbox"
                 class="h-4 w-4 rounded border-gray-300 text-pitch-600 focus:ring-pitch-500"
               />
-              Verified
+              Подтверждён
             </label>
           </div>
 

@@ -12,7 +12,7 @@
  * them. Use one shared AcademyUser type and apply sport filtering/validation at
  * the API boundary.
  */
-import { apiFetch } from './api'
+import { apiFetch, ruError } from './api'
 
 // ── Виды спорта ─────────────────────────────────────────────────────
 
@@ -239,7 +239,7 @@ export function unwrapAcademyPayload(data: unknown): unknown {
     if (envelope.ok === false) {
       const detail = typeof envelope.detail === 'string' ? envelope.detail : undefined
       const message = typeof envelope.message === 'string' ? envelope.message : undefined
-      throw new Error(detail || message || 'Запрос к API академии не удался')
+      throw new Error(detail || message ? ruError(400, detail || message) : 'Запрос к API академии не удался')
     }
     if (!('data' in envelope)) break
     payload = envelope.data

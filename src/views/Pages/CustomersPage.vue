@@ -379,7 +379,7 @@ onUnmounted(() => {
                 <th class="px-5 py-3 text-left sm:px-6">
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                      BOT
+                      Бот
                     </span>
                     <button
                       v-if="canManageGlobalBot"

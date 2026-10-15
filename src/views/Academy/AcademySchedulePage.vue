@@ -936,7 +936,7 @@ function groupColorClass(group: GroupView): string {
         </span>
         <button type="button" :class="[buttonPrimary, buttonSize.sm]" @click="viewScheduleDetails">
           <Eye class="h-3.5 w-3.5" aria-hidden="true" />
-          View details
+          Подробнее
         </button>
       </div>
     </section>
@@ -1316,8 +1316,8 @@ function groupColorClass(group: GroupView): string {
                   "
                   @click="setTimeMode('general')"
                 >
-                  <span class="block text-theme-sm font-semibold">Same time</span>
-                  <span class="mt-0.5 block text-[11px]">one time for all days</span>
+                  <span class="block text-theme-sm font-semibold">Одно время</span>
+                  <span class="mt-0.5 block text-[11px]">одинаково для всех дней</span>
                 </button>
                 <button
                   type="button"
@@ -1329,14 +1329,14 @@ function groupColorClass(group: GroupView): string {
                   "
                   @click="setTimeMode('custom')"
                 >
-                  <span class="block text-theme-sm font-semibold">Different by day</span>
-                  <span class="mt-0.5 block text-[11px]">set each day manually</span>
+                  <span class="block text-theme-sm font-semibold">По дням</span>
+                  <span class="mt-0.5 block text-[11px]">для каждого дня отдельно</span>
                 </button>
               </div>
 
               <div v-if="groupForm.timeMode === 'general'" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr]">
                 <div>
-                  <label :class="labelClass" for="group-general-start">Start time</label>
+                  <label :class="labelClass" for="group-general-start">Начало</label>
                   <input
                     id="group-general-start"
                     v-model="groupForm.generalStart"
@@ -1345,7 +1345,7 @@ function groupColorClass(group: GroupView): string {
                   />
                 </div>
                 <div>
-                  <label :class="labelClass" for="group-general-end">End time</label>
+                  <label :class="labelClass" for="group-general-end">Окончание</label>
                   <input
                     id="group-general-end"
                     v-model="groupForm.generalEnd"

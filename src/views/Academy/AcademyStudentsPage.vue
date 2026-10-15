@@ -1009,9 +1009,9 @@ const tabClass = (active: boolean) =>
                   :class="select"
                 >
                   <option value="">Не указан</option>
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
+                  <option value="Beginner">Начинающий</option>
+                  <option value="Intermediate">Средний</option>
+                  <option value="Advanced">Продвинутый</option>
                 </select>
                 <ChevronDownIcon
                   class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
@@ -1158,9 +1158,9 @@ const tabClass = (active: boolean) =>
                   :class="select"
                 >
                   <option value="">Не указан</option>
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
+                  <option value="Beginner">Начинающий</option>
+                  <option value="Intermediate">Средний</option>
+                  <option value="Advanced">Продвинутый</option>
                 </select>
                 <ChevronDownIcon
                   class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"

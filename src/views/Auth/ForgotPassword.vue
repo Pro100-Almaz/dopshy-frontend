@@ -31,7 +31,7 @@
           <form @submit.prevent="handleSubmit" class="space-y-5" novalidate>
             <AuthInput
               id="fp-email"
-              label="Email"
+              label="Эл. почта"
               type="email"
               placeholder="admin@dopsyarena.kz"
               v-model="email"
