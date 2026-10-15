@@ -26,7 +26,7 @@
         <span
           class="block font-medium text-gray-700 text-theme-sm dark:text-gray-400"
         >
-          {{ authStore.user?.name || 'Admin' }}
+          {{ authStore.user?.name || 'Администратор' }}
         </span>
         <span
           class="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400"
@@ -84,7 +84,7 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
 const displayName = computed(() => {
-  return authStore.user?.name?.split(' ')[0] || 'Admin'
+  return authStore.user?.name?.split(' ')[0] || 'Администратор'
 })
 
 const userInitials = computed(() => {

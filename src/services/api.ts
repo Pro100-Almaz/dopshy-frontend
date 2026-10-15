@@ -25,6 +25,56 @@ export class ApiError extends Error {
   }
 }
 
+// Бэкенд и бот отвечают по-английски. Известные ответы переводим дословно,
+// остальные — общей фразой по HTTP-статусу. Русский текст оставляем как есть.
+const RU_ERRORS: Record<string, string> = {
+  'insufficient permissions': 'Недостаточно прав для этого действия.',
+  'access denied': 'Недостаточно прав для этого действия.',
+  unauthorized: 'Требуется вход в систему.',
+  'authentication required': 'Требуется вход в систему.',
+  'invalid or expired token': 'Сессия истекла. Войдите снова.',
+  'account not found': 'Аккаунт не найден.',
+  'account is inactive': 'Аккаунт отключён.',
+  'only administrators can change regular-customer status':
+    'Менять статус постоянного клиента могут только администраторы.',
+  'only staff can confirm or decline bookings':
+    'Подтверждать и отклонять брони могут только сотрудники.',
+  'only staff can assign discounts': 'Назначать скидки могут только сотрудники.',
+  'cancellation is only allowed more than 48 hours before the booking start':
+    'Отменить бронь можно не позднее чем за 48 часов до начала.',
+  'the agent did not answer in time. try again or check the bot service':
+    'Агент не ответил вовремя. Попробуйте ещё раз.',
+  'student already exists for this phone, name, and group': 'Такой ученик уже есть в этой группе.',
+  'user already exists for this phone, name, and group': 'Такой ученик уже есть в этой группе.',
+  'assigned_group_id is required for sport-scoped student creation': 'Выберите группу.',
+  'group not found': 'Группа не найдена.',
+  'payment not found': 'Платёж не найден.',
+  'session not found': 'Сессия не найдена.',
+  'student not found': 'Ученик не найден.',
+  'student or group not found': 'Ученик или группа не найдены.',
+  'trial not found': 'Пробное занятие не найдено.',
+  'user not found': 'Пользователь не найден.',
+  'no fields to update': 'Нет изменений для сохранения.',
+  'at least one training day is required': 'Добавьте хотя бы один день тренировки.',
+  'duplicate training day/time': 'Это время тренировки уже добавлено.',
+  'invalid training day/time': 'Неверный день или время тренировки.',
+  'field must be between 1 and 3': 'Номер поля должен быть от 1 до 3.',
+}
+
+export function ruError(status: number, message?: string): string {
+  if (message && /[А-Яа-яЁё]/.test(message)) return message
+  const known = message && RU_ERRORS[message.trim().replace(/\.$/, '').toLowerCase()]
+  if (known) return known
+  if (status === 400 || status === 422) return 'Проверьте введённые данные.'
+  if (status === 401) return 'Требуется вход в систему.'
+  if (status === 403) return 'Недостаточно прав для этого действия.'
+  if (status === 404) return 'Не найдено.'
+  if (status === 409) return 'Конфликт данных: запись уже существует или занята.'
+  if (status === 429) return 'Слишком много запросов. Попробуйте позже.'
+  if (status >= 500) return 'Сервис временно недоступен. Попробуйте позже.'
+  return `Ошибка запроса (код ${status}).`
+}
+
 interface ApiFetchOptions extends RequestInit {
   skipSessionExpiredRedirect?: boolean
 }
@@ -83,7 +133,7 @@ export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): 
     // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
     const detail = typeof body.detail === 'string' ? body.detail : undefined
     const code = typeof body.code === 'string' ? body.code : undefined
-    throw new ApiError(res.status, detail || body.message || `API error ${res.status}`, code)
+    throw new ApiError(res.status, ruError(res.status, detail || body.message), code)
   }
 
   return res.json()
@@ -127,7 +177,7 @@ export async function apiFetchBlob(
     } catch {
       message = text.slice(0, 200)
     }
-    throw new ApiError(res.status, message || `API error ${res.status}`)
+    throw new ApiError(res.status, ruError(res.status, message))
   }
 
   return {

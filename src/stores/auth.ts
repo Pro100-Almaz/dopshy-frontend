@@ -62,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       storage.setItem('dopsy_token', res.token)
       storage.setItem('dopsy_user', JSON.stringify(res.user))
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Login failed'
+      error.value = e instanceof Error ? e.message : 'Не удалось войти'
       throw e
     } finally {
       loading.value = false

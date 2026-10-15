@@ -1,4 +1,4 @@
-import { apiFetch } from './api'
+import { apiFetch, ruError } from './api'
 
 /**
  * Консоль тестирования агентов.
@@ -86,7 +86,7 @@ interface Envelope<T> {
 
 async function unwrap<T>(promise: Promise<Envelope<T>>): Promise<T> {
   const res = await promise
-  if (!res.ok) throw new Error(res.message || 'Сервис бота вернул ошибку')
+  if (!res.ok) throw new Error(res.message ? ruError(400, res.message) : 'Сервис бота вернул ошибку')
   return res.data
 }
 

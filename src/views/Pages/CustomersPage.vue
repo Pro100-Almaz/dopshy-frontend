@@ -24,7 +24,7 @@ import {
   type BotType,
 } from '@/services/customer'
 import { ApiError } from '@/services/api'
-import { hasPermission } from '@/services/rbac'
+import { canSwitchBot } from '@/services/rbac'
 import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(defineProps<{ botType?: BotType }>(), {
@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<{ botType?: BotType }>(), {
 })
 const currentPageTitle = 'Клиентская база'
 const auth = useAuthStore()
-const canManageGlobalBot = computed(() => hasPermission(auth.role, 'globalBotSetting'))
+const canManageGlobalBot = computed(() => canSwitchBot(auth.role, props.botType))
 const PAGE_SIZE = 20
 
 // Держим экран свежим: авто-пауза и новые контакты появляются на бэкенде без
@@ -379,7 +379,7 @@ onUnmounted(() => {
                 <th class="px-5 py-3 text-left sm:px-6">
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                      BOT
+                      Бот
                     </span>
                     <button
                       v-if="canManageGlobalBot"

@@ -12,7 +12,7 @@
  * them. Use one shared AcademyUser type and apply sport filtering/validation at
  * the API boundary.
  */
-import { apiFetch } from './api'
+import { apiFetch, ruError } from './api'
 
 // ── Виды спорта ─────────────────────────────────────────────────────
 
@@ -198,10 +198,6 @@ export interface CreateGroupPayload extends Omit<UpdateGroupPayload, 'training_d
   training_days?: GroupTrainingDayPayload[]
 }
 
-export interface AssignStudentPayload {
-  student_id: string
-}
-
 // ── Разбор ответов ──────────────────────────────────────────────────
 
 const MANAGER_API_KEY = import.meta.env.VITE_MANAGER_API_KEY || ''
@@ -243,7 +239,7 @@ export function unwrapAcademyPayload(data: unknown): unknown {
     if (envelope.ok === false) {
       const detail = typeof envelope.detail === 'string' ? envelope.detail : undefined
       const message = typeof envelope.message === 'string' ? envelope.message : undefined
-      throw new Error(detail || message || 'Запрос к API академии не удался')
+      throw new Error(detail || message ? ruError(400, detail || message) : 'Запрос к API академии не удался')
     }
     if (!('data' in envelope)) break
     payload = envelope.data
@@ -424,20 +420,6 @@ export async function listStudents(
   )
 }
 
-/** GET /{sport}/groups/{id}/students — состав одной группы. */
-export async function listGroupStudents(
-  sport: SportKey,
-  groupId: string | number,
-): Promise<AcademyStudent[]> {
-  const data = await apiFetch<unknown>(
-    `/${sport}/groups/${encodeURIComponent(groupId)}/students`,
-    academyRequest,
-  )
-  return listFrom<unknown>(data, ['students', 'academy_users', 'results', 'items']).map(
-    normalizeAcademyUser,
-  )
-}
-
 export async function listAcademyUsers(groupType?: SportKey): Promise<AcademyUser[]> {
   const data = await apiFetch<unknown>(managerAcademyUsersPath(groupType), academyRequest)
   return listFrom<unknown>(data, ['users', 'academy_users', 'students', 'results', 'items']).map(
@@ -585,13 +567,17 @@ export async function deassignStudent(sport: SportKey, studentId: number): Promi
   })
 }
 
-/** Правка группы — общая менеджерская ручка, вид спорта не важен. */
+// Группы правим через /{sport}/groups: туда пускает и админов, и менеджера
+// направления, а /manager/academy_groups — только админов (403 у
+// football/boxing_manager).
+
 export function updateGroup(
+  sport: SportKey,
   groupId: string,
   payload: UpdateGroupPayload,
 ): Promise<{ ok: boolean; data: { group_id: number } }> {
   return apiFetch<{ ok: boolean; data: { group_id: number } }>(
-    `/manager/academy_groups/${encodeURIComponent(groupId)}`,
+    `/${sport}/groups/${encodeURIComponent(groupId)}`,
     {
       ...academyRequest,
       method: 'PATCH',
@@ -600,42 +586,23 @@ export function updateGroup(
   )
 }
 
-/** Создание группы — фронтенд готов к ручке, когда бэкенд её добавит. */
 export function createGroup(
+  sport: SportKey,
   payload: CreateGroupPayload,
 ): Promise<{ ok: boolean; data: { group_id: number } }> {
-  return apiFetch<{ ok: boolean; data: { group_id: number } }>('/manager/academy_groups', {
+  return apiFetch<{ ok: boolean; data: { group_id: number } }>(`/${sport}/groups`, {
     ...academyRequest,
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-/**
- * Мягкое удаление / отключение группы. Если бэкенд позже выберет PATCH
- * `is_active: false`, UI останется тем же — заменить нужно будет только этот
- * вызов.
- */
-export function deleteGroup(groupId: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(`/manager/academy_groups/${encodeURIComponent(groupId)}`, {
+/** Мягкое удаление: бэкенд деактивирует группу, а не стирает её. */
+export function deleteGroup(sport: SportKey, groupId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/${sport}/groups/${encodeURIComponent(groupId)}`, {
     ...academyRequest,
     method: 'DELETE',
   })
-}
-
-/** Назначение существующего ученика в группу. */
-export function assignStudentToGroup(
-  groupId: string,
-  payload: AssignStudentPayload,
-): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(
-    `/manager/academy_groups/${encodeURIComponent(groupId)}/students`,
-    {
-      ...academyRequest,
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  )
 }
 
 // ── Форматирование ──────────────────────────────────────────────────
