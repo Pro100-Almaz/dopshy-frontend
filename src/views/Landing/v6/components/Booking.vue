@@ -128,7 +128,7 @@ const rows = computed(() =>
 )
 const rowIndex = computed(() => new Map(rows.value.map((r, i) => [r.startMin, i])))
 
-// Zone badge: cheapest hourly rate in that zone this week (weekends can cost more).
+// Zone badge: cheapest hourly rate in that zone this week (weekday specials and weekends can differ).
 function zonePrice(z: Zone): number {
   const prices = rowsByZone.value[z].flatMap((r) => r.cells.map((c) => c.price * 2))
   return prices.length ? Math.min(...prices) : 0
