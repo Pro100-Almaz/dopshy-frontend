@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { useLang, fmt } from '../i18n'
+import { useLang } from '../i18n'
 import { BOOKING_PATH, to } from '../routes'
-import { FIELDS } from '../data/site'
 import PageHero from '../components/PageHero.vue'
 import Conditions from '../components/Conditions.vue'
 import Prices from '../components/Prices.vue'
 import Reviews from '../components/Reviews.vue'
 import InstaFeed from '../components/InstaFeed.vue'
 import Section from '../components/Section.vue'
-import Picture from '../components/Picture.vue'
-import Reveal from '../components/Reveal.vue'
 import PhotoGrid from '../components/PhotoGrid.vue'
 import Marquee from '../components/Marquee.vue'
+import Booking from '../components/Booking.vue'
 
 const { t } = useLang()
 
@@ -52,31 +50,7 @@ const photos = [
 
   <Conditions tone="ink" />
   <Prices variant="arena" tone="ink2" />
-  <Section id="booking" :kicker="t.booking.kicker" :title="t.booking.title">
-    <div class="grid gap-4 md:grid-cols-3">
-      <Reveal v-for="(f, i) in FIELDS" :key="f.id" :delay="i * 0.06">
-        <article class="overflow-hidden rounded-2xl border border-line bg-surface">
-          <Picture
-            :name="f.image"
-            :alt="`${t.booking.field} ${f.n}`"
-            sizes="(max-width: 767px) 92vw, 30vw"
-            class="aspect-[4/3] w-full object-cover"
-          />
-          <div class="p-5">
-            <h3 class="font-display text-2xl text-fg">{{ t.booking.field }} {{ f.n }}</h3>
-            <p class="mt-1 text-fg-muted">
-              {{ f.format }} · {{ fmt(t.booking.players, { n: f.players }) }}
-            </p>
-          </div>
-        </article>
-      </Reveal>
-    </div>
-    <div class="mt-8">
-      <RouterLink :to="BOOKING_PATH" class="v6-button v6-button--primary">
-        {{ t.nav.book }}
-      </RouterLink>
-    </div>
-  </Section>
+  <Booking />
   <Section :kicker="t.common.photo" :title="t.arena.fields" tone="ink2">
     <PhotoGrid :close-label="t.checkout.close" :items="photos as any" />
   </Section>

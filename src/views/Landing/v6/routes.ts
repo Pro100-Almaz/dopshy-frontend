@@ -1,4 +1,4 @@
-export type LandingRoute = 'home' | 'arena' | 'school' | 'boxing' | 'contacts'
+export type LandingRoute = 'home' | 'arena' | 'school' | 'boxing' | 'contacts' | 'privacy' | 'offer'
 
 // `/boxing` is taken by the admin academy section, so the public boxing page lives at `/boxy`.
 export const PATHS: Record<LandingRoute, string> = {
@@ -7,6 +7,8 @@ export const PATHS: Record<LandingRoute, string> = {
   school: '/school',
   boxing: '/boxy',
   contacts: '/contacts',
+  privacy: '/privacy',
+  offer: '/offer',
 }
 
 export const to = (route: LandingRoute, section?: string) => ({
@@ -14,7 +16,7 @@ export const to = (route: LandingRoute, section?: string) => ({
   hash: section ? `#${section}` : '',
 })
 
-// Real booking flow (views/Booking) replaces the design's demo slot grid.
-export const BOOKING_PATH = '/booking'
+// Booking lives on the Arena page (components/Booking.vue), as in the design.
+export const BOOKING_PATH = to('arena', 'booking')
 
 export const ASSETS = '/landing/'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowUpRight, Phone } from 'lucide-vue-next'
 import { useLang } from '../i18n'
-import { CONTACTS, INSTAGRAM } from '../data/site'
+import { DIVISION_PHONES, INSTAGRAM } from '../data/site'
 import { to } from '../routes'
 import Logo from './Logo.vue'
 
@@ -25,10 +25,18 @@ const year = new Date().getFullYear()
             }}
           </p>
         </div>
-        <a class="v6-button v6-button--primary" :href="CONTACTS.phoneHref">
-          <Phone :size="16" aria-hidden="true" />
-          {{ CONTACTS.phone }}
-        </a>
+        <ul class="v6-footer__phones">
+          <li v-for="d in ['arena', 'school', 'boxing'] as const" :key="d">
+            <span>{{ t.insta.names[d] }}</span>
+            <a
+              :class="['v6-button', d === 'arena' ? 'v6-button--primary' : 'v6-button--outline']"
+              :href="DIVISION_PHONES[d].phoneHref"
+            >
+              <Phone :size="16" aria-hidden="true" />
+              {{ DIVISION_PHONES[d].phone }}
+            </a>
+          </li>
+        </ul>
       </div>
       <div class="v6-footer__grid">
         <div>
@@ -57,6 +65,10 @@ const year = new Date().getFullYear()
       </div>
       <div class="v6-footer__bottom">
         <span>© {{ year }} DOPȘÝ ARENA</span>
+        <span class="v6-footer__legal">
+          <RouterLink :to="to('offer')">{{ t.footer.offer }}</RouterLink>
+          <RouterLink :to="to('privacy')">{{ t.footer.privacy }}</RouterLink>
+        </span>
       </div>
     </div>
   </footer>

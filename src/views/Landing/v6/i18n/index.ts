@@ -39,4 +39,6 @@ export const fmt = (s: string, vars: Record<string, string | number>) =>
   s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''))
 export const money = (n: number, l: Lang) =>
   `${n.toLocaleString(l === 'kk' ? 'kk-KZ' : 'ru-RU')} ₸`
+// «от 23 000 ₸» in Russian, «23 000 ₸ бастап» in Kazakh.
+export const fromPrice = (price: string, l: Lang) => (l === 'kk' ? `${price} бастап` : `от ${price}`)
 export const num = (n: number, l: Lang) => n.toLocaleString(l === 'kk' ? 'kk-KZ' : 'ru-RU')

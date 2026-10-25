@@ -81,13 +81,13 @@ export const STAFF_ROLES: StaffRole[] = [
 ]
 
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
-  super_admin: 'Super admin',
-  admin: 'Admin',
-  manager: 'Manager',
-  arena_manager: 'Arena manager',
-  boxing_manager: 'Boxing manager',
-  football_manager: 'Football manager',
-  client: 'Client',
+  super_admin: 'Суперадмин',
+  admin: 'Администратор',
+  manager: 'Менеджер',
+  arena_manager: 'Менеджер арены',
+  boxing_manager: 'Менеджер бокса',
+  football_manager: 'Менеджер футбола',
+  client: 'Клиент',
 }
 
 function normalizeStaffUser(row: StaffUserResponseRaw): StaffUser {

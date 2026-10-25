@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { MapPin, Clock, Phone, Mail, Navigation, Dumbbell } from 'lucide-vue-next'
 import InstagramIcon from '../components/InstagramIcon.vue'
 import { useLang } from '../i18n'
-import { CONTACTS, INSTAGRAM } from '../data/site'
+import { CONTACTS, DIVISION_PHONES, INSTAGRAM } from '../data/site'
 import PageHero from '../components/PageHero.vue'
 import Section from '../components/Section.vue'
 import MapBlock from '../components/MapBlock.vue'
@@ -16,9 +16,15 @@ const rows = computed(() => {
   return [
     { icon: MapPin, label: c.address, value: c.addressValue, href: CONTACTS.twogis },
     { icon: Clock, label: c.hours, value: c.hoursValue },
-    { icon: Phone, label: c.phone, value: CONTACTS.phone, href: CONTACTS.phoneHref },
+    ...(['arena', 'school', 'boxing'] as const).map((d) => ({
+      icon: Phone,
+      label: `${c.phone} · ${t.value.insta.names[d]}`,
+      value: DIVISION_PHONES[d].phone,
+      href: DIVISION_PHONES[d].phoneHref,
+    })),
     { icon: Mail, label: c.email, value: CONTACTS.email, href: CONTACTS.emailHref },
     { icon: Dumbbell, label: 'BOXY ACADEMY', value: c.boxingFloor },
+    { icon: Dumbbell, label: 'FS DOPȘÝ', value: c.schoolFloor },
   ] as { icon: typeof MapPin; label: string; value: string; href?: string }[]
 })
 </script>

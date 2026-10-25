@@ -12,7 +12,7 @@
  * them. Use one shared AcademyUser type and apply sport filtering/validation at
  * the API boundary.
  */
-import { apiFetch } from './api'
+import { apiFetch, ruError } from './api'
 
 // ── Виды спорта ─────────────────────────────────────────────────────
 
@@ -158,6 +158,8 @@ export interface AcademyTrial {
   state_label: string
   notes: string
   attended: boolean
+  /** Отметка менеджера: в отличие от `attended`, отличает «не пришёл» от «не отмечено». */
+  attendance_state: AttendanceState
   subscribed: boolean
   user: AcademyStudent | null
   // Необязательные поля из ТЗ §4.2 — приходят, если бэкенд их отдаёт.
@@ -166,6 +168,8 @@ export interface AcademyTrial {
   shift?: string | null
   school_time?: string | null
 }
+
+export type AttendanceState = 'pending' | 'attended' | 'missed'
 
 /** PATCH /manager/academy_groups/{id}: базовые поля и будущий массив дней. */
 export interface UpdateGroupPayload {
@@ -192,10 +196,6 @@ export interface CreateGroupPayload extends Omit<UpdateGroupPayload, 'training_d
   group_type: string
   max_cap: number
   training_days?: GroupTrainingDayPayload[]
-}
-
-export interface AssignStudentPayload {
-  student_id: string
 }
 
 // ── Разбор ответов ──────────────────────────────────────────────────
@@ -239,7 +239,7 @@ export function unwrapAcademyPayload(data: unknown): unknown {
     if (envelope.ok === false) {
       const detail = typeof envelope.detail === 'string' ? envelope.detail : undefined
       const message = typeof envelope.message === 'string' ? envelope.message : undefined
-      throw new Error(detail || message || 'Запрос к API академии не удался')
+      throw new Error(detail || message ? ruError(400, detail || message) : 'Запрос к API академии не удался')
     }
     if (!('data' in envelope)) break
     payload = envelope.data
@@ -345,12 +345,66 @@ export async function listGroups(sport: SportKey): Promise<AcademyGroup[]> {
   return listFrom<AcademyGroup>(data, ['groups', 'results', 'items'])
 }
 
+/**
+ * Бэкенд отдаёт пробные то нормализованными, то сырыми из бота: `group_id`
+ * числом, без `id` и `assigned_group_name`, с `null` в строковых полях.
+ * Приводим к одному виду, иначе страница падает на строковых методах.
+ */
+function normalizeTrial(value: unknown, groupNames: Map<string, string>): AcademyTrial {
+  const record = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const trialId = nullableNumber(record.trial_id ?? record.id) ?? 0
+  const groupId = record.group_id == null ? '' : String(record.group_id)
+  const text = (field: unknown) => (field == null ? '' : String(field))
+  const birthYear = nullableNumber(record.child_birth_year)
+  const attended = record.attended === true
+  const state = record.attendance_state
+
+  return {
+    ...(record as unknown as AcademyTrial),
+    id: text(record.id) || String(trialId),
+    trial_id: trialId,
+    group_id: groupId,
+    assigned_group_id: groupId || null,
+    assigned_group_name:
+      nullableString(record.assigned_group_name) ?? (groupNames.get(groupId) || null),
+    child_name: text(record.child_name),
+    // Бот отдаёт только год рождения — возраст считаем по нему.
+    child_age:
+      nullableNumber(record.child_age) ??
+      (birthYear ? new Date().getFullYear() - birthYear : null),
+    birthdate: text(record.birthdate),
+    language: text(record.language),
+    phone: text(record.phone ?? record.parent_phone),
+    trial_day: text(record.trial_day ?? record.trial_date),
+    start_time: text(record.start_time),
+    end_time: text(record.end_time),
+    state: text(record.state),
+    state_label: text(record.state_label),
+    notes: text(record.notes),
+    attended,
+    attendance_state:
+      state === 'pending' || state === 'attended' || state === 'missed'
+        ? state
+        : attended
+          ? 'attended'
+          : 'pending',
+    subscribed: record.subscribed === true,
+    user: record.user && typeof record.user === 'object' ? (record.user as AcademyStudent) : null,
+  }
+}
+
 export async function listTrials(sport: SportKey, subscribed?: boolean): Promise<AcademyTrial[]> {
-  const data = await apiFetch<unknown>(
-    `/${sport}/trials${subscribedQuery(subscribed)}`,
-    academyRequest,
+  const [data, groups] = await Promise.all([
+    apiFetch<unknown>(`/${sport}/trials${subscribedQuery(subscribed)}`, academyRequest),
+    // Названия групп — только для подписи: без них список всё равно нужен.
+    listGroups(sport).catch(() => [] as AcademyGroup[]),
+  ])
+  const groupNames = new Map(
+    groups.map((group) => [String(group.group_id ?? group.id), group.group_name]),
   )
-  return listFrom<AcademyTrial>(data, ['trials', 'results', 'items'])
+  return listFrom<unknown>(data, ['trials', 'results', 'items']).map((trial) =>
+    normalizeTrial(trial, groupNames),
+  )
 }
 
 export async function listStudents(
@@ -388,7 +442,8 @@ export async function setTrialAttended(
   const data = await apiFetch<unknown>(`/${sport}/trials/${trialId}/attended`, {
     ...academyRequest,
     method: 'PATCH',
-    body: JSON.stringify({ attended }),
+    // `attended: false` на чтении неотличим от «не отмечено», поэтому шлём состояние.
+    body: JSON.stringify({ attendance_state: attended ? 'attended' : 'missed' }),
   })
   return entityFrom<AcademyTrial>(data, ['trial'])
 }
@@ -512,13 +567,17 @@ export async function deassignStudent(sport: SportKey, studentId: number): Promi
   })
 }
 
-/** Правка группы — общая менеджерская ручка, вид спорта не важен. */
+// Группы правим через /{sport}/groups: туда пускает и админов, и менеджера
+// направления, а /manager/academy_groups — только админов (403 у
+// football/boxing_manager).
+
 export function updateGroup(
+  sport: SportKey,
   groupId: string,
   payload: UpdateGroupPayload,
 ): Promise<{ ok: boolean; data: { group_id: number } }> {
   return apiFetch<{ ok: boolean; data: { group_id: number } }>(
-    `/manager/academy_groups/${encodeURIComponent(groupId)}`,
+    `/${sport}/groups/${encodeURIComponent(groupId)}`,
     {
       ...academyRequest,
       method: 'PATCH',
@@ -527,42 +586,23 @@ export function updateGroup(
   )
 }
 
-/** Создание группы — фронтенд готов к ручке, когда бэкенд её добавит. */
 export function createGroup(
+  sport: SportKey,
   payload: CreateGroupPayload,
 ): Promise<{ ok: boolean; data: { group_id: number } }> {
-  return apiFetch<{ ok: boolean; data: { group_id: number } }>('/manager/academy_groups', {
+  return apiFetch<{ ok: boolean; data: { group_id: number } }>(`/${sport}/groups`, {
     ...academyRequest,
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-/**
- * Мягкое удаление / отключение группы. Если бэкенд позже выберет PATCH
- * `is_active: false`, UI останется тем же — заменить нужно будет только этот
- * вызов.
- */
-export function deleteGroup(groupId: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(`/manager/academy_groups/${encodeURIComponent(groupId)}`, {
+/** Мягкое удаление: бэкенд деактивирует группу, а не стирает её. */
+export function deleteGroup(sport: SportKey, groupId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/${sport}/groups/${encodeURIComponent(groupId)}`, {
     ...academyRequest,
     method: 'DELETE',
   })
-}
-
-/** Назначение существующего ученика в группу. */
-export function assignStudentToGroup(
-  groupId: string,
-  payload: AssignStudentPayload,
-): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(
-    `/manager/academy_groups/${encodeURIComponent(groupId)}/students`,
-    {
-      ...academyRequest,
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  )
 }
 
 // ── Форматирование ──────────────────────────────────────────────────

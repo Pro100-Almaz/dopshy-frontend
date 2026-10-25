@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -15,9 +14,10 @@ import {
   ShowerHead,
   Sprout,
 } from 'lucide-vue-next'
-import { useLang, money } from '../i18n'
+import { useLang, fromPrice, money } from '../i18n'
 import { BOOKING_PATH, to } from '../routes'
-import { CONTACTS, SCHOOL, ZONE_HOURS, ZONE_ORDER, ZONE_PRICE } from '../data/site'
+import { CONTACTS, DIVISION_PHONES, SCHOOL, ZONE_HOURS, ZONE_ORDER } from '../data/site'
+import { useArenaPrices } from '../data/prices'
 import HeroPicture from '../components/HeroPicture.vue'
 import RotatingWord from '../components/RotatingWord.vue'
 import Picture from '../components/Picture.vue'
@@ -30,7 +30,8 @@ const COPY = {
   ru: {
     address: 'Астана · Сыганак, 6ф',
     lead: 'Аренда поля, футбольная школа и бокс.\nТри направления — одна арена в Астане.',
-    conditions: 'Посмотреть условия',
+    trialSchool: 'Пробное в FS DOPȘÝ',
+    trialBoxing: 'Пробное по боксу',
     directions: 'Выберите своё направление',
     underRoof: 'Всё в одном месте',
     details: 'Подробнее',
@@ -38,7 +39,6 @@ const COPY = {
     photos: ['Футбольное поле', 'Раздевалки', 'Душевые'],
     photoNote: 'Фотографии нашей арены',
     pricing: 'Тарифы и занятия',
-    pricingNote: 'Выберите формат, затем удобное время.',
     trial: 'Первое занятие',
     free: 'Бесплатно',
     group: 'В группе',
@@ -52,7 +52,8 @@ const COPY = {
   kk: {
     address: 'Астана · Сығанақ, 6ф',
     lead: 'Алаң жалдау, футбол мектебі және бокс.\nҮш бағыт — Астанадағы бір аренада.',
-    conditions: 'Жағдайларды көру',
+    trialSchool: 'FS DOPȘÝ-да сынақ сабақ',
+    trialBoxing: 'Бокстан сынақ сабақ',
     directions: 'Өз бағытыңызды таңдаңыз',
     underRoof: 'Барлығы бір жерде',
     details: 'Толығырақ',
@@ -60,7 +61,6 @@ const COPY = {
     photos: ['Футбол алаңы', 'Киім ауыстыру бөлмелері', 'Душ бөлмелері'],
     photoNote: 'Аренамыздың фотосуреттері',
     pricing: 'Тарифтер мен сабақтар',
-    pricingNote: 'Алдымен форматты, содан кейін ыңғайлы уақытты таңдаңыз.',
     trial: 'Алғашқы сабақ',
     free: 'Тегін',
     group: 'Топпен',
@@ -93,6 +93,15 @@ const PHOTOS = ['hall-goal', 'locker', 'shower'] as const
 const { t, lang } = useLang()
 const c = computed(() => COPY[lang.value])
 const photo = ref(0)
+const arenaPrices = useArenaPrices()
+// Price line on each direction card; boxing waits for the client's price list.
+const directionPrice = computed<Record<(typeof DIVISIONS)[number]['key'], string>>(() => ({
+  arena: arenaPrices.value[0]
+    ? fromPrice(money(arenaPrices.value[0].zones.night, lang.value) + t.value.prices.perHour, lang.value)
+    : '',
+  school: money(SCHOOL.month, lang.value) + t.value.prices.perMonth,
+  boxing: '',
+}))
 </script>
 
 <template>
@@ -120,13 +129,15 @@ const photo = ref(0)
           </h1>
           <p class="v6-hero__lead">{{ c.lead }}</p>
           <div class="v6-hero__actions">
-            <RouterLink :to="to('home', 'directions')" class="v6-button v6-button--primary">
-              {{ t.hero.ctaMore }}
-              <ArrowDown :size="16" aria-hidden="true" />
-            </RouterLink>
-            <RouterLink :to="to('home', 'conditions')" class="v6-text-link">
-              {{ c.conditions }}
+            <RouterLink :to="BOOKING_PATH" class="v6-button v6-button--primary">
+              {{ t.hero.ctaBook }}
               <ArrowRight :size="16" aria-hidden="true" />
+            </RouterLink>
+            <RouterLink :to="to('school', 'enroll')" class="v6-button v6-button--outline">
+              {{ c.trialSchool }}
+            </RouterLink>
+            <RouterLink :to="to('boxing', 'enroll')" class="v6-button v6-button--outline">
+              {{ c.trialBoxing }}
             </RouterLink>
           </div>
         </div>
@@ -182,6 +193,9 @@ const photo = ref(0)
           <span class="v6-direction__body">
             <span class="v6-direction__title font-display">{{ t.directions[key].title }}</span>
             <span class="v6-direction__text">{{ t.directions[key].text }}</span>
+            <span v-if="directionPrice[key]" class="v6-direction__price">
+              {{ directionPrice[key] }}
+            </span>
             <span class="v6-direction__link">
               {{ c.details }}
               <ArrowUpRight :size="16" aria-hidden="true" />
@@ -240,9 +254,6 @@ const photo = ref(0)
     </Section>
 
     <Section id="prices" :kicker="t.prices.kicker" :title="c.pricing">
-      <template #action>
-        <p class="v6-caption">{{ c.pricingNote }}</p>
-      </template>
       <div class="v6-prices">
         <article class="v6-price-card v6-price-card--arena">
           <div class="v6-price-card__heading">
@@ -256,7 +267,12 @@ const photo = ref(0)
                 <span>{{ t.prices.zones[z] }}</span>
                 <small>{{ ZONE_HOURS[z] }}</small>
               </dt>
-              <dd>{{ money(ZONE_PRICE[z], lang) }}</dd>
+              <dd v-if="arenaPrices[0]">
+                <small v-if="lang === 'ru'">{{ t.common.from }}</small>
+                {{ money(arenaPrices[0].zones[z], lang) }}
+                <small v-if="lang === 'kk'">{{ t.common.from }}</small>
+              </dd>
+              <dd v-else aria-hidden="true">—</dd>
             </div>
           </dl>
           <RouterLink :to="BOOKING_PATH" class="v6-button v6-button--primary">
@@ -304,7 +320,9 @@ const photo = ref(0)
             <span>{{ c.personal }}</span>
           </div>
           <p class="v6-price-explainer">{{ c.boxingNote }}</p>
-          <a :href="CONTACTS.phoneHref" class="v6-price-phone">{{ CONTACTS.phone }}</a>
+          <a :href="DIVISION_PHONES.boxing.phoneHref" class="v6-price-phone">
+            {{ DIVISION_PHONES.boxing.phone }}
+          </a>
           <RouterLink :to="to('boxing', 'enroll')" class="v6-button v6-button--outline">
             {{ t.prices.trial }}
             <ArrowUpRight :size="16" aria-hidden="true" />

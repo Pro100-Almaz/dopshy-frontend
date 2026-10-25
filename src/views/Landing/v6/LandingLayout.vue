@@ -5,6 +5,7 @@ import { useLang } from './i18n'
 import type { LandingRoute } from './routes'
 import Nav from './components/Nav.vue'
 import Footer from './components/Footer.vue'
+import { Analytics } from '@vercel/analytics/vue'
 import './landing.css'
 
 const { t } = useLang()
@@ -30,12 +31,17 @@ const focusMain = () => document.getElementById('main')?.focus()
     >
       {{ t.nav.skip }}
     </a>
+    <Analytics />
     <Nav />
     <main id="main" tabindex="-1" class="outline-none">
       <RouterView v-slot="{ Component }">
         <Transition mode="out-in" enter-from-class="opacity-0" leave-to-class="opacity-0"
           enter-active-class="transition-opacity duration-200" leave-active-class="transition-opacity duration-200">
-          <component :is="Component" />
+          <!-- Single element root: out-in can't finish leaving a multi-root page (Arena, School…),
+               which left every next page blank. Keyed by path so #hash links don't remount. -->
+          <div :key="route.path">
+            <component :is="Component" />
+          </div>
         </Transition>
       </RouterView>
     </main>

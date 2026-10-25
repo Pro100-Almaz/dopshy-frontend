@@ -9,7 +9,6 @@
 import { ref } from 'vue'
 
 import { listGroups, listStudents, listTrials, SPORTS, type SportKey } from '@/services/academy'
-import { useAcademyStore } from '@/stores/academy'
 import { resolveWeekday, trialTiming } from '@/utils/schedule'
 import { trialOutcome } from '@/utils/trialOutcome'
 
@@ -26,7 +25,6 @@ export interface AcademyDigest {
 }
 
 export function useAcademyDigest() {
-  const academy = useAcademyStore()
   const digests = ref<AcademyDigest[]>([])
   const loading = ref(false)
 
@@ -58,10 +56,7 @@ export function useAcademyDigest() {
         trialsToday: trials.filter((trial) => trialTiming(trial, now).today).length,
         unmarked: trials.filter(
           (trial) =>
-            trialOutcome(trial, {
-              markedMissed: academy.isMarkedMissed(sport, trial.trial_id),
-              now,
-            }).outcome === 'unmarked',
+            trialOutcome(trial, { now }).outcome === 'unmarked',
         ).length,
         subscribed: students.length,
         failed: false,

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { Component } from 'vue'
+import { computed, type Component } from 'vue'
 import { Flame, Gift, Moon, Phone, Sun, Sunset } from 'lucide-vue-next'
 import { money, useLang } from '../i18n'
 import { BOOKING_PATH, to } from '../routes'
-import { CONTACTS, SCHOOL, ZONE_HOURS, ZONE_ORDER, ZONE_PRICE, type Zone } from '../data/site'
+import { DIVISION_PHONES, SCHOOL, ZONE_HOURS, ZONE_ORDER, type Zone } from '../data/site'
+import { useArenaPrices } from '../data/prices'
 import Section from './Section.vue'
 import Reveal from './Reveal.vue'
 
@@ -15,7 +16,9 @@ withDefaults(defineProps<{ variant?: 'arena' | 'all'; tone?: 'ink' | 'ink2' }>()
 })
 
 const { t, lang } = useLang()
-const max = Math.max(...Object.values(ZONE_PRICE))
+const formats = useArenaPrices()
+const base = computed(() => formats.value[0])
+const max = computed(() => (base.value ? Math.max(...Object.values(base.value.zones)) : 1))
 </script>
 
 <template>
@@ -79,18 +82,32 @@ const max = Math.max(...Object.values(ZONE_PRICE))
                   {{ ZONE_HOURS[z] }}
                 </span>
               </div>
-              <p>
+              <p v-if="base">
+                <span
+                  v-if="lang === 'ru'"
+                  :class="['text-sm', z === 'prime' ? 'text-fg-muted' : 'text-fg-dim']"
+                >
+                  {{ t.common.from }}&nbsp;</span
+                >
                 <span class="font-display text-4xl text-fg tabular-nums">
-                  {{ money(ZONE_PRICE[z], lang) }}
+                  {{ money(base.zones[z], lang) }}
                 </span>
                 <span :class="['text-sm', z === 'prime' ? 'text-fg-muted' : 'text-fg-dim']">
-                  {{ t.prices.perHour }}
+                  {{ t.prices.perHour }}<template v-if="lang === 'kk'">&nbsp;{{ t.common.from }}</template>
                 </span>
               </p>
+              <p v-else class="h-10 w-32 animate-pulse rounded-lg bg-surface-2" aria-hidden="true" />
+              <ul v-if="formats.length > 1" class="space-y-0.5 text-sm text-fg-muted tabular-nums">
+                <li v-for="f in formats" :key="f.format" class="flex justify-between gap-3">
+                  <span>{{ f.format }}</span>
+                  <span>{{ money(f.zones[z], lang) }}</span>
+                </li>
+              </ul>
               <span class="h-1 rounded-full bg-line" aria-hidden="true">
                 <span
+                  v-if="base"
                   :class="['block h-full rounded-full', z === 'prime' ? 'bg-prime' : 'bg-acid']"
-                  :style="{ width: `${(ZONE_PRICE[z] / max) * 100}%` }"
+                  :style="{ width: `${(base.zones[z] / max) * 100}%` }"
                 />
               </span>
               <span v-if="z === 'prime'" class="text-xs font-medium text-prime">
@@ -138,7 +155,7 @@ const max = Math.max(...Object.values(ZONE_PRICE))
             <h3 class="font-display text-3xl text-fg">{{ t.prices.boxingTitle }}</h3>
             <p class="mt-3 text-sm text-fg-muted">{{ t.prices.boxingText }}</p>
             <a
-              :href="CONTACTS.phoneHref"
+              :href="DIVISION_PHONES.boxing.phoneHref"
               class="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-boxy px-5 text-sm font-semibold text-white hover:brightness-110"
             >
               <Phone class="size-4" aria-hidden="true" /> {{ t.prices.call }}

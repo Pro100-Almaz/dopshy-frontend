@@ -52,7 +52,7 @@
             </dd>
           </div>
           <div>
-            <dt class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Email</dt>
+            <dt class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">Эл. почта</dt>
             <dd class="text-sm font-medium text-gray-800 dark:text-white/90">
               {{ user?.email || '—' }}
             </dd>

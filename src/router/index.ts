@@ -63,27 +63,11 @@ const router = createRouter({
         { path: 'school', name: 'LandingSchool', component: () => import('../views/Landing/v6/pages/School.vue'), meta: { landing: 'school' } },
         { path: 'boxy', name: 'LandingBoxing', component: () => import('../views/Landing/v6/pages/Boxing.vue'), meta: { landing: 'boxing' } },
         { path: 'contacts', name: 'LandingContacts', component: () => import('../views/Landing/v6/pages/Contacts.vue'), meta: { landing: 'contacts' } },
+        { path: 'privacy', name: 'LandingPrivacy', component: () => import('../views/Landing/v6/pages/Privacy.vue'), meta: { landing: 'privacy' } },
+        { path: 'offer', name: 'LandingOffer', component: () => import('../views/Landing/v6/pages/Offer.vue'), meta: { landing: 'offer' } },
+        // Бронирование — секция на странице аренды; старые адреса ведут туда.
+        { path: 'booking/:rest(.*)*', name: 'Booking', redirect: { path: '/arena', hash: '#booking' } },
       ],
-    },
-
-    // ── Публичное бронирование ─────────────────
-    {
-      path: '/booking',
-      name: 'Booking',
-      component: () => import('../views/Booking/FieldsList.vue'),
-      meta: { title: 'Бронирование полей', public: true },
-    },
-    {
-      path: '/booking/checkout',
-      name: 'BookingCheckout',
-      component: () => import('../views/Booking/Checkout.vue'),
-      meta: { title: 'Оформление брони', public: true },
-    },
-    {
-      path: '/booking/:fieldId',
-      name: 'BookingField',
-      component: () => import('../views/Booking/FieldDetail.vue'),
-      meta: { title: 'Выбор времени', public: true },
     },
 
     // ── Авторизация (публичные) ────────────────

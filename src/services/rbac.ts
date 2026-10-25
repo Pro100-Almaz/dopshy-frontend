@@ -1,5 +1,6 @@
 import type { UserRole } from '@/types'
 import type { SportKey } from './academy'
+import type { BotType } from './customer'
 
 export type AppPermission =
   | 'arena'
@@ -13,10 +14,11 @@ export type AppPermission =
   | 'reports'
   | 'settings'
   | 'sportSwitcher'
+  | 'botHandoff'
   | 'globalBotSetting'
 
 const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
-const ARENA_ROLES =new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
+const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
 const ACADEMY_ROLES = new Set<UserRole>([
   'super_admin',
   'admin',
@@ -70,7 +72,25 @@ export function hasPermission(
     case 'globalBotSetting':
       // Глобальный выключатель бота (страница клиентов) — админы, менеджеры и менеджеры арены.
       return ARENA_ROLES.has(role)
+    case 'botHandoff':
+      // /bot-status/{phone}/pause|resume — бэкенд пускает только admin и arena_manager.
+      return role === 'admin' || role === 'arena_manager'
   }
+}
+
+// Как BOT_SWITCH_ROLES на бэкенде: менеджер включает/выключает только своего бота.
+const OWN_BOT: Partial<Record<UserRole, BotType>> = {
+  arena_manager: 'arena',
+  football_manager: 'football_academy',
+  boxing_manager: 'boxing_academy',
+}
+
+export function canSwitchBot(
+  roleValue: UserRole | string | null | undefined,
+  botType: BotType,
+): boolean {
+  const role = roleOf(roleValue)
+  return role === 'super_admin' || role === 'admin' || OWN_BOT[role] === botType
 }
 
 export function canAccessSport(
