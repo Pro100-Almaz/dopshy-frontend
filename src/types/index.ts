@@ -70,7 +70,7 @@ export type PricingType =
   | 'evening'
   | 'late_night'
   | 'after_midnight'
-  | 'weekend_holiday'
+  | 'weekday_special'
 export type PriceTable = Partial<Record<PricingType, number>>
 
 export interface Field {

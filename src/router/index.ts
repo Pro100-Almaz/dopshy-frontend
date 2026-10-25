@@ -45,36 +45,29 @@ function lastSport(): SportKey {
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  scrollBehavior(_to, _from, savedPosition) {
-    return savedPosition || { left: 0, top: 0 }
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    // Landing section links (/arena#booking); top offset clears the fixed landing nav.
+    if (to.hash) return new Promise((resolve) => setTimeout(() => resolve({ el: to.hash, top: 84, behavior: 'smooth' }), 250))
+    return { left: 0, top: 0 }
   },
   routes: [
     // ── Лендинг (публичный) ────────────────────
     {
       path: '/',
-      name: 'Landing',
-      component: () => import('../views/Landing/landing.vue'),
-      meta: { title: 'Dopsy Arena', public: true },
-    },
-
-    // ── Публичное бронирование ─────────────────
-    {
-      path: '/booking',
-      name: 'Booking',
-      component: () => import('../views/Booking/FieldsList.vue'),
-      meta: { title: 'Бронирование полей', public: true },
-    },
-    {
-      path: '/booking/checkout',
-      name: 'BookingCheckout',
-      component: () => import('../views/Booking/Checkout.vue'),
-      meta: { title: 'Оформление брони', public: true },
-    },
-    {
-      path: '/booking/:fieldId',
-      name: 'BookingField',
-      component: () => import('../views/Booking/FieldDetail.vue'),
-      meta: { title: 'Выбор времени', public: true },
+      component: () => import('../views/Landing/v6/LandingLayout.vue'),
+      meta: { public: true },
+      children: [
+        { path: '', name: 'Landing', component: () => import('../views/Landing/v6/pages/Home.vue'), meta: { landing: 'home' } },
+        { path: 'arena', name: 'LandingArena', component: () => import('../views/Landing/v6/pages/Arena.vue'), meta: { landing: 'arena' } },
+        { path: 'school', name: 'LandingSchool', component: () => import('../views/Landing/v6/pages/School.vue'), meta: { landing: 'school' } },
+        { path: 'boxy', name: 'LandingBoxing', component: () => import('../views/Landing/v6/pages/Boxing.vue'), meta: { landing: 'boxing' } },
+        { path: 'contacts', name: 'LandingContacts', component: () => import('../views/Landing/v6/pages/Contacts.vue'), meta: { landing: 'contacts' } },
+        { path: 'privacy', name: 'LandingPrivacy', component: () => import('../views/Landing/v6/pages/Privacy.vue'), meta: { landing: 'privacy' } },
+        { path: 'offer', name: 'LandingOffer', component: () => import('../views/Landing/v6/pages/Offer.vue'), meta: { landing: 'offer' } },
+        // Бронирование — секция на странице аренды; старые адреса ведут туда.
+        { path: 'booking/:rest(.*)*', name: 'Booking', redirect: { path: '/arena', hash: '#booking' } },
+      ],
     },
 
     // ── Авторизация (публичные) ────────────────

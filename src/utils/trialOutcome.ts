@@ -6,11 +6,8 @@
  * абонемента. Поэтому отметка — не галочка в таблице, а действие с видимым
  * последствием, и интерфейс показывает, что именно уйдёт в WhatsApp.
  *
- * Ограничение API: `attended` — булево, поэтому «не пришёл» и «ещё не
- * отмечено» на бэкенде выглядят одинаково. Пока бэкенд не отдаёт третье
- * состояние, факт явной отметки «не пришёл» помним на клиенте
- * (см. `stores/academy.ts`), а список пробных дополнительно опирается на
- * время занятия: пока занятие не прошло, отметку не требуем.
+ * «Не пришёл» берём из `attendance_state`; без отметки опираемся на время
+ * занятия: пока занятие не прошло, отметку не требуем.
  */
 import type { AcademyTrial } from '@/services/academy'
 import { normalizeLanguage } from '@/services/academy'
@@ -44,7 +41,7 @@ const OUTCOME_META: Record<TrialOutcome, Omit<OutcomeMeta, 'outcome'>> = {
 
 export function trialOutcome(
   trial: AcademyTrial,
-  options: { markedMissed?: boolean; now?: Date } = {},
+  options: { now?: Date } = {},
 ): OutcomeMeta {
   const now = options.now ?? new Date()
 
@@ -52,7 +49,7 @@ export function trialOutcome(
     ? 'subscribed'
     : trial.attended
       ? 'attended'
-      : options.markedMissed
+      : trial.attendance_state === 'missed'
         ? 'missed'
         : trialTiming(trial, now).past
           ? 'unmarked'

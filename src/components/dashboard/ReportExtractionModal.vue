@@ -67,14 +67,14 @@
                 </div>
                 <div>
                   <p class="text-sm font-bold text-gray-900 dark:text-white">{{ selectedOption?.label }}</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">PDF report</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Отчёт в PDF</p>
                 </div>
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <label class="block">
                   <span class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Start date
+                    Дата начала
                   </span>
                   <input
                     v-model="startDate"
@@ -84,7 +84,7 @@
                 </label>
                 <label class="block">
                   <span class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    End date
+                    Дата окончания
                   </span>
                   <input
                     v-model="endDate"
@@ -107,7 +107,7 @@
                   @click="generate"
                 >
                   <Loader2 v-if="generating" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Generate
+                  Сформировать
                 </button>
               </div>
             </section>
@@ -116,9 +116,9 @@
               <div class="grid h-16 w-16 place-items-center rounded-full bg-success-50 text-success-600 dark:bg-success-500/10">
                 <CheckCircle2 class="h-9 w-9" aria-hidden="true" />
               </div>
-              <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white">Report is ready</h3>
+              <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white">Отчёт готов</h3>
               <p class="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
-                {{ readyFilename }} has been generated and downloaded.
+                Файл {{ readyFilename }} сформирован и скачан.
               </p>
             </section>
           </Transition>
@@ -142,9 +142,9 @@ const emit = defineEmits<{ close: [] }>()
 type Step = 'type' | 'dates' | 'ready'
 
 const reportOptions = [
-  { value: 'arena', label: 'Arena report', icon: Building2, supported: true },
-  { value: 'fs_academy', label: 'FS academy report', icon: Goal, supported: false },
-  { value: 'box_academy', label: 'Boxing academy report', icon: Dumbbell, supported: false },
+  { value: 'arena', label: 'Отчёт по арене', icon: Building2, supported: true },
+  { value: 'fs_academy', label: 'Отчёт по FS academy', icon: Goal, supported: false },
+  { value: 'box_academy', label: 'Отчёт по академии бокса', icon: Dumbbell, supported: false },
 ] satisfies { value: DocumentBotType; label: string; icon: unknown; supported: boolean }[]
 
 const step = ref<Step>('type')
@@ -159,9 +159,9 @@ let closeTimer: ReturnType<typeof setTimeout> | null = null
 
 const selectedOption = computed(() => reportOptions.find((option) => option.value === selectedType.value))
 const title = computed(() => {
-  if (step.value === 'type') return 'Generate report'
-  if (step.value === 'dates') return 'Choose period'
-  return 'Ready'
+  if (step.value === 'type') return 'Сформировать отчёт'
+  if (step.value === 'dates') return 'Выберите период'
+  return 'Готово'
 })
 const transitionName = computed(() => (direction.value === 'forward' ? 'report-slide' : 'report-slide-back'))
 
@@ -198,13 +198,13 @@ function back() {
 }
 
 function validate(): string {
-  if (!selectedType.value) return 'Choose report type.'
-  if (!startDate.value || !endDate.value) return 'Choose start and end dates.'
-  if (endDate.value < startDate.value) return 'End date cannot be earlier than start date.'
+  if (!selectedType.value) return 'Выберите тип отчёта.'
+  if (!startDate.value || !endDate.value) return 'Укажите даты начала и окончания.'
+  if (endDate.value < startDate.value) return 'Дата окончания не может быть раньше даты начала.'
   const start = new Date(`${startDate.value}T00:00:00Z`)
   const end = new Date(`${endDate.value}T00:00:00Z`)
   const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
-  if (days > 366) return 'Period cannot exceed 366 days.'
+  if (days > 366) return 'Период не может быть больше 366 дней.'
   return ''
 }
 
@@ -228,7 +228,7 @@ async function generate() {
     step.value = 'ready'
     closeTimer = setTimeout(close, 5000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to generate report.'
+    error.value = e instanceof Error ? e.message : 'Не удалось сформировать отчёт.'
   } finally {
     generating.value = false
   }

@@ -199,38 +199,56 @@ function toDisplayEnd(time: string): string {
   return time === '23:59' ? '24:00' : time
 }
 
-/** Тарифное окно для часа (будни). Выходные/праздники обрабатываются отдельно. */
-function pricingTypeForHour(hour: number): PricingType {
-  if (hour < 7) return 'after_midnight'
-  if (hour < 19) return 'morning_day'
-  if (hour < 22) return 'evening'
+const MIN_PER_HOUR = 60
+const EVENING_START_MIN = 18 * MIN_PER_HOUR + 30 // 18:30
+// Будни (пн–пт): окна тарифа weekday_special — 12:00–16:00 и 18:30–20:00 (WEEKDAY_PRICING_PERIODS на бэкенде).
+const WEEKDAY_SPECIAL_WINDOWS: ReadonlyArray<readonly [number, number]> = [
+  [12 * MIN_PER_HOUR, 16 * MIN_PER_HOUR],
+  [EVENING_START_MIN, 20 * MIN_PER_HOUR],
+]
+
+function isWeekday(dateISO: string): boolean {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  const day = new Date(y, m - 1, d).getDay()
+  return day >= 1 && day <= 5
+}
+
+/** Базовый тариф по минуте суток (без учёта weekday_special): 00–07 / 07–18:30 / 18:30–22 / 22–24. */
+function basePricingType(min: number): PricingType {
+  if (min < 7 * MIN_PER_HOUR) return 'after_midnight'
+  if (min < EVENING_START_MIN) return 'morning_day'
+  if (min < 22 * MIN_PER_HOUR) return 'evening'
   return 'late_night'
 }
 
-// TODO: праздники приходят с бэкенда — пока учитываем только сб/вс.
-function isWeekend(dateISO: string): boolean {
-  const [y, m, d] = dateISO.split('-').map(Number)
-  const day = new Date(y, m - 1, d).getDay()
-  return day === 0 || day === 6
+/** Тарифный тип для момента `min` (минуты от полуночи) в дату `dateISO`. */
+function pricingTypeAt(dateISO: string, min: number): PricingType {
+  if (
+    isWeekday(dateISO) &&
+    WEEKDAY_SPECIAL_WINDOWS.some(([from, to]) => min >= from && min < to)
+  ) {
+    return 'weekday_special'
+  }
+  return basePricingType(min)
 }
 
-function resolvePrice(pricing: PriceTable, dateISO: string, hour: number): number {
-  if (isWeekend(dateISO) && pricing.weekend_holiday != null) return pricing.weekend_holiday
-  const type = pricingTypeForHour(hour)
-  return pricing[type] ?? pricing.morning_day ?? 0
+function resolvePrice(pricing: PriceTable, dateISO: string, min: number): number {
+  // Нет цены для weekday_special — берём базовый тариф этого времени.
+  const type = pricingTypeAt(dateISO, min)
+  return pricing[type] ?? pricing[basePricingType(min)] ?? pricing.morning_day ?? 0
 }
 
-function hourlyRate(field: Field, dateISO: string, hour: number): number {
+/** Ставка ₸/час на момент `min` (минуты от полуночи). */
+function hourlyRate(field: Field, dateISO: string, min: number): number {
   return field.pricing
-    ? resolvePrice(field.pricing, dateISO, hour)
-    : hour >= 18
+    ? resolvePrice(field.pricing, dateISO, min)
+    : min >= 18 * MIN_PER_HOUR
       ? Math.round(field.pricePerHour * 1.2)
       : field.pricePerHour
 }
 
 function makeSlot(field: Field, date: string, startMin: number, now: Date): Slot {
-  const hour = Math.floor(startMin / 60)
-  const perHour = hourlyRate(field, date, hour)
+  const perHour = hourlyRate(field, date, startMin)
   // Цена слота пропорциональна его длительности (прайс задан за час).
   const price = Math.round((perHour * SLOT_MINUTES) / 60)
   const booked = field.pricing ? false : hash(`${field.id}|${date}|${startMin}`) % 10 < 3
@@ -277,7 +295,7 @@ export function estimateBookingPrice(
   let total = 0
   for (let m = startMin; m < endMin; m += RATE_STEP_MIN) {
     const segment = Math.min(RATE_STEP_MIN, endMin - m)
-    total += (hourlyRate(field, dateISO, Math.floor(m / 60)) * segment) / 60
+    total += (hourlyRate(field, dateISO, m) * segment) / 60
   }
   return Math.round(total)
 }
@@ -434,6 +452,51 @@ export async function getManagerWeek(
     // хотя бы реальные цены, без наложения броней.
     return week
   }
+}
+
+// ── Публичная занятость: GET /api/bookings/availability/{from}/{to}?field= ──
+// Без авторизации — только интервалы времени, без данных клиента. Для лендинга.
+interface PublicBookedSlotApi {
+  field: number | null
+  date: string | null
+  time_start: string | null
+  time_end: string | null
+}
+
+/** Недельная сетка для лендинга: цены из прайса + обезличенная занятость. */
+export async function getPublicWeek(
+  field: Field,
+  startISO: string,
+  now: Date = new Date(),
+  dayCount = 7,
+): Promise<WeekSlots> {
+  const week = await getWeekSlots(field, startISO, now, dayCount)
+  const days = week.days
+  if (!days.length) return week
+  let rows: PublicBookedSlotApi[]
+  try {
+    rows = await apiFetch<PublicBookedSlotApi[]>(
+      `/bookings/availability/${days[0].iso}/${days[days.length - 1].iso}?field=${field.id}`,
+    )
+  } catch {
+    // ponytail: fallback while the backend endpoint isn't deployed yet; drop once it is.
+    return getManagerWeek(field, startISO, now, dayCount)
+  }
+  // Every returned interval already holds the slot (awaiting_payment / confirmed).
+  return overlayBookings(
+    week,
+    rows.map((r) => ({
+      ...r,
+      id: 0,
+      phone: null,
+      state: BOOKING_STATE_ENUMS.CONFIRMED,
+      source: '',
+      notes: null,
+      reserved_until: null,
+      created_at: null,
+      updated_at: null,
+    })),
+  )
 }
 
 export interface BookingPayload extends BookingDraft {

@@ -44,10 +44,12 @@ import {
 } from '@/components/academy/ui'
 import {
   assignAcademyUser,
+  assignStudent as assignSportStudent,
   createGroup,
   deleteGroup,
   listAcademyUsers,
   listGroups,
+  listStudents,
   shiftLabel,
   SPORTS,
   updateGroup,
@@ -69,9 +71,15 @@ import {
   WEEKDAYS,
   weekdayLong,
 } from '@/utils/schedule'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from '@/stores/auth'
 import { pluralize } from '@/utils/plural'
 
 const props = defineProps<{ sport: SportKey }>()
+
+const auth = useAuthStore()
+/** football/boxing_manager не видят общий /manager/academy_users (403). */
+const canViewAllSports = computed(() => hasPermission(auth.role, 'academyUsers'))
 
 const rawGroups = ref<AcademyGroup[]>([])
 const students = ref<AcademyStudent[]>([])
@@ -336,7 +344,12 @@ async function load() {
     // (без group_type): сузив по спорту, бэкенд отдаёт только тех, кто уже
     // назначен в этом виде спорта — непроверенные и кросс-спортивные дети
     // исчезают из списка, и назначать в группу становится некого (см. #8).
-    const [nextGroups, nextStudents] = await Promise.all([listGroups(props.sport), listAcademyUsers()])
+    // Менеджеры одного направления (football/boxing_manager) не имеют доступа к
+    // /manager/academy_users (403) — для них берём /{sport}/students.
+    const [nextGroups, nextStudents] = await Promise.all([
+      listGroups(props.sport),
+      canViewAllSports.value ? listAcademyUsers() : listStudents(props.sport),
+    ])
     rawGroups.value = nextGroups
     students.value = nextStudents
     if (!nextGroups.some((group) => groupKeyOf(group) === selectedKey.value)) {
@@ -541,7 +554,7 @@ async function saveGroup() {
         shift: groupForm.shift || undefined,
         is_active: groupForm.active,
       }
-      await createGroup(payload)
+      await createGroup(props.sport, payload)
     } else {
       const group = selectedGroup.value
       if (!group) return
@@ -563,7 +576,7 @@ async function saveGroup() {
         payload.start_time = firstTraining.start_time
         payload.end_time = firstTraining.end_time
       }
-      await updateGroup(group.groupId, payload)
+      await updateGroup(props.sport, group.groupId, payload)
     }
     await load()
     groupForm.open = false
@@ -591,7 +604,7 @@ async function disableGroup() {
   deleteSaving.value = true
   deleteError.value = ''
   try {
-    await deleteGroup(group.groupId)
+    await deleteGroup(props.sport, group.groupId)
     await load()
   } catch (e) {
     deleteError.value =
@@ -642,9 +655,11 @@ async function assignStudent(student: AcademyStudent) {
   assignModal.savingId = student.id
   assignModal.error = ''
   try {
-    // Менеджерская ручка, а не sport-scoped: кандидаты приходят из общего
-    // списка academy_users и могут ещё не иметь записи в этом виде спорта.
-    await assignAcademyUser(student.id, { group_id: Number(group.groupId) })
+    // Админы назначают через общую менеджерскую ручку (кандидаты из полного
+    // списка academy_users); менеджеры направления — через /{sport}/students.
+    const payload = { group_id: Number(group.groupId) }
+    if (canViewAllSports.value) await assignAcademyUser(student.id, payload)
+    else await assignSportStudent(props.sport, student.id, payload)
     await load()
     assignModal.open = false
   } catch (e) {
@@ -921,7 +936,7 @@ function groupColorClass(group: GroupView): string {
         </span>
         <button type="button" :class="[buttonPrimary, buttonSize.sm]" @click="viewScheduleDetails">
           <Eye class="h-3.5 w-3.5" aria-hidden="true" />
-          View details
+          Подробнее
         </button>
       </div>
     </section>
@@ -1301,8 +1316,8 @@ function groupColorClass(group: GroupView): string {
                   "
                   @click="setTimeMode('general')"
                 >
-                  <span class="block text-theme-sm font-semibold">Same time</span>
-                  <span class="mt-0.5 block text-[11px]">one time for all days</span>
+                  <span class="block text-theme-sm font-semibold">Одно время</span>
+                  <span class="mt-0.5 block text-[11px]">одинаково для всех дней</span>
                 </button>
                 <button
                   type="button"
@@ -1314,14 +1329,14 @@ function groupColorClass(group: GroupView): string {
                   "
                   @click="setTimeMode('custom')"
                 >
-                  <span class="block text-theme-sm font-semibold">Different by day</span>
-                  <span class="mt-0.5 block text-[11px]">set each day manually</span>
+                  <span class="block text-theme-sm font-semibold">По дням</span>
+                  <span class="mt-0.5 block text-[11px]">для каждого дня отдельно</span>
                 </button>
               </div>
 
               <div v-if="groupForm.timeMode === 'general'" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr]">
                 <div>
-                  <label :class="labelClass" for="group-general-start">Start time</label>
+                  <label :class="labelClass" for="group-general-start">Начало</label>
                   <input
                     id="group-general-start"
                     v-model="groupForm.generalStart"
@@ -1330,7 +1345,7 @@ function groupColorClass(group: GroupView): string {
                   />
                 </div>
                 <div>
-                  <label :class="labelClass" for="group-general-end">End time</label>
+                  <label :class="labelClass" for="group-general-end">Окончание</label>
                   <input
                     id="group-general-end"
                     v-model="groupForm.generalEnd"

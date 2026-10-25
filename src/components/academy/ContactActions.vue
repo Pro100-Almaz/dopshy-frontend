@@ -18,8 +18,10 @@ const props = withDefaults(
     /** null — статус бота неизвестен (сервис не ответил) → кнопку не показываем. */
     handoff?: HandoffState | null
     handoffPending?: boolean
+    /** false — роль не может ставить бота на паузу: статус показываем, кнопку нет. */
+    canHandoff?: boolean
   }>(),
-  { language: null, handoff: null, handoffPending: false },
+  { language: null, handoff: null, handoffPending: false, canHandoff: true },
 )
 
 const emit = defineEmits<{ handoff: [] }>()
@@ -57,7 +59,7 @@ const iconAction =
       </a>
 
       <button
-        v-if="handoff"
+        v-if="handoff && canHandoff"
         type="button"
         :class="[iconAction, paused ? 'text-warning-600 dark:text-warning-400' : '']"
         :disabled="handoffPending"

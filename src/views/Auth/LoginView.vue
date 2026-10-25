@@ -143,7 +143,7 @@
           <form @submit.prevent="handleSubmit" class="space-y-5" novalidate>
             <AuthInput
               id="login-email"
-              label="Email или номер телефона"
+              label="Эл. почта или номер телефона"
               type="text"
               placeholder="admin@dopsyarena.kz"
               v-model="email"
