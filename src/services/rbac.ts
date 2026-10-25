@@ -15,6 +15,7 @@ export type AppPermission =
   | 'settings'
   | 'sportSwitcher'
   | 'botHandoff'
+  | 'globalBotSetting'
 
 const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
 const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
@@ -68,6 +69,9 @@ export function hasPermission(
       return false
     case 'sportSwitcher':
       return role === 'admin' || role === 'manager'
+    case 'globalBotSetting':
+      // Глобальный выключатель бота (страница клиентов) — админы, менеджеры и менеджеры арены.
+      return ARENA_ROLES.has(role)
     case 'botHandoff':
       // /bot-status/{phone}/pause|resume — бэкенд пускает только admin и arena_manager.
       return role === 'admin' || role === 'arena_manager'

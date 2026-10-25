@@ -235,6 +235,28 @@ layer(base);
   }
 }
 
+/* Поля форм договоров (страница, мастер создания, платежи). */
+@utility contract-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-gray-300);
+  background: white;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--color-gray-800);
+  outline: none;
+
+  &:focus {
+    border-color: var(--color-success-600);
+    box-shadow: 0 0 0 1px var(--color-success-600);
+  }
+
+  &:disabled {
+    background: var(--color-gray-50);
+    color: var(--color-gray-500);
+  }
+}
+
 @utility menu-item {
   @apply relative flex items-center w-full gap-3 px-3 py-2 font-medium rounded-lg text-theme-sm;
 }

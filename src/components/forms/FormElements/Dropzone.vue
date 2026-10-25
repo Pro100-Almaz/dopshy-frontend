@@ -60,7 +60,7 @@ const props = defineProps({
 
 const dropzoneForm = ref(null)
 const dropzoneId = `dropzone-${Math.random().toString(36).substr(2, 9)}`
-let dropzoneInstance = null
+let dropzoneInstance: Dropzone | null = null
 
 onMounted(() => {
   Dropzone.autoDiscover = false

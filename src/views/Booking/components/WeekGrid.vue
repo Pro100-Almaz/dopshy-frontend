@@ -15,6 +15,10 @@ const props = defineProps<{
   large?: boolean
   hideBookingDetails?: boolean
   hideSlotPrices?: boolean
+  // Пересечения с бронями (напр. из проверки слотов договора) — подсвечиваются красным.
+  conflicts?: { field: number; date: string; time_start: string; time_end: string }[]
+  // Крайняя дата повтора (напр. окончание договора).
+  repeatMaxUntil?: string
 }>()
 
 const store = useBookingStore()
@@ -40,6 +44,24 @@ const repeatStates = computed(() => {
     }
   }
   return m
+})
+
+// Ячейки, пересекающиеся с конфликтами. Конец раньше начала — переход через полночь.
+const conflictIds = computed(() => {
+  const ids = new Set<string>()
+  if (!props.conflicts?.length) return ids
+  for (const c of props.conflicts) {
+    const cs = toMin(c.time_start)
+    let ce = toMin(c.time_end)
+    if (ce <= cs) ce = 24 * 60
+    for (const row of props.week.rows) {
+      for (const cell of row.cells) {
+        if (cell.fieldId !== String(c.field) || cell.date !== c.date) continue
+        if (toMin(cell.start) < ce && toMin(cell.end) > cs) ids.add(cell.id)
+      }
+    }
+  }
+  return ids
 })
 
 // ── Повтор: sticky-модалка по правому клику на интервале ──
@@ -247,6 +269,7 @@ function hideBooking() {
           class="sched-cell select-none border-b border-r border-gray-100 leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-success-600 dark:border-gray-800"
           :class="[
             large ? 'h-14 text-sm sm:text-xl' : 'h-11 text-[8px] sm:text-[11px]',
+            conflictIds.has(cell.id) && 'ring-2 ring-inset ring-error-500',
             store.isSelected(cell.id)
               ? 'bg-success-600 font-semibold text-white'
               : cell.status === 'booked'
@@ -352,6 +375,7 @@ function hideBooking() {
     :open="repeatOpen"
     :interval="repeatInterval"
     :anchor="repeatAnchor"
+    :max-until="repeatMaxUntil"
     @close="repeatOpen = false"
   />
 </template>

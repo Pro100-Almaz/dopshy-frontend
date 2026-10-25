@@ -82,7 +82,7 @@ const selected = ref('optionOne')
 const date = ref('')
 
 const flatpickrConfig = {
-  mode: 'range',
+  mode: 'range' as const,
   dateFormat: 'M j',
   defaultDate: [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), new Date()],
 }

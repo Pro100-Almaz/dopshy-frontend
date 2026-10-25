@@ -100,6 +100,10 @@ const couponAmountOutdated = computed(
     selectedDiscount.value.discount_amount !== appliedDiscountAmount.value,
 )
 
+// Бронь по договору: деньги ведутся на договоре, поэтому сумму, скидку и
+// оплаты здесь не показываем и не отправляем.
+const isContract = computed(() => props.booking.hasContract)
+
 const selectedField = computed(() => fields.value.find((f) => f.id === form.fieldId))
 
 // Новая сумма — считается только пока время/поле/дата реально отличаются от
@@ -123,11 +127,14 @@ onMounted(async () => {
   try {
     const [loadedFields, available] = await Promise.all([
       getManagerFields(),
-      listDiscounts({ phone: props.booking.customerPhone, available_only: true }),
+      isContract.value
+        ? Promise.resolve([])
+        : listDiscounts({ phone: props.booking.customerPhone, available_only: true }),
     ])
     fields.value = loadedFields
     discounts.value = available
     if (
+      !isContract.value &&
       props.booking.discountId &&
       !discounts.value.some((discount) => String(discount.id) === props.booking.discountId)
     ) {
@@ -150,11 +157,13 @@ async function save() {
     error.value = 'Время окончания должно быть позже начала'
     return
   }
-  const payments = [
-    { value: Number(form.paidKaspiQr), label: 'Kaspi QR' },
-    { value: Number(form.paidCash), label: 'Наличные' },
-    { value: Number(form.paidAvans), label: 'Аванс' },
-  ]
+  const payments = isContract.value
+    ? []
+    : [
+        { value: Number(form.paidKaspiQr), label: 'Kaspi QR' },
+        { value: Number(form.paidCash), label: 'Наличные' },
+        { value: Number(form.paidAvans), label: 'Аванс' },
+      ]
   const over = payments.find((p) => p.value > MAX_PAYMENT)
   if (over) {
     error.value = `Сумма «${over.label}» не может превышать ${MAX_PAYMENT.toLocaleString('ru-RU')} ₸`
@@ -171,11 +180,15 @@ async function save() {
       end_date: form.date,
       status: form.status as BookingState,
       notes: form.notes.trim(),
-      ...(recalculatedTotal.value != null ? { price_total: recalculatedTotal.value } : {}),
-      paid_kaspi_qr: Number(form.paidKaspiQr) || 0,
-      paid_cash: Number(form.paidCash) || 0,
-      paid_avans: Number(form.paidAvans) || 0,
-      discount_id: form.discountId ? Number(form.discountId) : null,
+      ...(isContract.value
+        ? {}
+        : {
+            ...(recalculatedTotal.value != null ? { price_total: recalculatedTotal.value } : {}),
+            paid_kaspi_qr: Number(form.paidKaspiQr) || 0,
+            paid_cash: Number(form.paidCash) || 0,
+            paid_avans: Number(form.paidAvans) || 0,
+            discount_id: form.discountId ? Number(form.discountId) : null,
+          }),
     })
     emit('saved')
   } catch (e) {
@@ -210,7 +223,9 @@ const inputClass =
         <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
           Редактировать бронь
         </h3>
-        <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">{{ booking.ref }}</p>
+        <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+          {{ booking.ref }}<template v-if="isContract"> · бронь по договору</template>
+        </p>
 
         <form class="space-y-4" @submit.prevent="save">
           <!-- Customer name -->
@@ -272,7 +287,7 @@ const inputClass =
 
           <!-- Recalculated total: shown only while date/time/field actually differ from the original booking -->
           <p
-            v-if="recalculatedTotal != null"
+            v-if="!isContract && recalculatedTotal != null"
             class="rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
           >
             Новая сумма: <span class="font-semibold">{{ formatPrice(recalculatedTotal) }}</span>
@@ -300,7 +315,7 @@ const inputClass =
           </div>
 
           <!-- Discount: applied amount on the booking vs. the coupon (coupon amount can change later) -->
-          <div>
+          <div v-if="!isContract">
             <p class="mb-1.5 text-sm font-medium text-gray-700 dark:text-gray-400">Скидка</p>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -376,7 +391,7 @@ const inputClass =
           </div>
 
           <!-- Payments -->
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div v-if="!isContract" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                 Kaspi QR
