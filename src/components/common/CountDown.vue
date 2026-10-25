@@ -51,7 +51,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
 const daysArray = ref([])
@@ -107,21 +107,13 @@ const getMaxValueForUnit = (unit) => {
 }
 
 const getTimeArray = (value, unit) => {
-  let stringValue = format(value).toString()
-  let percentage = (value / getMaxValueForUnit(unit)) * 100
+  const stringValue = format(value).toString()
+  const percentage = (value / getMaxValueForUnit(unit)) * 100
   return stringValue.split('').map((digit) => ({
     value: digit,
     visible: true,
     remainingPercentage: percentage,
   }))
-}
-
-const calcOverlayHeight = () => {
-  if (daysArray.value.length > 0) {
-    let remainingDaysPercentage = daysArray.value[0].remainingPercentage
-    return `${remainingDaysPercentage}%`
-  }
-  return '0%'
 }
 
 const resetTimeArrays = () => {

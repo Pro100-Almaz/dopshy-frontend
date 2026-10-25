@@ -17,11 +17,13 @@ export class ApiError extends Error {
   status: number
   /** Machine-readable reason from the bot service (e.g. 'SLOT_TAKEN', 'NO_KASPI'), when present. */
   code?: string
-  constructor(status: number, message: string, code?: string) {
+  details?: Record<string, unknown>
+  constructor(status: number, message: string, code?: string, details?: Record<string, unknown>) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.details = details
   }
 }
 
@@ -107,8 +109,7 @@ async function handleSessionExpired(): Promise<void> {
 }
 
 export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): Promise<T> {
-  const token =
-    localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
+  const token = localStorage.getItem('dopsy_token') || sessionStorage.getItem('dopsy_token')
   const { skipSessionExpiredRedirect, ...fetchOptions } = options ?? {}
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -133,7 +134,7 @@ export async function apiFetch<T>(endpoint: string, options?: ApiFetchOptions): 
     // FastAPI reports errors under `detail`; fall back to `message` or a generic label.
     const detail = typeof body.detail === 'string' ? body.detail : undefined
     const code = typeof body.code === 'string' ? body.code : undefined
-    throw new ApiError(res.status, ruError(res.status, detail || body.message), code)
+    throw new ApiError(res.status, ruError(res.status, detail || body.message), code, body)
   }
 
   return res.json()

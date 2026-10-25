@@ -1,6 +1,4 @@
-<script>
-import { onMounted, onUnmounted } from 'vue'
-
+<script lang="ts">
 export default {
   created(el, binding) {
     el.clickOutsideEvent = (event) => {

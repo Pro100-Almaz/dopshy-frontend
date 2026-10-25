@@ -109,8 +109,8 @@ async function handleSubmit() {
   try {
     await authService.resetPassword((route.query.token as string) || '', password.value)
     done.value = true
-  } catch (e: any) {
-    errors.password = e.message
+  } catch (e) {
+    errors.password = e instanceof Error ? e.message : 'Не удалось сбросить пароль'
   } finally {
     loading.value = false
   }

@@ -156,18 +156,14 @@ export interface BookingConfirmation {
 }
 
 // Сырые статусы брони на бэкенде (значения enum) — используются при редактировании.
-export type BookingState =
-  | 'draft'
-  | 'awaiting_payment'
-  | 'confirmed'
-  | 'cancelled'
-  | 'unpaid'
+export type BookingState = 'draft' | 'awaiting_payment' | 'confirmed' | 'cancelled' | 'unpaid'
 
 export interface Booking {
   id: string
   ref: string // human-readable reference, e.g. 'BK-1042'
   customerName: string
   customerPhone: string
+  customerId?: number
   fieldId: string
   fieldName: string
   fieldType?: FieldType // unknown for backend rows that only carry a numeric field id
@@ -186,6 +182,9 @@ export interface Booking {
   paidAvans: number
   paidTotal: number // сумма всех paid_* — вычисляется при маппинге
   hasContract: boolean // бронь создана в рамках контракта
+  discountAmount?: number // скидка, применённая к брони (API пока может не отдавать)
+  discountId?: string
+  priceBeforeDiscount?: number
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
@@ -215,6 +214,7 @@ export interface BookingApi {
   field: number
   customer_name: string
   phone: string
+  customer_id?: number | null
   time_start: string // 'HH:mm:ss'
   time_end: string // 'HH:mm:ss'
   price_total: string | null // decimal-строка, напр. "10000.00"
@@ -230,6 +230,9 @@ export interface BookingApi {
   created_at: string // ISO datetime
   updated_at: string // ISO datetime
   has_contract: boolean
+  discount_id?: number | null
+  discount_amount?: string | number | null
+  price_before_discount?: string | number | null
 }
 
 export interface BookedSlotApi {
@@ -273,7 +276,6 @@ export interface BotToggleResult {
   paused: boolean
 }
 
-
 export interface BotEnabledStatus {
   is_enabled: boolean
 }
@@ -282,12 +284,14 @@ export interface BotEnabledStatus {
 // Это любой, кто писал боту; может иметь или не иметь брони.
 export interface Contact {
   phone: string // канонический id: международные цифры без «+»
-  name: string // имя из броней; '' у контактов только-написавших → показываем телефон
+  name: string | null // имя из броней; null у контактов только-написавших
   texted: boolean // писал боту в WhatsApp
   has_booking: boolean // есть хотя бы одна бронь
   paused: boolean // true = бот выключен для контакта
   paused_reason: PausedReason
-  last_activity: string // ISO datetime; список приходит отсортированным (новые сверху)
+  last_activity: string | null // ISO datetime; список приходит отсортированным (новые сверху)
+  is_registered: boolean
+  is_regular_customer: boolean
 }
 
 export interface ContactPage {
@@ -305,7 +309,9 @@ export interface ContactPage {
 // 'account:email'. Нераспознанный формат отображается целиком.
 export interface HistoryEntry {
   id: number
-  booking_id: number
+  booking_id: number | null
+  customer_id: number | null
+  discount_id: number | null
   source: string // '<kind>:<value>', напр. 'manager:almaz'
   description: string
   created_at: string // ISO datetime

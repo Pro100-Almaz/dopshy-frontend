@@ -37,7 +37,24 @@ export function listContacts(): Promise<Contact[]>
 export function listContacts(q: ContactsQuery): Promise<ContactPage>
 export function listContacts(q?: ContactsQuery): Promise<Contact[] | ContactPage> {
   const qs = q ? buildQs({ bot_type: q.bot_type, page: q.page, page_size: q.page_size }) : ''
-  return apiFetch<Contact[] | ContactPage>(`/bot-status/contacts${qs}`)
+  return apiFetch<Contact[] | ContactPage>(`/bot-status/contacts${qs}`).then((response) => {
+    if (!q || !Array.isArray(response)) return response
+    // Бэкенд пока не умеет постранично отдавать контакты — присылает весь список
+    // независимо от page/page_size. Пагинируем на фронте, пока это не исправлено.
+    const page = q.page ?? 1
+    const pageSize = (q.page_size ?? response.length) || 1
+    const total = response.length
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const start = (page - 1) * pageSize
+    return {
+      ok: true,
+      data: response.slice(start, start + pageSize),
+      page,
+      page_size: pageSize,
+      total,
+      total_pages: totalPages,
+    }
+  })
 }
 
 // ── Статус / переключение бота ──────────────────────────────────────
@@ -93,7 +110,7 @@ function pluralRu(n: number, one: string, few: string, many: string): string {
 }
 
 /** ISO datetime → «5 минут назад» (пустая строка при некорректной дате). */
-export function relativeTime(iso: string, now: Date = new Date()): string {
+export function relativeTime(iso: string | null, now: Date = new Date()): string {
   if (!iso) return ''
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return iso
