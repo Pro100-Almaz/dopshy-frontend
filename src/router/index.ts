@@ -66,7 +66,7 @@ const router = createRouter({
         { path: 'privacy', name: 'LandingPrivacy', component: () => import('../views/Landing/v6/pages/Privacy.vue'), meta: { landing: 'privacy' } },
         { path: 'offer', name: 'LandingOffer', component: () => import('../views/Landing/v6/pages/Offer.vue'), meta: { landing: 'offer' } },
         // Бронирование — секция на странице аренды; старые адреса ведут туда.
-        { path: 'booking/:rest(.*)*', name: 'Booking', redirect: { path: '/arena', hash: '#booking' } },
+        { path: 'booking/:rest(.*)*', name: 'Booking', redirect: (to) => ({ path: '/arena', hash: '#booking', query: to.query }) },
       ],
     },
 

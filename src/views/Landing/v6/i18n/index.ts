@@ -6,6 +6,16 @@ export type Lang = 'ru' | 'kk'
 const DICTS: Record<Lang, Dict> = { ru, kk }
 const KEY = 'dopsy-lang'
 
+/** Пользователь уже выбирал язык сам — автоподстановку (например, из ссылки бота) не применяем. */
+export function hasSavedLang(): boolean {
+  try {
+    const saved = localStorage.getItem(KEY)
+    return saved === 'ru' || saved === 'kk'
+  } catch {
+    return false
+  }
+}
+
 function initialLang(): Lang {
   try {
     const saved = localStorage.getItem(KEY)

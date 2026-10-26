@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   AlertTriangle,
   Check,
@@ -7,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Info,
   Moon,
   RotateCcw,
   Users,
@@ -21,7 +23,8 @@ import {
   type WeekSlots,
 } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
-import { useLang, fmt, fromPrice, money, num } from '../i18n'
+import { useBookingPrefillStore } from '@/stores/bookingPrefill'
+import { hasSavedLang, useLang, fmt, fromPrice, money, num } from '../i18n'
 import { ZONE_HOURS, zoneAt, type Zone } from '../data/site'
 import Section from './Section.vue'
 import Reveal from './Reveal.vue'
@@ -43,9 +46,12 @@ const RAIL: Record<Zone, string> = {
 // Backend fields have no real photos (Field.photos are generic placeholders) — use the design's hall shots.
 const FALLBACK_IMAGES = ['hall-main', 'hall-glass', 'hall-balcony']
 
-const { t, lang } = useLang()
+const { t, lang, setLang } = useLang()
 const b = computed(() => t.value.booking)
 const store = useBookingStore()
+const prefill = useBookingPrefillStore()
+const route = useRoute()
+const router = useRouter()
 
 const fields = ref<Field[]>([])
 const fieldsState = ref<'loading' | 'error' | 'ready'>('loading')
@@ -97,7 +103,7 @@ function selectField(i: number) {
   fieldIdx.value = i
   store.setField(fields.value[i]) // другое поле сбрасывает выбор
   week.value = 0
-  loadWeek()
+  return loadWeek()
 }
 
 function shiftWeek(d: number) {
@@ -260,7 +266,157 @@ watch(areaRef, (el) => {
   })
   io.observe(el)
 })
-onMounted(loadFields)
+
+// ── Prefill from the bot link ──
+type Notice = 'applied' | 'details' | 'taken' | 'invalid' | 'date' | 'day'
+const notice = ref<Notice | null>(null)
+const alternatives = ref<{ field: number; start: string; end: string }[]>([])
+let didApply = false
+
+// Week offset (0..MAX_WEEK) the date falls in, or null when it is past or beyond the horizon.
+function weekOffsetOf(date: string): number | null {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.round((dateOf(date).getTime() - today.getTime()) / 864e5)
+  const offset = Math.floor(diff / DAYS)
+  return diff < 0 || offset > MAX_WEEK ? null : offset
+}
+
+// The link may carry a time but no field (the bot sends it before the field is chosen):
+// pick the first field that is free for the whole range. Fetches the week per field without
+// touching the visible grid.
+async function findFreeField(date: string, start: string, end: string): Promise<number | null> {
+  const offset = weekOffsetOf(date)
+  if (offset == null) return null
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() + offset * DAYS)
+  const found = await Promise.all(
+    fields.value.map(async (f) => {
+      try {
+        const w = await getPublicWeek(f, toISO(weekStart), new Date(), DAYS)
+        const cells = new Map(w.rows.flatMap((r) => r.cells.map((c) => [c.id, c] as const)))
+        for (let m = toMin(start); m < toMin(end); m += SLOT_MIN) {
+          if (cells.get(`${f.id}__${date}__${m}`)?.status !== 'available') return null
+        }
+        return Number(f.id)
+      } catch {
+        return null
+      }
+    }),
+  )
+  return found.find((id) => id != null) ?? null
+}
+
+// Opens the week that contains `date` on the given field (or the current one) without selecting.
+async function showDate(date: string, fieldId: number | null): Promise<boolean> {
+  const offset = weekOffsetOf(date)
+  if (offset == null) return false
+  const i = fieldId == null ? fieldIdx.value : fields.value.findIndex((f) => f.id === String(fieldId))
+  if (i < 0 || !fields.value[i]) return false
+  if (i !== fieldIdx.value) store.setField(fields.value[i])
+  fieldIdx.value = i
+  week.value = offset
+  await loadWeek()
+  return true
+}
+
+// Selects exactly [start, end) in half-hour cells. Field first (setField clears the
+// selection), then week, then slots. Leaves the grid on the requested date even when it fails.
+async function selectRange(fieldId: number, date: string, start: string, end: string): Promise<Notice> {
+  const offset = weekOffsetOf(date)
+  if (offset == null) return 'date'
+  if (!(await showDate(date, fieldId)) || field.value?.id !== String(fieldId)) return 'taken'
+
+  const cells: Slot[] = []
+  for (let m = toMin(start); m < toMin(end); m += SLOT_MIN) {
+    const cell = cellById.value.get(`${field.value.id}__${date}__${m}`)
+    if (!cell || cell.status !== 'available') return 'taken'
+    cells.push(cell)
+  }
+  if (!cells.length) return 'taken'
+  for (const cell of cells) if (!store.isSelected(cell.id)) store.toggleSlot(cell)
+  await revealCell(cells[0])
+  return 'applied'
+}
+
+// Scroll the grid to the selected time and put keyboard focus on its first cell.
+async function revealCell(cell: Slot) {
+  const dayIdx = days.value.findIndex((d) => d.iso === cell.date)
+  const startMin = toMin(cell.start)
+  if (!rowIndex.value.has(startMin)) showNight.value = true
+  await nextTick()
+  const r = rowIndex.value.get(startMin)
+  if (r == null || dayIdx < 0) return
+  didScroll = true
+  focus.value = [r, dayIdx]
+  await nextTick()
+  const box = scrollRef.value
+  const row = box?.querySelector<HTMLElement>(`[data-row="${r}"]`)
+  if (box && row) {
+    const head = box.querySelector<HTMLElement>('[data-head]')?.getBoundingClientRect().height ?? 56
+    box.scrollTop += row.getBoundingClientRect().top - box.getBoundingClientRect().top - head
+  }
+  gridRef.value?.querySelector<HTMLElement>(`[data-cell="${r}-${dayIdx}"]`)?.focus({ preventScroll: true })
+}
+
+async function applyPrefill() {
+  const d = prefill.data
+  if (prefill.status === 'invalid') {
+    notice.value = 'invalid'
+    return
+  }
+  if (prefill.status !== 'ready' || !d) return
+  if (d.lang && !hasSavedLang()) setLang(d.lang)
+  if (!d.date) return
+  // The user already started picking while the link resolved — don't touch it.
+  if (store.count > 0) {
+    notice.value = 'details'
+    return
+  }
+  // Date only: open that week so the user just picks a time.
+  if (!d.time_start || !d.time_end) {
+    notice.value = (await showDate(d.date, d.field)) ? 'day' : 'date'
+    return
+  }
+  alternatives.value = d.alternatives.map((a) => ({ field: a.field, start: a.time_start, end: a.time_end }))
+  if (d.slot_available === false && d.field) {
+    // Still jump to the date so the alternatives are in view.
+    await showDate(d.date, d.field).catch(() => {})
+    notice.value = 'taken'
+    return
+  }
+  const fieldId = d.field ?? (await findFreeField(d.date, d.time_start, d.time_end))
+  if (fieldId == null) {
+    // No field is free for that time (or the date is out of range): show the day anyway.
+    const shown = await showDate(d.date, null).catch(() => false)
+    notice.value = shown ? 'taken' : 'date'
+    return
+  }
+  notice.value = await selectRange(fieldId, d.date, d.time_start, d.time_end)
+}
+
+async function pickAlternative(a: { field: number; start: string; end: string }) {
+  const date = prefill.data?.date
+  if (!date) return
+  store.clearSlots()
+  const res = await selectRange(a.field, date, a.start, a.end)
+  notice.value = res === 'applied' ? null : res
+}
+
+watch(
+  [fieldsState, () => prefill.status],
+  ([fs, ps]) => {
+    if (didApply || fs !== 'ready' || ps === 'idle' || ps === 'loading') return
+    didApply = true
+    applyPrefill()
+  },
+)
+
+onMounted(() => {
+  prefill.init(route, router)
+  loadFields()
+})
 onBeforeUnmount(() => io?.disconnect())
 
 function onDone() {
@@ -367,6 +523,50 @@ watch(
         <AlertTriangle class="mt-0.5 size-4 shrink-0 text-prime" aria-hidden="true" />
         {{ b.conflict }}
       </p>
+
+      <div
+        v-if="notice"
+        role="status"
+        aria-live="polite"
+        class="mb-6 rounded-2xl border border-line-2 bg-surface px-4 py-3 text-sm text-fg"
+      >
+        <div class="flex items-start gap-3">
+          <Info class="mt-0.5 size-4 shrink-0 text-acid" aria-hidden="true" />
+          <p class="flex-1">
+            {{
+              {
+                applied: b.prefillApplied,
+                details: b.prefillDetails,
+                taken: b.prefillTaken,
+                invalid: b.prefillInvalid,
+                date: b.prefillDate,
+                day: b.prefillDay,
+              }[notice]
+            }}
+          </p>
+          <button
+            type="button"
+            class="-m-1 shrink-0 rounded p-1 text-fg-dim hover:text-fg"
+            :aria-label="b.dismiss"
+            @click="notice = null"
+          >
+            <X class="size-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div v-if="notice === 'taken' && alternatives.length" class="mt-3 flex flex-wrap items-center gap-2 pl-7">
+          <span class="text-fg-muted">{{ b.prefillAlternatives }}</span>
+          <button
+            v-for="a in alternatives"
+            :key="`${a.field}${a.start}${a.end}`"
+            type="button"
+            class="min-h-9 rounded-full border border-line-2 px-3 text-fg hover:border-acid"
+            @click="pickAlternative(a)"
+          >
+            {{ fields.find((f) => f.id === String(a.field)) ? shortName(fields.find((f) => f.id === String(a.field))!) : a.field }}
+            · {{ a.start }}–{{ a.end }}
+          </button>
+        </div>
+      </div>
 
       <div ref="areaRef" class="grid gap-6 pb-28 lg:grid-cols-[1fr_22rem] lg:items-start lg:pb-0">
         <Reveal class="min-w-0">

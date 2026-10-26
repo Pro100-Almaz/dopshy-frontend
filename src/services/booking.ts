@@ -517,6 +517,27 @@ export interface BatchSlotIn {
   discount_id?: number | null
 }
 
+/** Ответ GET /bookings/prefill/{token}. Полный номер в браузер не попадает — только маска. */
+export interface BookingPrefill {
+  phone_masked: string
+  customer_name: string | null
+  field: number | null
+  date: string | null
+  time_start: string | null
+  time_end: string | null
+  players: number | null
+  lang: 'ru' | 'kk' | null
+  slot_available: boolean | null
+  alternatives: { field: number; time_start: string; time_end: string }[]
+}
+
+/** Публичный, без авторизации. ApiError: 404 — неизвестный/просроченный, 410 — уже использован. */
+export function getPrefill(token: string): Promise<BookingPrefill> {
+  return apiFetch(`/bookings/prefill/${encodeURIComponent(token)}`, {
+    skipSessionExpiredRedirect: true,
+  })
+}
+
 export interface BookingBatchPayload {
   slots: BatchSlotIn[]
   customer?: string
@@ -528,6 +549,8 @@ export interface BookingBatchPayload {
   reserved_until?: number
   updated_by?: string
   discount_id?: number | null
+  /** Токен предзаполнения из ссылки бота: бэкенд атрибутирует бронь боту и, если `phone` не задан, берёт номер из него. */
+  prefill_token?: string
 }
 
 /**
