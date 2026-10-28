@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeft, CalendarPlus, Check, CreditCard, Loader2 } from 'lucide-vue-next'
 import { ApiError } from '@/services/api'
 import { createBookingsBatch, RESERVATION_TTL_MINUTES } from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
+import { useBookingPrefillStore } from '@/stores/bookingPrefill'
 import { useLang, fmt, money } from '../i18n'
 import Modal from './Modal.vue'
 
@@ -14,6 +15,7 @@ const emit = defineEmits<{ close: []; done: []; conflict: [] }>()
 const { t, lang } = useLang()
 const c = computed(() => t.value.checkout)
 const store = useBookingStore()
+const prefill = useBookingPrefillStore()
 
 const step = ref(0)
 const name = ref('')
@@ -26,6 +28,20 @@ const failed = ref(false)
 const noKaspi = ref(false)
 watch(phone, () => (noKaspi.value = false))
 
+// The WhatsApp number stays server-side: while untouched we show its mask and send the token instead.
+const usingPrefillPhone = computed(() => !!prefill.tokenForSubmit && !prefill.phoneEdited)
+const phoneShown = computed(() =>
+  usingPrefillPhone.value ? (prefill.data?.phone_masked ?? '') : phone.value,
+)
+// Frozen at success: consume() drops the prefill, but the final screen still names the number.
+const sentPhone = ref('')
+const phoneInput = ref<HTMLInputElement>()
+function changePhone() {
+  prefill.phoneEdited = true
+  phone.value = ''
+  nextTick(() => phoneInput.value?.focus())
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -34,6 +50,7 @@ watch(
     touched.value = false
     failed.value = false
     noKaspi.value = false
+    if (!name.value && prefill.data?.customer_name) name.value = prefill.data.customer_name
   },
 )
 
@@ -56,7 +73,7 @@ const nameErr = computed(() => (touched.value && !name.value.trim() ? c.value.re
 const phoneErr = computed(() =>
   noKaspi.value
     ? c.value.noKaspi
-    : touched.value && !phoneComplete(phone.value)
+    : touched.value && !usingPrefillPhone.value && !phoneComplete(phone.value)
       ? phone.value
         ? c.value.phoneInvalid
         : c.value.required
@@ -65,7 +82,7 @@ const phoneErr = computed(() =>
 
 function toPayment() {
   touched.value = true
-  if (!name.value.trim() || !phoneComplete(phone.value)) return
+  if (!name.value.trim() || (!usingPrefillPhone.value && !phoneComplete(phone.value))) return
   step.value = 1
 }
 
@@ -76,12 +93,16 @@ async function confirm() {
     await createBookingsBatch({
       slots: store.batchSlots,
       customer: name.value.trim(),
-      phone: `+${phone.value.replace(/\D/g, '')}`,
+      phone: usingPrefillPhone.value ? undefined : `+${phone.value.replace(/\D/g, '')}`,
+      // Kept even with a typed number so the booking is still attributed to the bot.
+      prefill_token: prefill.tokenForSubmit ?? undefined,
       notes: team.value.trim() ? `${c.value.team}: ${team.value.trim()}` : undefined,
       // 0 не отправляем — бэкенд подставит дефолт (как в CreateBookingModal).
       prepayment: store.prepaymentTotal || undefined,
       reserved_until: RESERVATION_TTL_MINUTES,
     })
+    sentPhone.value = phoneShown.value
+    prefill.consume()
     step.value = 2
   } catch (e) {
     const code = e instanceof ApiError ? e.code : undefined
@@ -175,11 +196,13 @@ const btnPrimary =
       <label class="block">
         <span class="mb-1.5 block text-sm font-medium text-fg-muted">{{ c.phone }}</span>
         <input
-          :value="phone"
+          ref="phoneInput"
+          :value="phoneShown"
           :class="inputCls"
           placeholder="+7 (7__) ___ __ __"
           inputmode="tel"
           autocomplete="tel"
+          :readonly="usingPrefillPhone"
           :aria-invalid="!!phoneErr"
           @input="phone = formatPhone(($event.target as HTMLInputElement).value)"
         />
@@ -187,6 +210,12 @@ const btnPrimary =
           {{ phoneErr }}
         </span>
       </label>
+      <p v-if="usingPrefillPhone" class="-mt-2 flex items-center justify-between gap-3 text-xs text-fg-dim">
+        <span>{{ c.phoneFromWa }}</span>
+        <button type="button" class="font-medium text-acid underline" @click="changePhone">
+          {{ c.phoneChange }}
+        </button>
+      </p>
       <label class="block">
         <span class="mb-1.5 block text-sm font-medium text-fg-muted">{{ c.team }}</span>
         <input
@@ -213,7 +242,7 @@ const btnPrimary =
               store.prepaymentTotal > 0
                 ? fmt(c.payText, {
                     sum: money(store.prepaymentTotal, lang),
-                    phone,
+                    phone: phoneShown,
                     min: RESERVATION_TTL_MINUTES,
                   })
                 : c.noPrepay
@@ -254,7 +283,7 @@ const btnPrimary =
       <p class="mt-2 text-fg-muted">
         {{
           store.prepaymentTotal > 0
-            ? fmt(c.successText, { phone, min: RESERVATION_TTL_MINUTES })
+            ? fmt(c.successText, { phone: sentPhone, min: RESERVATION_TTL_MINUTES })
             : c.successNoPrepay
         }}
       </p>
