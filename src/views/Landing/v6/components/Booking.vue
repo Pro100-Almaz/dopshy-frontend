@@ -186,7 +186,7 @@ function cellLabel(d: Date, row: Row, cell: Slot) {
     : busy(cell)
       ? b.value.ariaBusy
       : b.value.ariaFree
-  const price = fmt(b.value.ariaPrice, { p: cell.price * 2 })
+  const price = fmt(b.value.ariaPrice, { p: cell.price })
   return `${dayLabel(d)} ${b.value.months[d.getMonth()]}, ${row.label}, ${price}, ${state}`
 }
 
@@ -775,7 +775,7 @@ watch(
                           v-else-if="cell.status === 'available'"
                           class="tabular-nums opacity-80"
                         >
-                          {{ Math.round((cell.price * 2) / 1000) }}K
+                          {{ +(cell.price / 1000).toFixed(1) }}K
                         </span>
                       </div>
                     </div>

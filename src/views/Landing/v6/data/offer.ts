@@ -6,6 +6,11 @@ import type { LegalDoc } from './legal'
  * Публичная оферта (ред. 14.10.2026). Оба текста — от заказчика и по пункту
  * 1.5 имеют одинаковую силу: правки вносить в обе версии.
  */
+/** Редакция оферты (дата из шапки). Меняется вместе с текстом — уходит в согласие брони. */
+export const OFFER_VERSION = '2026-10-14'
+/** Версия текста чекбокса согласия в Checkout. Поднять при правке checkout.offer* в i18n. */
+export const CONSENT_TEXT_VERSION = 'site-v1'
+
 const SITE = { value: 'https://dopsy.kz', href: 'https://dopsy.kz' }
 const EMAIL = { value: CONTACTS.email, href: CONTACTS.emailHref }
 const PHONE = { value: CONTACTS.phone, href: CONTACTS.phoneHref }

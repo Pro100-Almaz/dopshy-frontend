@@ -6,6 +6,7 @@ import {
   BadgePercent,
   CheckCircle2,
   Loader2,
+  MessageCircle,
   Search,
   UserRound,
   X,
@@ -13,6 +14,7 @@ import {
 import {
   createBookingsBatch,
   formatPrice,
+  HOLD_WITHOUT_PAYMENT_TTL_MINUTES,
   PREPAYMENT_PER_SLOT,
   RESERVATION_TTL_MINUTES,
 } from '@/services/booking'
@@ -42,7 +44,11 @@ const dialog = ref<HTMLDialogElement | null>(null),
   step = ref<1 | 2 | 3>(1),
   busy = ref(false),
   error = ref('')
-const form = reactive({ phone: '', notes: '', prepayment: '' })
+const form = reactive({ phone: '', notes: '', prepayment: '', kaspiPhone: '' })
+const holdWithoutPayment = ref(false)
+const holdCreated = ref(false)
+// Бронь админа ждёт подтверждения клиента в WhatsApp (state awaiting_consent).
+const consentPending = ref(false)
 const customer = ref<Customer | null>(null),
   checked = ref(false),
   customerModal = ref(false),
@@ -61,6 +67,7 @@ const draft = reactive({
   status: 'pending' as DiscountStatus,
 })
 const isSuper = computed(() => auth.role === 'super_admin')
+const canHoldWithoutPayment = computed(() => ['admin', 'super_admin'].includes(auth.role))
 const canCreateDiscount = computed(() => ['admin', 'super_admin'].includes(auth.role))
 const discountDraftValid = computed(
   () =>
@@ -88,6 +95,14 @@ const discountTotal = computed(() =>
   }, 0),
 )
 const finalTotal = computed(() => Math.max(0, store.projectedTotal - discountTotal.value))
+const kaspiDigits = computed(() => form.kaspiPhone.replace(/\D/g, ''))
+const kaspiValid = computed(() => kaspiDigits.value.length === 11)
+/** '77015551212' → '+7 701 555 12 12'. */
+function formatKzPhone(raw: string) {
+  const d = raw.replace(/\D/g, '')
+  if (d.length !== 11) return raw
+  return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`
+}
 const prepayment = computed(() =>
   Math.min(finalTotal.value, Math.max(0, Number(form.prepayment) || 0)),
 )
@@ -99,6 +114,10 @@ function reset() {
   form.phone = ''
   form.notes = ''
   form.prepayment = ''
+  form.kaspiPhone = ''
+  consentPending.value = false
+  holdWithoutPayment.value = false
+  holdCreated.value = false
   customer.value = null
   checked.value = false
   discounts.value = []
@@ -157,6 +176,8 @@ function goNext() {
   if (!customerReady.value) return
   step.value = 2
   form.prepayment = String(Math.min(PREPAYMENT_PER_SLOT, finalTotal.value))
+  // Номер для оплаты по умолчанию — контактный; менеджер может заменить.
+  if (customer.value && !form.kaspiPhone) form.kaspiPhone = formatKzPhone(customer.value.phone)
 }
 function discountAvailable(d: Discount, i: number) {
   const assignedElsewhere = selected.value.reduce<number>((count, id, index) => {
@@ -202,11 +223,12 @@ function openDiscountModal() {
   discountModal.value = true
 }
 async function submit() {
-  if (!customerReady.value || !customer.value) return
+  if (!customerReady.value || !customer.value || (!holdWithoutPayment.value && !kaspiValid.value))
+    return
   busy.value = true
   error.value = ''
   try {
-    await createBookingsBatch({
+    const res = await createBookingsBatch({
       slots: rows.value.map((row, i) => ({
         ...row,
         discount_id: selected.value[i] ?? null,
@@ -215,9 +237,15 @@ async function submit() {
       customer_id: customer.value.id,
       phone: customer.value.phone,
       notes: form.notes || undefined,
-      prepayment: prepayment.value,
-      reserved_until: RESERVATION_TTL_MINUTES,
+      prepayment: holdWithoutPayment.value ? 0 : prepayment.value,
+      reserved_until: holdWithoutPayment.value
+        ? HOLD_WITHOUT_PAYMENT_TTL_MINUTES
+        : RESERVATION_TTL_MINUTES,
+      hold_without_payment: holdWithoutPayment.value,
+      kaspi_phone: holdWithoutPayment.value ? undefined : `+${kaspiDigits.value}`,
     })
+    consentPending.value = res?.consent?.status === 'pending'
+    holdCreated.value = res?.hold_without_payment === true
     step.value = 3
     emit('created')
   } catch (e) {
@@ -400,7 +428,24 @@ watch(
           >
             <CheckCircle2 class="h-4 w-4" />Заявка создана
           </p>
-          <label class="block text-sm font-medium"
+          <label
+            v-if="canHoldWithoutPayment"
+            class="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"
+          >
+            <input
+              v-model="holdWithoutPayment"
+              type="checkbox"
+              class="mt-1 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span>
+              <b class="block text-sm">Удержать слот 24 часа без оплаты</b>
+              <small class="text-gray-600"
+                >Счёт и аванс не создаются. Если оплату не запустить, слот освободится автоматически
+                через 24 часа.</small
+              >
+            </span>
+          </label>
+          <label v-if="!holdWithoutPayment" class="block text-sm font-medium"
             >Предоплата<input
               v-model="form.prepayment"
               type="number"
@@ -409,6 +454,18 @@ watch(
               class="mt-1 h-11 w-full rounded-lg border px-4"
             /><small class="text-gray-500"
               >По умолчанию: до {{ formatPrice(PREPAYMENT_PER_SLOT) }}</small
+            ></label
+          >
+          <label v-if="!holdWithoutPayment" class="block text-sm font-medium"
+            >Номер для оплаты (Kaspi)<input
+              v-model="form.kaspiPhone"
+              type="tel"
+              placeholder="+7 701 555 12 12"
+              class="mt-1 h-11 w-full rounded-lg border px-4"
+            /><small v-if="form.kaspiPhone && !kaspiValid" class="text-error-600"
+              >Введите номер полностью: +7 XXX XXX XX XX</small
+            ><small v-else class="text-gray-500"
+              >На этот номер уйдёт счёт Kaspi на аванс. По умолчанию — номер клиента.</small
             ></label
           >
           <label class="block text-sm font-medium"
@@ -437,7 +494,21 @@ watch(
         <section v-else class="py-10 text-center">
           <CheckCircle2 class="mx-auto h-14 w-14 text-success-600" />
           <h3 class="mt-3 text-xl font-bold">Бронь создана</h3>
-          <p class="text-sm text-gray-500">Предоплата {{ formatPrice(prepayment) }}</p>
+          <p v-if="holdCreated" class="text-sm text-gray-500">
+            Слот удерживается 24 часа без оплаты и без счёта
+          </p>
+          <p v-else class="text-sm text-gray-500">Предоплата {{ formatPrice(prepayment) }}</p>
+          <div
+            v-if="consentPending"
+            class="mx-auto mt-5 flex max-w-sm items-start gap-3 rounded-xl border border-blue-light-200 bg-blue-light-50 p-4 text-left text-sm text-blue-light-700"
+          >
+            <MessageCircle class="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              Клиенту отправлено сообщение в WhatsApp: он должен подтвердить бронь и принять оферту.
+              Счёт на аванс уйдёт только после согласия. Без ответа в течение 30 минут бронь
+              отменится автоматически.
+            </p>
+          </div>
         </section>
       </main>
       <footer class="flex justify-between border-t px-6 py-4">
@@ -453,8 +524,8 @@ watch(
           Далее<ArrowRight class="h-4 w-4" /></button
         ><button
           v-else-if="step === 2"
-          :disabled="busy"
-          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 font-semibold text-white"
+          :disabled="busy || (!holdWithoutPayment && !kaspiValid)"
+          class="inline-flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 font-semibold text-white disabled:opacity-50"
           @click="submit"
         >
           <Loader2 v-if="busy" class="h-4 w-4 animate-spin" />Создать бронь</button

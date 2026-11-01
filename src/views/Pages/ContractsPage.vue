@@ -22,11 +22,7 @@ import ContractCreateDialog from '@/components/contracts/ContractCreateDialog.vu
 import ContractPaymentsDialog from '@/components/contracts/ContractPaymentsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingStore } from '@/stores/booking'
-import type {
-  ContractListRow,
-  ContractStatus,
-  CreateContractResult,
-} from '@/services/contracts'
+import type { ContractListRow, ContractStatus, CreateContractResult } from '@/services/contracts'
 import {
   CONTRACT_STATUS_LABEL,
   PAYMENT_CHANNEL_LABEL,
@@ -65,6 +61,24 @@ const editing = ref<ContractListRow | null>(null)
 const paymentsOpen = ref(false)
 const paymentsContract = ref<ContractListRow | null>(null)
 const actionOpen = ref<number | null>(null)
+// Меню вынесено в body (таблица обрезает overflow), поэтому позиция — fixed.
+const actionPos = ref({ top: 0, right: 0, up: false })
+const ACTION_MENU_HEIGHT = 140
+
+function toggleActions(id: number, event: MouseEvent) {
+  if (actionOpen.value === id) {
+    actionOpen.value = null
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const up = rect.bottom + ACTION_MENU_HEIGHT > window.innerHeight
+  actionPos.value = {
+    top: up ? rect.top : rect.bottom,
+    right: window.innerWidth - rect.right,
+    up,
+  }
+  actionOpen.value = id
+}
 
 const hasPrev = computed(() => page.value > 1)
 const hasNext = computed(() => contracts.value.length >= PAGE_SIZE && !atEnd.value)
@@ -225,7 +239,11 @@ const formError = computed(() => {
   if (form.end_date < form.start_date) return 'Дата окончания не может быть раньше начала'
   const price = Number(form.price)
   if (form.price === '' || !Number.isFinite(price) || price < 1) return 'Укажите сумму контракта'
-  if (editing.value?.payment_status && editing.value.payment_status !== 'none' && !Number.isInteger(price))
+  if (
+    editing.value?.payment_status &&
+    editing.value.payment_status !== 'none' &&
+    !Number.isInteger(price)
+  )
     return 'При онлайн-оплате сумма — в целых тенге'
   return ''
 })
@@ -475,45 +493,54 @@ function onEditClose() {
                     type="button"
                     class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/5"
                     aria-label="Действия"
-                    @click="actionOpen = actionOpen === contract.id ? null : contract.id"
+                    @click="toggleActions(contract.id, $event)"
                   >
                     <MoreHorizontal class="h-5 w-5" aria-hidden="true" />
                   </button>
-                  <div
-                    v-if="actionOpen === contract.id"
-                    class="absolute right-0 top-full z-40 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
-                  >
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-                      @click="openPayments(contract)"
+                  <Teleport to="body">
+                    <div
+                      v-if="actionOpen === contract.id"
+                      class="fixed inset-0 z-[99998]"
+                      @click="actionOpen = null"
+                    />
+                    <div
+                      v-if="actionOpen === contract.id"
+                      class="fixed z-[99999] w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
+                      :class="actionPos.up ? '-translate-y-full -mt-1' : 'mt-1'"
+                      :style="{ top: `${actionPos.top}px`, right: `${actionPos.right}px` }"
                     >
-                      <Wallet class="h-4 w-4" aria-hidden="true" />
-                      Платежи
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-                      @click="openEdit(contract)"
-                    >
-                      <Edit3 class="h-4 w-4" aria-hidden="true" />
-                      Изменить
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-error-600 hover:bg-error-50 disabled:opacity-50"
-                      :disabled="deletingId === contract.id"
-                      @click="onDelete(contract)"
-                    >
-                      <Loader2
-                        v-if="deletingId === contract.id"
-                        class="h-4 w-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                      <Trash2 v-else class="h-4 w-4" aria-hidden="true" />
-                      Удалить
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                        @click="openPayments(contract)"
+                      >
+                        <Wallet class="h-4 w-4" aria-hidden="true" />
+                        Платежи
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+                        @click="openEdit(contract)"
+                      >
+                        <Edit3 class="h-4 w-4" aria-hidden="true" />
+                        Изменить
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-error-600 hover:bg-error-50 disabled:opacity-50"
+                        :disabled="deletingId === contract.id"
+                        @click="onDelete(contract)"
+                      >
+                        <Loader2
+                          v-if="deletingId === contract.id"
+                          class="h-4 w-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                        <Trash2 v-else class="h-4 w-4" aria-hidden="true" />
+                        Удалить
+                      </button>
+                    </div>
+                  </Teleport>
                 </div>
               </td>
             </tr>
