@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Loader2, X } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
+import BookingRefundPanel from '@/components/bookings/BookingRefundPanel.vue'
 import type { Booking, BookingState, Field } from '@/types'
 import {
   getManagerFields,
@@ -14,9 +15,13 @@ import {
 } from '@/services/booking'
 import { ApiError } from '@/services/api'
 import { discountUsageLeft, getDiscount, listDiscounts, type Discount } from '@/services/discounts'
+import { hasPermission } from '@/services/rbac'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ booking: Booking }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
+
+const auth = useAuthStore()
 
 const fields = ref<Field[]>([])
 const saving = ref(false)
@@ -103,6 +108,31 @@ const couponAmountOutdated = computed(
 // Бронь по договору: деньги ведутся на договоре, поэтому сумму, скидку и
 // оплаты здесь не показываем и не отправляем.
 const isContract = computed(() => props.booking.hasContract)
+
+// Переключатель «Редактирование / Возврат». Возврат — для admin, super_admin и
+// arena_manager; у брони по договору деньги ведутся на договоре, там его нет.
+type ModalMode = 'edit' | 'refund'
+const MODES: { value: ModalMode; label: string }[] = [
+  { value: 'edit', label: 'Редактирование' },
+  { value: 'refund', label: 'Возврат' },
+]
+const canRefund = computed(() => !isContract.value && hasPermission(auth.role, 'bookingRefund'))
+const mode = ref<ModalMode>('edit')
+// Возврат уже записан на бэкенде — при закрытии окна список нужно перечитать.
+const refundedHere = ref(false)
+
+function close() {
+  if (refundedHere.value) emit('saved')
+  else emit('close')
+}
+
+const modeClass = (active: boolean) =>
+  [
+    'focus-ring flex-1 rounded-lg px-3 py-1.5 text-theme-xs font-semibold transition-colors duration-150',
+    active
+      ? 'bg-white text-gray-900 shadow-theme-xs dark:bg-gray-800 dark:text-white'
+      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200',
+  ].join(' ')
 
 const selectedField = computed(() => fields.value.find((f) => f.id === form.fieldId))
 
@@ -207,7 +237,7 @@ const inputClass =
 </script>
 
 <template>
-  <Modal :fullScreenBackdrop="true" @close="emit('close')">
+  <Modal :fullScreenBackdrop="true" @close="close">
     <template #body>
       <div
         class="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
@@ -215,19 +245,45 @@ const inputClass =
         <button
           class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"
           aria-label="Закрыть"
-          @click="emit('close')"
+          @click="close"
         >
           <X class="h-5 w-5" />
         </button>
 
         <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
-          Редактировать бронь
+          {{ mode === 'refund' ? 'Возврат по брони' : 'Редактировать бронь' }}
         </h3>
         <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
           {{ booking.ref }}<template v-if="isContract"> · бронь по договору</template>
         </p>
 
-        <form class="space-y-4" @submit.prevent="save">
+        <div
+          v-if="canRefund"
+          role="tablist"
+          aria-label="Режим окна брони"
+          class="mb-5 flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-white/[0.04]"
+        >
+          <button
+            v-for="m in MODES"
+            :key="m.value"
+            type="button"
+            role="tab"
+            :aria-selected="mode === m.value"
+            :class="modeClass(mode === m.value)"
+            @click="mode = m.value"
+          >
+            {{ m.label }}
+          </button>
+        </div>
+
+        <BookingRefundPanel
+          v-if="mode === 'refund'"
+          :booking="booking"
+          @close="close"
+          @refunded="refundedHere = true"
+        />
+
+        <form v-else class="space-y-4" @submit.prevent="save">
           <!-- Customer name -->
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -442,7 +498,7 @@ const inputClass =
             <button
               type="button"
               class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-              @click="emit('close')"
+              @click="close"
             >
               Отмена
             </button>

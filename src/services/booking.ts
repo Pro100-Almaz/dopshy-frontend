@@ -9,6 +9,7 @@ import type {
   BookingApi,
   BookedSlotApi,
   BookingDetailApi,
+  BookingRefundSummaryApi,
   BookingState,
   BookingPeriod,
   FieldApi,
@@ -972,6 +973,8 @@ function mapBooking(api: BookingApi): Booking {
     consentAt: api.consent_at || undefined,
     consentChannel: api.consent_channel || undefined,
     paymentMethod: api.payment_method || undefined,
+    firstPaidAt: api.first_paid_at || undefined,
+    refundedTotal: toMoney(api.refunded_total),
   }
 }
 
@@ -1058,6 +1061,37 @@ export function updateBooking(
     method: 'PATCH',
     body: JSON.stringify(body),
   })
+}
+
+// ── Возвраты: /api/bookings/{id}/refunds ───────────────────────────
+// Возврат через ApiPay на Kaspi, с которого была оплата. Наличные, Kaspi QR и
+// аванс, внесённый вручную, через систему не возвращаются.
+
+/** Окно, в которое клиент вправе вернуть оплату (часы от первой оплаты). */
+export const REFUND_WINDOW_HOURS = 48
+
+/** История возвратов, остаток к возврату и признак 48-часового окна. */
+export async function getBookingRefunds(id: string | number): Promise<BookingRefundSummaryApi> {
+  const res = await apiFetch<{ ok: boolean; data: BookingRefundSummaryApi }>(
+    `/bookings/${id}/refunds`,
+  )
+  return res.data
+}
+
+/**
+ * Вернуть деньги через ApiPay. `request_key` — один на нажатие кнопки: повтор
+ * запроса с тем же ключом вернёт тот же возврат, а не создаст второй. Больше
+ * доступного бэкенд не примет (409); отказ ApiPay — 409 REFUND_FAILED.
+ */
+export async function createBookingRefund(
+  id: string | number,
+  payload: { amount: number; comment?: string; request_key: string },
+): Promise<BookingRefundSummaryApi> {
+  const res = await apiFetch<{ ok: boolean; data: BookingRefundSummaryApi }>(
+    `/bookings/${id}/refunds`,
+    { method: 'POST', body: JSON.stringify(payload) },
+  )
+  return res.data
 }
 
 function startOfWeek(d: Date): Date {
