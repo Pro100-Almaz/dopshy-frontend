@@ -99,12 +99,12 @@ function onBackdropClick(e: MouseEvent) {
 <template>
   <dialog
     ref="dialog"
-    class="week-dialog m-auto w-[min(64rem,94vw)] max-h-[90vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
+    class="week-dialog m-auto w-[min(64rem,94vw)] max-h-[calc(100dvh-1.5rem)] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
     aria-labelledby="week-title"
     @close="onDialogClose"
     @click="onBackdropClick"
   >
-    <div class="flex max-h-[90vh] flex-col">
+    <div class="flex max-h-[calc(100dvh-1.5rem)] flex-col">
       <!-- Header -->
       <div
         class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4"

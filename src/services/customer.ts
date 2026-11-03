@@ -17,10 +17,15 @@ function phonePath(phone: string): string {
   return encodeURIComponent(phone)
 }
 
+export type ContactFilter = 'all' | 'texted' | 'booking' | 'paused'
+
 export interface ContactsQuery {
   bot_type?: BotType
   page?: number
   page_size?: number
+  /** Имя или телефон — фильтрует весь список на бэкенде, до пагинации. */
+  search?: string
+  filter?: ContactFilter
 }
 
 function buildQs(params: Record<string, string | number | undefined>): string {
@@ -36,7 +41,15 @@ function buildQs(params: Record<string, string | number | undefined>): string {
 export function listContacts(): Promise<Contact[]>
 export function listContacts(q: ContactsQuery): Promise<ContactPage>
 export function listContacts(q?: ContactsQuery): Promise<Contact[] | ContactPage> {
-  const qs = q ? buildQs({ bot_type: q.bot_type, page: q.page, page_size: q.page_size }) : ''
+  const qs = q
+    ? buildQs({
+        bot_type: q.bot_type,
+        page: q.page,
+        page_size: q.page_size,
+        search: q.search?.trim() || undefined,
+        filter: q.filter && q.filter !== 'all' ? q.filter : undefined,
+      })
+    : ''
   return apiFetch<Contact[] | ContactPage>(`/bot-status/contacts${qs}`).then((response) => {
     if (!q || !Array.isArray(response)) return response
     // Бэкенд пока не умеет постранично отдавать контакты — присылает весь список

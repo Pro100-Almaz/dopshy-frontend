@@ -14,11 +14,15 @@ import {
   Ban,
   UserPlus,
   Trash2,
+  X,
 } from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import BotToggle from '@/components/customers/BotToggle.vue'
+import Modal from '@/components/ui/Modal.vue'
+import ModalBackButton from '@/components/ui/ModalBackButton.vue'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 
 import type { BotStatus, Contact } from '@/types'
 import {
@@ -75,20 +79,55 @@ function openActions(contact: Contact) {
   customerEdit.phone = contact.phone
 }
 
+// ── Телефон: в строке только контакт, остальное и действия — в модалке деталей ──
+// «Редактировать» открывается поверх деталей: «Назад» возвращает к ним, X закрывает всё.
+const isMobile = useMediaQuery('(max-width: 767px)')
+const detailContact = ref<Contact | null>(null)
+const mobileEditOpen = ref(false)
+
+function openDetails(contact: Contact) {
+  if (isMobile.value) detailContact.value = contact
+}
+function openMobileEdit() {
+  const contact = detailContact.value
+  if (!contact) return
+  customerEdit.name = contact.name ?? ''
+  customerEdit.phone = contact.phone
+  mobileEditOpen.value = true
+}
+function closeAll() {
+  mobileEditOpen.value = false
+  detailContact.value = null
+}
+watch(isMobile, (mobile) => {
+  if (!mobile) closeAll()
+})
+
+// Контакт, над которым сейчас действие: из меню «⋯» (десктоп) или из деталей (телефон).
+function managedContact(): Contact | null {
+  return actionContact.value ?? detailContact.value
+}
+// После действия: меню «⋯» закрываем, детали на телефоне оставляем — они уже обновлены.
+function finishAction() {
+  actionContact.value = null
+  mobileEditOpen.value = false
+}
+
 async function saveCustomer() {
-  if (!actionContact.value) return
+  const contact = managedContact()
+  if (!contact) return
   customerSaving.value = true
   try {
-    const customer = await findCustomerByPhone(actionContact.value.phone)
+    const customer = await findCustomerByPhone(contact.phone)
     if (!customer) throw new Error('Клиент не найден')
     const updated = await updateCustomer(customer.id, {
       name: customerEdit.name || null,
       phone: customerEdit.phone,
     })
-    actionContact.value.name = updated.name
-    actionContact.value.phone = updated.phone
+    contact.name = updated.name
+    contact.phone = updated.phone
     editingCustomer.value = false
-    actionContact.value = null
+    finishAction()
   } catch (e) {
     onError(e instanceof Error ? e.message : 'Не удалось сохранить клиента')
   } finally {
@@ -97,7 +136,7 @@ async function saveCustomer() {
 }
 
 async function registerCustomer() {
-  const contact = actionContact.value
+  const contact = managedContact()
   if (!contact || isRegistered(contact)) return
   registeringCustomer.value = true
   try {
@@ -110,7 +149,7 @@ async function registerCustomer() {
     contact.phone = created.phone
     contact.is_registered = true
     contact.is_regular_customer = created.is_regular_customer
-    actionContact.value = null
+    finishAction()
     onSuccess('Клиент зарегистрирован')
   } catch (e) {
     if (e instanceof ApiError && e.code === 'CONFLICT') {
@@ -120,7 +159,7 @@ async function registerCustomer() {
         contact.phone = existing.phone
         contact.is_registered = true
         contact.is_regular_customer = existing.is_regular_customer
-        actionContact.value = null
+        finishAction()
         onSuccess('Клиент уже был зарегистрирован')
         return
       }
@@ -132,7 +171,7 @@ async function registerCustomer() {
 }
 
 async function removeCustomer() {
-  const contact = actionContact.value
+  const contact = managedContact()
   if (!contact || !canDeleteCustomer.value || deletingCustomer.value) return
   if (!window.confirm(`Удалить клиента ${displayName(contact)}?`)) return
   deletingCustomer.value = true
@@ -142,7 +181,7 @@ async function removeCustomer() {
     await deleteCustomer(customer.id)
     contact.is_registered = false
     contact.is_regular_customer = false
-    actionContact.value = null
+    finishAction()
     onSuccess('Клиент удалён')
   } catch (e) {
     onError(e instanceof Error ? e.message : 'Не удалось удалить клиента')
@@ -183,18 +222,14 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'paused', label: 'Бот на паузе' },
 ]
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase()
-  const digits = q.replace(/\D/g, '')
-  return contacts.value.filter((c) => {
-    if (filter.value === 'texted' && !c.texted) return false
-    if (filter.value === 'booking' && !c.has_booking) return false
-    if (filter.value === 'paused' && !c.paused) return false
-    if (!q) return true
-    const nameHit = (c.name ?? '').toLowerCase().includes(q)
-    const phoneHit = digits.length > 0 && c.phone.includes(digits)
-    return nameHit || phoneHit
-  })
+// Поиск и фильтр применяются на бэкенде ко всей базе (до пагинации).
+// Ввод в поиск отправляем с задержкой, чтобы не дёргать API на каждую букву.
+const SEARCH_DEBOUNCE_MS = 300
+const searchTerm = ref('')
+let searchTimer: number | undefined
+watch(query, (q) => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => (searchTerm.value = q.trim()), SEARCH_DEBOUNCE_MS)
 })
 
 const pageItems = computed<(number | '…')[]>(() => {
@@ -249,6 +284,8 @@ function onSuccess(message: string) {
 }
 
 let silentInFlight = false
+// Номер последнего запроса: ответ на устаревший (поиск уже изменился) отбрасываем.
+let requestSeq = 0
 
 // Дешёвое структурное сравнение — список детерминирован (бэкенд отдаёт его
 // отсортированным). Присваиваем ref только при реальном изменении.
@@ -263,29 +300,39 @@ async function load(silent = false) {
   } else {
     loading.value = true
   }
+  const seq = ++requestSeq
   try {
     const res = await listContacts({
       bot_type: props.botType,
       page: page.value,
       page_size: PAGE_SIZE,
+      search: searchTerm.value,
+      filter: filter.value,
     })
+    if (seq !== requestSeq) return
     const next = res.data
     // Фоновое обновление применяем только при изменении — без мигания списка.
-    if (!silent || changed(contacts.value, next)) contacts.value = next
+    if (!silent || changed(contacts.value, next)) {
+      contacts.value = next
+      const open = detailContact.value
+      if (open) detailContact.value = next.find((c) => c.phone === open.phone) ?? open
+    }
     total.value = res.total
     totalPages.value = res.total_pages || 1
     error.value = ''
   } catch (e) {
     // Фоновое обновление не должно затирать уже показанный список ошибкой.
-    if (!silent) error.value = e instanceof Error ? e.message : 'Не удалось загрузить контакты'
+    if (!silent && seq === requestSeq)
+      error.value = e instanceof Error ? e.message : 'Не удалось загрузить контакты'
   } finally {
     if (silent) silentInFlight = false
-    else loading.value = false
+    else if (seq === requestSeq) loading.value = false
   }
 }
 
-watch([query, filter], () => {
-  page.value = 1
+watch([searchTerm, filter], () => {
+  if (page.value === 1) load()
+  else page.value = 1 // смена страницы сама вызовет load()
 })
 
 watch(page, () => load())
@@ -388,6 +435,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (pollId !== undefined) window.clearInterval(pollId)
+  window.clearTimeout(searchTimer)
   document.removeEventListener('visibilitychange', onVisibility)
 })
 </script>
@@ -460,6 +508,31 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <!-- Телефон: глобальный выключатель бота (на десктопе он в заголовке колонки «Бот») -->
+        <div
+          v-if="canManageGlobalBot"
+          class="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-3 dark:border-gray-800 md:hidden"
+        >
+          <span class="text-theme-sm text-gray-700 dark:text-gray-300">Бот для всех клиентов</span>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="on"
+            :aria-label="`Бот для всех клиентов: ${label}`"
+            :disabled="pending"
+            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-3 focus:ring-brand-500/20 disabled:opacity-60"
+            :class="on ? 'bg-success-500' : 'bg-gray-300 dark:bg-gray-700'"
+            @click="toggle"
+          >
+            <span
+              class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-theme-xs transition-transform"
+              :class="on ? 'translate-x-5' : 'translate-x-0.5'"
+            >
+              <Loader2 v-if="pending" class="h-3 w-3 animate-spin text-gray-500" />
+            </span>
+          </button>
+        </div>
+
         <!-- Loading -->
         <div v-if="loading" class="flex min-h-[240px] items-center justify-center">
           <Loader2 class="h-7 w-7 animate-spin text-success-600" aria-hidden="true" />
@@ -483,37 +556,37 @@ onUnmounted(() => {
 
         <!-- Empty -->
         <div
-          v-else-if="!filtered.length"
+          v-else-if="!contacts.length"
           class="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 text-center"
         >
           <Users class="h-7 w-7 text-gray-400" aria-hidden="true" />
           <p class="text-gray-600 dark:text-gray-400">
-            {{ contacts.length ? 'Контакты не найдены.' : 'Клиентов пока нет.' }}
+            {{ searchTerm || filter !== 'all' ? 'Контакты не найдены.' : 'Клиентов пока нет.' }}
           </p>
         </div>
 
         <!-- Rows -->
         <div v-else class="max-w-full overflow-x-auto custom-scrollbar">
-          <table class="min-w-full">
+          <table class="w-full table-fixed md:min-w-full md:table-auto">
             <thead>
               <tr class="border-b border-gray-200 dark:border-gray-700">
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="px-4 py-3 text-left sm:px-6">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контакт</p>
                 </th>
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="w-32 px-3 py-3 text-left sm:px-6 md:w-auto">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                     Регистрация
                   </p>
                 </th>
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Метки</p>
                 </th>
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                     Активность
                   </p>
                 </th>
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                       Бот
@@ -539,56 +612,63 @@ onUnmounted(() => {
                     </button>
                   </div>
                 </th>
-                <th class="px-5 py-3 text-left sm:px-6">
+                <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                   <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                     Постоянный клиент
                   </p>
                 </th>
-                <th class="w-16 px-5 py-3"><span class="sr-only">Действия</span></th>
+                <th class="hidden w-16 px-5 py-3 md:table-cell">
+                  <span class="sr-only">Действия</span>
+                </th>
+                <th class="w-10 md:hidden"><span class="sr-only">Подробнее</span></th>
               </tr>
             </thead>
 
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <tr
-                v-for="c in filtered"
+                v-for="c in contacts"
                 :key="c.phone"
-                class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02] max-md:cursor-pointer max-md:active:bg-gray-100 dark:max-md:active:bg-white/5"
+                :tabindex="isMobile ? 0 : undefined"
+                :aria-label="isMobile ? `${displayName(c)} — подробнее` : undefined"
+                @click="openDetails(c)"
+                @keydown.enter="openDetails(c)"
               >
                 <!-- Contact -->
-                <td class="px-5 py-4 sm:px-6">
-                  <div class="flex items-center gap-3">
+                <td class="px-4 py-4 sm:px-6">
+                  <div class="flex min-w-0 items-center gap-3">
                     <div
-                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
+                      class="flex h-9 w-9 shrink-0 md:h-10 md:w-10 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
                     >
                       {{ initials(c) }}
                     </div>
-                    <div>
+                    <div class="min-w-0">
                       <span
-                        class="block font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                        class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
                       >
                         {{ displayName(c) }}
                       </span>
-                      <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
+                      <span class="block truncate text-gray-500 text-theme-xs dark:text-gray-400">
                         {{ c.phone }}
                       </span>
                     </div>
                   </div>
                 </td>
 
-                <td class="px-5 py-4 sm:px-6">
+                <td class="px-3 py-4 sm:px-6">
                   <span
-                    class="rounded-full px-2 py-1 text-xs font-medium"
+                    class="inline-block rounded-full px-2 py-1 text-center text-xs font-medium leading-tight"
                     :class="
                       isRegistered(c)
-                        ? 'bg-success-50 text-success-700'
-                        : 'bg-gray-100 text-gray-500'
+                        ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
+                        : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
                     "
                     >{{ isRegistered(c) ? 'Зарегистрирован' : 'Не зарегистрирован' }}</span
                   >
                 </td>
 
                 <!-- Badges -->
-                <td class="px-5 py-4 sm:px-6">
+                <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                   <div class="flex flex-wrap items-center gap-2">
                     <span
                       v-if="c.texted"
@@ -609,14 +689,14 @@ onUnmounted(() => {
                 </td>
 
                 <!-- Last activity -->
-                <td class="px-5 py-4 sm:px-6">
+                <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                   <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
                     {{ relativeTime(c.last_activity) }}
                   </span>
                 </td>
 
                 <!-- Bot toggle -->
-                <td class="px-5 py-4 sm:px-6">
+                <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                   <BotToggle
                     :phone="c.phone"
                     :paused="c.paused"
@@ -625,7 +705,7 @@ onUnmounted(() => {
                     @error="onError"
                   />
                 </td>
-                <td class="px-5 py-4 sm:px-6">
+                <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                   <button
                     v-if="isRegistered(c)"
                     type="button"
@@ -642,13 +722,16 @@ onUnmounted(() => {
                     ></span></button
                   ><span v-else class="text-xs text-gray-400">—</span>
                 </td>
-                <td class="px-5 py-4 sm:px-6">
+                <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                   <button
                     class="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
                     @click="openActions(c)"
                   >
                     <MoreVertical class="h-4 w-4" />
                   </button>
+                </td>
+                <td class="py-4 pr-3 text-right md:hidden">
+                  <ChevronRight class="ml-auto h-5 w-5 text-gray-400" aria-hidden="true" />
                 </td>
               </tr>
             </tbody>
@@ -717,92 +800,329 @@ onUnmounted(() => {
       {{ toast }}
     </div>
 
-    <div
-      v-if="actionContact"
-      class="fixed inset-0 z-999999 flex items-end justify-center bg-gray-900/45 p-4 sm:items-center"
-      @click.self="actionContact = null"
-    >
-      <div
-        class="sticky bottom-4 w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-900"
-      >
-        <div class="mb-4">
-          <h3 class="font-semibold text-gray-900 dark:text-white">
-            {{ displayName(actionContact) }}
-          </h3>
-          <p class="text-xs text-gray-500">Управление данными клиента</p>
-        </div>
-        <form v-if="editingCustomer" class="space-y-3" @submit.prevent="saveCustomer">
-          <label class="block text-sm"
-            >Имя<input
-              v-model="customerEdit.name"
-              class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
-          /></label>
-          <label class="block text-sm"
-            >Телефон<input
-              v-model="customerEdit.phone"
-              required
-              pattern="7[0-9]+"
-              class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
-          /></label>
-          <div class="flex gap-2">
+    <!-- Телефон: детали клиента (в строке только контакт и регистрация) -->
+    <Modal v-if="detailContact" :fullScreenBackdrop="true" @close="closeAll">
+      <template #body>
+        <div
+          class="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="displayName(detailContact)"
+        >
+          <div
+            class="shrink-0 border-b border-gray-100 px-5 pb-3 pt-5 dark:border-gray-800 flex items-start justify-between gap-3"
+          >
+            <div class="flex min-w-0 items-center gap-3">
+              <div
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-sm font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
+              >
+                {{ initials(detailContact) }}
+              </div>
+              <div class="min-w-0">
+                <h2 class="truncate text-lg font-bold text-gray-900 dark:text-white">
+                  {{ displayName(detailContact) }}
+                </h2>
+                <a
+                  :href="`tel:+${detailContact.phone}`"
+                  class="text-theme-sm text-success-600 dark:text-success-500"
+                >
+                  {{ detailContact.phone }}
+                </a>
+              </div>
+            </div>
             <button
               type="button"
-              class="flex-1 rounded-lg border py-2 text-sm"
-              @click="editingCustomer = false"
+              class="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/5"
+              aria-label="Закрыть"
+              @click="closeAll"
             >
-              Отмена</button
-            ><button
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+            <dl class="mt-4 divide-y divide-gray-100 text-theme-sm dark:divide-gray-800">
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Регистрация</dt>
+                <dd>
+                  <span
+                    class="rounded-full px-2 py-1 text-xs font-medium"
+                    :class="
+                      isRegistered(detailContact)
+                        ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
+                        : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
+                    "
+                  >
+                    {{ isRegistered(detailContact) ? 'Зарегистрирован' : 'Не зарегистрирован' }}
+                  </span>
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Метки</dt>
+                <dd class="flex flex-wrap justify-end gap-2">
+                  <span
+                    v-if="detailContact.texted"
+                    class="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-theme-xs font-medium text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+                  >
+                    <MessageCircle class="h-3 w-3" /> WhatsApp
+                  </span>
+                  <span
+                    v-if="detailContact.has_booking"
+                    class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-theme-xs font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                  >
+                    <CalendarCheck class="h-3 w-3" /> Бронь
+                  </span>
+                  <span
+                    v-if="!detailContact.texted && !detailContact.has_booking"
+                    class="text-gray-400"
+                    >—</span
+                  >
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Активность</dt>
+                <dd class="text-gray-800 dark:text-white/90">
+                  {{ relativeTime(detailContact.last_activity) }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Бот</dt>
+                <dd>
+                  <BotToggle
+                    :phone="detailContact.phone"
+                    :paused="detailContact.paused"
+                    :paused-reason="detailContact.paused_reason"
+                    @change="(st) => onChange(detailContact!, st)"
+                    @error="onError"
+                  />
+                </dd>
+              </div>
+              <div
+                v-if="isRegistered(detailContact)"
+                class="flex items-center justify-between gap-4 py-2.5"
+              >
+                <dt class="text-gray-500 dark:text-gray-400">Постоянный клиент</dt>
+                <dd>
+                  <button
+                    type="button"
+                    role="switch"
+                    :aria-checked="isRegular(detailContact)"
+                    aria-label="Постоянный клиент"
+                    :disabled="!canManageRegular || regularSaving === detailContact.phone"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="
+                      isRegular(detailContact) ? 'bg-success-500' : 'bg-gray-300 dark:bg-gray-700'
+                    "
+                    @click="toggleRegular(detailContact)"
+                  >
+                    <span
+                      class="h-5 w-5 rounded-full bg-white shadow transition-transform"
+                      :class="isRegular(detailContact) ? 'translate-x-5' : 'translate-x-0.5'"
+                    ></span>
+                  </button>
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="shrink-0 border-t border-gray-100 px-5 py-4 dark:border-gray-800 grid gap-2">
+            <button
+              v-if="!isRegistered(detailContact)"
+              type="button"
+              :disabled="registeringCustomer"
+              class="flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold border-success-200 bg-success-50 text-success-700 hover:bg-success-100 disabled:opacity-50 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
+              @click="registerCustomer"
+            >
+              <Loader2 v-if="registeringCustomer" class="h-4 w-4 animate-spin" />
+              <UserPlus v-else class="h-4 w-4" />Зарегистрировать клиента
+            </button>
+            <button
+              v-else
+              type="button"
+              class="flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+              @click="openMobileEdit"
+            >
+              <UserRoundPen class="h-4 w-4" />Редактировать данные
+            </button>
+            <button
+              type="button"
+              disabled
+              class="flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold border-gray-200 text-gray-400 dark:border-gray-700"
+            >
+              <Ban class="h-4 w-4" />Добавить в чёрный список
+            </button>
+            <button
+              v-if="canDeleteCustomer && isRegistered(detailContact)"
+              type="button"
+              :disabled="deletingCustomer"
+              class="flex h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold border-error-200 text-error-700 hover:bg-error-50 disabled:opacity-50 dark:border-error-500/30 dark:text-error-500 dark:hover:bg-error-500/10"
+              @click="removeCustomer"
+            >
+              <Loader2 v-if="deletingCustomer" class="h-4 w-4 animate-spin" />
+              <Trash2 v-else class="h-4 w-4" />Удалить клиента
+            </button>
+          </div>
+        </div>
+      </template>
+    </Modal>
+
+    <!-- Телефон: редактирование поверх деталей -->
+    <Modal
+      v-if="mobileEditOpen && detailContact"
+      :fullScreenBackdrop="true"
+      @close="mobileEditOpen = false"
+    >
+      <template #body>
+        <form
+          class="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900"
+          @submit.prevent="saveCustomer"
+        >
+          <div
+            class="shrink-0 border-b border-gray-100 px-5 pb-3 pt-5 dark:border-gray-800 flex items-center justify-between gap-3"
+          >
+            <div class="flex min-w-0 items-center gap-1">
+              <ModalBackButton :disabled="customerSaving" @back="mobileEditOpen = false" />
+              <h2 class="truncate text-lg font-bold text-gray-900 dark:text-white">
+                Редактировать данные
+              </h2>
+            </div>
+            <button
+              type="button"
+              class="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/5"
+              aria-label="Закрыть"
               :disabled="customerSaving"
-              class="flex-1 rounded-lg bg-success-600 py-2 text-sm font-medium text-white disabled:opacity-50"
+              @click="closeAll"
             >
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+            <div class="mt-4 space-y-3">
+              <label class="block text-sm text-gray-700 dark:text-gray-300"
+                >Имя<input
+                  v-model="customerEdit.name"
+                  class="mt-1 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              /></label>
+              <label class="block text-sm text-gray-700 dark:text-gray-300"
+                >Телефон<input
+                  v-model="customerEdit.phone"
+                  required
+                  type="tel"
+                  inputmode="numeric"
+                  pattern="7[0-9]+"
+                  class="mt-1 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              /></label>
+            </div>
+          </div>
+          <div
+            class="shrink-0 border-t border-gray-100 px-5 py-4 dark:border-gray-800 grid grid-cols-2 gap-2"
+          >
+            <button
+              type="button"
+              class="h-11 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+              :disabled="customerSaving"
+              @click="mobileEditOpen = false"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              :disabled="customerSaving"
+              class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-success-600 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50"
+            >
+              <Loader2 v-if="customerSaving" class="h-4 w-4 animate-spin" />
               Сохранить
             </button>
           </div>
         </form>
-        <button
-          v-if="!editingCustomer && !isRegistered(actionContact)"
-          type="button"
-          :disabled="registeringCustomer"
-          class="mb-2 flex w-full items-center gap-3 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm font-medium text-success-700 hover:bg-success-100 disabled:opacity-50"
-          @click="registerCustomer"
+      </template>
+    </Modal>
+
+    <Teleport to="body">
+      <div v-if="actionContact" class="fixed inset-0 z-999999 overflow-hidden bg-gray-900/45">
+        <div
+          class="app-modal flex h-full items-end justify-center p-4 sm:items-center"
+          @click.self="actionContact = null"
         >
-          <Loader2 v-if="registeringCustomer" class="h-4 w-4 animate-spin" />
-          <UserPlus v-else class="h-4 w-4" />Зарегистрировать клиента
-        </button>
-        <button
-          v-if="!editingCustomer"
-          :disabled="!isRegistered(actionContact)"
-          class="mb-2 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
-          :class="!isRegistered(actionContact) ? 'cursor-not-allowed opacity-50' : ''"
-          @click="editingCustomer = true"
-        >
-          <UserRoundPen class="h-4 w-4" />Редактировать данные
-        </button>
-        <button
-          v-if="!editingCustomer"
-          disabled
-          class="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-400"
-        >
-          <Ban class="h-4 w-4" />Добавить в чёрный список
-        </button>
-        <button
-          v-if="!editingCustomer && canDeleteCustomer && isRegistered(actionContact)"
-          type="button"
-          :disabled="deletingCustomer"
-          class="mt-2 flex w-full items-center gap-3 rounded-lg border border-error-200 px-4 py-3 text-sm text-error-700 hover:bg-error-50 disabled:opacity-50"
-          @click="removeCustomer"
-        >
-          <Loader2 v-if="deletingCustomer" class="h-4 w-4 animate-spin" />
-          <Trash2 v-else class="h-4 w-4" />Удалить клиента
-        </button>
-        <button
-          v-if="!editingCustomer"
-          class="mt-4 w-full rounded-lg bg-gray-100 py-2.5 text-sm font-medium"
-          @click="actionContact = null"
-        >
-          Закрыть
-        </button>
+          <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-900">
+            <div class="mb-4">
+              <h3 class="font-semibold text-gray-900 dark:text-white">
+                {{ displayName(actionContact) }}
+              </h3>
+              <p class="text-xs text-gray-500">Управление данными клиента</p>
+            </div>
+            <form v-if="editingCustomer" class="space-y-3" @submit.prevent="saveCustomer">
+              <label class="block text-sm"
+                >Имя<input
+                  v-model="customerEdit.name"
+                  class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
+              /></label>
+              <label class="block text-sm"
+                >Телефон<input
+                  v-model="customerEdit.phone"
+                  required
+                  pattern="7[0-9]+"
+                  class="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3"
+              /></label>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex-1 rounded-lg border py-2 text-sm"
+                  @click="editingCustomer = false"
+                >
+                  Отмена</button
+                ><button
+                  :disabled="customerSaving"
+                  class="flex-1 rounded-lg bg-success-600 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </form>
+            <button
+              v-if="!editingCustomer && !isRegistered(actionContact)"
+              type="button"
+              :disabled="registeringCustomer"
+              class="mb-2 flex w-full items-center gap-3 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm font-medium text-success-700 hover:bg-success-100 disabled:opacity-50"
+              @click="registerCustomer"
+            >
+              <Loader2 v-if="registeringCustomer" class="h-4 w-4 animate-spin" />
+              <UserPlus v-else class="h-4 w-4" />Зарегистрировать клиента
+            </button>
+            <button
+              v-if="!editingCustomer"
+              :disabled="!isRegistered(actionContact)"
+              class="mb-2 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+              :class="!isRegistered(actionContact) ? 'cursor-not-allowed opacity-50' : ''"
+              @click="editingCustomer = true"
+            >
+              <UserRoundPen class="h-4 w-4" />Редактировать данные
+            </button>
+            <button
+              v-if="!editingCustomer"
+              disabled
+              class="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-sm text-gray-400"
+            >
+              <Ban class="h-4 w-4" />Добавить в чёрный список
+            </button>
+            <button
+              v-if="!editingCustomer && canDeleteCustomer && isRegistered(actionContact)"
+              type="button"
+              :disabled="deletingCustomer"
+              class="mt-2 flex w-full items-center gap-3 rounded-lg border border-error-200 px-4 py-3 text-sm text-error-700 hover:bg-error-50 disabled:opacity-50"
+              @click="removeCustomer"
+            >
+              <Loader2 v-if="deletingCustomer" class="h-4 w-4 animate-spin" />
+              <Trash2 v-else class="h-4 w-4" />Удалить клиента
+            </button>
+            <button
+              v-if="!editingCustomer"
+              class="mt-4 w-full rounded-lg bg-gray-100 py-2.5 text-sm font-medium"
+              @click="actionContact = null"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </AdminLayout>
 </template>

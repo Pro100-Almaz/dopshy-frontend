@@ -1036,7 +1036,7 @@ function groupColorClass(group: GroupView): string {
     <Modal v-if="isDetailOpen && selectedGroup" :fullScreenBackdrop="true" @close="closeGroupDetail">
       <template #body>
         <div
-          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900 sm:my-8"
+          class="relative z-10 max-h-full w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900"
         >
           <button
             type="button"
@@ -1201,7 +1201,7 @@ function groupColorClass(group: GroupView): string {
     <Modal v-if="groupForm.open" :fullScreenBackdrop="true" @close="closeGroupForm">
       <template #body>
         <form
-          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:my-8 sm:p-6"
+          class="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
           @submit.prevent="saveGroup"
         >
           <div class="mb-5 flex items-start justify-between gap-3">
@@ -1456,7 +1456,7 @@ function groupColorClass(group: GroupView): string {
     <Modal v-if="deleteTarget" :fullScreenBackdrop="true" @close="closeDeleteConfirm">
       <template #body>
         <div
-          class="relative z-10 mx-4 my-8 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
+          class="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
         >
           <div class="flex items-start gap-3">
             <div
@@ -1510,7 +1510,7 @@ function groupColorClass(group: GroupView): string {
     <Modal v-if="assignModal.open && selectedGroup" :fullScreenBackdrop="true" @close="closeAssign">
       <template #body>
         <div
-          class="relative z-10 mx-4 my-8 w-full max-w-2xl rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
+          class="relative z-10 w-full max-w-2xl rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
         >
           <div class="mb-5 flex items-start justify-between gap-3">
             <div>

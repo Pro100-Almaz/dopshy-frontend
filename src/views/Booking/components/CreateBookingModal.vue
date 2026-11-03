@@ -311,26 +311,30 @@ watch(
 <template>
   <dialog
     ref="dialog"
-    class="booking-dialog m-auto w-[min(38rem,94vw)] max-h-[92vh] rounded-2xl bg-white p-0 text-gray-800 shadow-xl"
+    class="booking-dialog m-auto w-[min(38rem,94vw)] max-h-[calc(100dvh-1.5rem)] rounded-2xl bg-white p-0 text-gray-800 shadow-xl"
     @close="props.open && emit('close')"
   >
-    <div class="flex max-h-[92vh] flex-col">
-      <header class="flex items-center justify-between border-b px-6 py-4">
+    <div class="flex max-h-[calc(100dvh-1.5rem)] flex-col">
+      <header class="flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 sm:py-4">
         <div>
           <h2 class="text-lg font-bold">
             {{ step === 1 ? 'Клиент' : step === 2 ? 'Детали брони' : 'Готово' }}
           </h2>
           <p class="text-sm text-gray-500">{{ store.field?.name }}</p>
         </div>
-        <button class="rounded-full p-2 hover:bg-gray-100" @click="emit('close')">
+        <button
+          class="-mr-1 shrink-0 rounded-full p-2.5 hover:bg-gray-100"
+          aria-label="Закрыть"
+          @click="emit('close')"
+        >
           <X class="h-5 w-5" />
         </button>
       </header>
-      <div v-if="step < 3" class="flex gap-2 px-6 pt-4">
+      <div v-if="step < 3" class="flex gap-2 px-4 pt-4 sm:px-6">
         <i class="h-1 flex-1 rounded bg-success-600"></i
         ><i class="h-1 flex-1 rounded" :class="step === 2 ? 'bg-success-600' : 'bg-gray-200'"></i>
       </div>
-      <main class="flex-1 overflow-y-auto p-6">
+      <main class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <section v-if="step === 1" class="space-y-5">
           <div>
             <label class="mb-1 block text-sm font-medium">Номер телефона</label>
@@ -511,7 +515,7 @@ watch(
           </div>
         </section>
       </main>
-      <footer class="flex justify-between border-t px-6 py-4">
+      <footer class="flex items-center justify-between gap-3 border-t px-4 py-3 sm:px-6 sm:py-4">
         <button v-if="step === 2" class="inline-flex items-center gap-2 text-sm" @click="step = 1">
           <ArrowLeft class="h-4 w-4" />Назад</button
         ><span v-else></span
@@ -541,7 +545,7 @@ watch(
   </dialog>
   <dialog
     ref="customerDialog"
-    class="nested-dialog m-auto w-[min(27rem,92vw)] rounded-2xl bg-white p-6 shadow-2xl"
+    class="nested-dialog m-auto w-[min(27rem,92vw)] max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
     @close="customerModal = false"
     @cancel.prevent="customerModal = false"
   >
@@ -572,7 +576,7 @@ watch(
   </dialog>
   <dialog
     ref="discountDialog"
-    class="nested-dialog m-auto w-[min(28rem,92vw)] rounded-2xl bg-white p-6 shadow-2xl"
+    class="nested-dialog m-auto w-[min(28rem,92vw)] max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
     @close="discountModal = false"
     @cancel.prevent="discountModal = false"
   >

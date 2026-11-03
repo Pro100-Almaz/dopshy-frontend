@@ -163,7 +163,7 @@ const remaining = computed(() => total.value - paidTotal.value)
   <Modal :fullScreenBackdrop="true" @close="$emit('close')">
     <template #body>
       <div
-        class="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900 custom-scrollbar"
+        class="relative max-h-full w-full max-w-md overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900 custom-scrollbar"
       >
         <button
           class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"

@@ -13,7 +13,7 @@ defineEmits<{ close: [] }>()
   <Modal :fullScreenBackdrop="true" @close="$emit('close')">
     <template #body>
       <div
-        class="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+        class="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
       >
         <button
           class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"

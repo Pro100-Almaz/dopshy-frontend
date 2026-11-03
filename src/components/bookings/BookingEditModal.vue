@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { Loader2, X } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
+import ModalBackButton from '@/components/ui/ModalBackButton.vue'
 import BookingRefundPanel from '@/components/bookings/BookingRefundPanel.vue'
 import type { Booking, BookingState, Field } from '@/types'
 import {
@@ -18,8 +19,10 @@ import { discountUsageLeft, getDiscount, listDiscounts, type Discount } from '@/
 import { hasPermission } from '@/services/rbac'
 import { useAuthStore } from '@/stores/auth'
 
-const props = defineProps<{ booking: Booking }>()
-const emit = defineEmits<{ close: []; saved: [] }>()
+// stacked — открыта поверх модалки с деталями брони: есть «Назад», а «Отмена»/фон возвращают к ней.
+// X всегда закрывает всё (emit close); `back` сообщает, был ли записан возврат, чтобы перечитать список.
+const props = defineProps<{ booking: Booking; stacked?: boolean }>()
+const emit = defineEmits<{ close: []; saved: []; back: [changed: boolean] }>()
 
 const auth = useAuthStore()
 
@@ -123,7 +126,17 @@ const refundedHere = ref(false)
 
 function close() {
   if (refundedHere.value) emit('saved')
-  else emit('close')
+  emit('close')
+}
+
+function back() {
+  emit('back', refundedHere.value)
+}
+
+// Отмена и клик по фону: в стеке — шаг назад, иначе — закрыть.
+function dismiss() {
+  if (props.stacked) back()
+  else close()
 }
 
 const modeClass = (active: boolean) =>
@@ -237,281 +250,295 @@ const inputClass =
 </script>
 
 <template>
-  <Modal :fullScreenBackdrop="true" @close="close">
+  <Modal :fullScreenBackdrop="true" @close="dismiss">
     <template #body>
       <div
-        class="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+        class="relative flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
       >
-        <button
-          class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"
-          aria-label="Закрыть"
-          @click="close"
-        >
-          <X class="h-5 w-5" />
-        </button>
-
-        <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
-          {{ mode === 'refund' ? 'Возврат по брони' : 'Редактировать бронь' }}
-        </h3>
-        <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
-          {{ booking.ref }}<template v-if="isContract"> · бронь по договору</template>
-        </p>
-
-        <div
-          v-if="canRefund"
-          role="tablist"
-          aria-label="Режим окна брони"
-          class="mb-5 flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-white/[0.04]"
-        >
+        <div class="relative shrink-0 px-5 pt-5 sm:px-6 sm:pt-6">
           <button
-            v-for="m in MODES"
-            :key="m.value"
             type="button"
-            role="tab"
-            :aria-selected="mode === m.value"
-            :class="modeClass(mode === m.value)"
-            @click="mode = m.value"
+            class="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-white/90"
+            aria-label="Закрыть"
+            @click="close"
           >
-            {{ m.label }}
+            <X class="h-5 w-5" />
           </button>
-        </div>
 
-        <BookingRefundPanel
-          v-if="mode === 'refund'"
-          :booking="booking"
-          @close="close"
-          @refunded="refundedHere = true"
-        />
-
-        <form v-else class="space-y-4" @submit.prevent="save">
-          <!-- Customer name -->
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Клиент
-            </label>
-            <input v-model="form.customerName" type="text" :class="inputClass" />
+          <div class="mb-1 flex items-center gap-1 pr-8">
+            <ModalBackButton v-if="stacked" @back="back" />
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {{ mode === 'refund' ? 'Возврат по брони' : 'Редактировать бронь' }}
+            </h3>
           </div>
-
-          <!-- Field -->
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Поле
-            </label>
-            <select v-model="form.fieldId" :class="inputClass" class="appearance-none pr-11">
-              <option v-if="!fields.length" :value="form.fieldId">Поле №{{ form.fieldId }}</option>
-              <option v-for="f in fields" :key="f.id" :value="f.id">
-                {{ f.name }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Date -->
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Дата
-            </label>
-            <input v-model="form.date" type="date" :class="inputClass" />
-          </div>
-
-          <!-- Times -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Начало
-              </label>
-              <input
-                v-model="form.start"
-                type="time"
-                step="1800"
-                :class="inputClass"
-                @change="snapStart"
-              />
-            </div>
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Конец
-              </label>
-              <input
-                v-model="form.end"
-                type="time"
-                step="1800"
-                :class="inputClass"
-                @change="snapEnd"
-              />
-            </div>
-          </div>
-
-          <!-- Recalculated total: shown only while date/time/field actually differ from the original booking -->
-          <p
-            v-if="!isContract && recalculatedTotal != null"
-            class="rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
-          >
-            Новая сумма: <span class="font-semibold">{{ formatPrice(recalculatedTotal) }}</span>
-            <span class="text-brand-600/70 dark:text-brand-400/70">
-              (было {{ formatPrice(booking.total) }})
-            </span>
+          <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+            {{ booking.ref }}<template v-if="isContract"> · бронь по договору</template>
           </p>
 
-          <!-- Status -->
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Статус
-            </label>
-            <select v-model="form.status" :class="inputClass" class="appearance-none pr-11">
-              <option
-                v-if="!STATUS_OPTIONS.includes(form.status as BookingState)"
-                :value="form.status"
-              >
-                {{ stateLabel(form.status) }}
-              </option>
-              <option v-for="s in STATUS_OPTIONS" :key="s" :value="s">
-                {{ BOOKING_STATE_LABEL[s] }}
-              </option>
-            </select>
+          <div
+            v-if="canRefund"
+            role="tablist"
+            aria-label="Режим окна брони"
+            class="mb-5 flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-800 dark:bg-white/[0.04]"
+          >
+            <button
+              v-for="m in MODES"
+              :key="m.value"
+              type="button"
+              role="tab"
+              :aria-selected="mode === m.value"
+              :class="modeClass(mode === m.value)"
+              @click="mode = m.value"
+            >
+              {{ m.label }}
+            </button>
           </div>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6">
+          <BookingRefundPanel
+            v-if="mode === 'refund'"
+            class="pb-5 sm:pb-6"
+            :booking="booking"
+            @close="dismiss"
+            @refunded="refundedHere = true"
+          />
 
-          <!-- Discount: applied amount on the booking vs. the coupon (coupon amount can change later) -->
-          <div v-if="!isContract">
-            <p class="mb-1.5 text-sm font-medium text-gray-700 dark:text-gray-400">Скидка</p>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form v-else class="space-y-4" @submit.prevent="save">
+            <!-- Customer name -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Клиент
+              </label>
+              <input v-model="form.customerName" type="text" :class="inputClass" />
+            </div>
+
+            <!-- Field -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Поле
+              </label>
+              <select v-model="form.fieldId" :class="inputClass" class="appearance-none pr-11">
+                <option v-if="!fields.length" :value="form.fieldId">
+                  Поле №{{ form.fieldId }}
+                </option>
+                <option v-for="f in fields" :key="f.id" :value="f.id">
+                  {{ f.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Date -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Дата
+              </label>
+              <input v-model="form.date" type="date" :class="inputClass" />
+            </div>
+
+            <!-- Times -->
+            <div class="grid grid-cols-2 gap-4">
               <div>
-                <label
-                  for="booking-applied-discount"
-                  class="mb-1.5 block text-xs text-gray-500 dark:text-gray-400"
-                >
-                  Применено к брони
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Начало
                 </label>
                 <input
-                  id="booking-applied-discount"
-                  :value="appliedDiscountAmount ? `− ${formatPrice(appliedDiscountAmount)}` : 'Нет'"
-                  type="text"
-                  readonly
+                  v-model="form.start"
+                  type="time"
+                  step="1800"
                   :class="inputClass"
-                  class="cursor-default bg-gray-50 dark:bg-white/[0.03]"
+                  @change="snapStart"
                 />
               </div>
               <div>
-                <label
-                  for="booking-discount-coupon"
-                  class="mb-1.5 block text-xs text-gray-500 dark:text-gray-400"
-                >
-                  Купон клиента
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Конец
                 </label>
-                <select
-                  id="booking-discount-coupon"
-                  v-model="form.discountId"
+                <input
+                  v-model="form.end"
+                  type="time"
+                  step="1800"
                   :class="inputClass"
-                  class="appearance-none pr-11"
-                >
-                  <option value="">Без скидки</option>
-                  <option
-                    v-for="discount in discounts"
-                    :key="discount.id"
-                    :value="String(discount.id)"
-                  >
-                    {{ formatPrice(discount.discount_amount) }} · осталось
-                    {{ discountUsageLeft(discount) }}
-                  </option>
-                </select>
+                  @change="snapEnd"
+                />
               </div>
             </div>
-            <p v-if="couponChanged" class="mt-2 text-xs text-brand-700 dark:text-brand-300">
-              После сохранения:
-              {{
-                selectedDiscount
-                  ? `− ${formatPrice(selectedDiscount.discount_amount)}`
-                  : 'без скидки'
-              }}
-            </p>
+
+            <!-- Recalculated total: shown only while date/time/field actually differ from the original booking -->
             <p
-              v-else-if="couponAmountOutdated && selectedDiscount"
-              class="mt-2 text-xs text-warning-700 dark:text-warning-400"
+              v-if="!isContract && recalculatedTotal != null"
+              class="rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
             >
-              Сумма купона изменилась на {{ formatPrice(selectedDiscount.discount_amount) }}, но к
-              брони применено {{ formatPrice(appliedDiscountAmount) }}.
+              Новая сумма: <span class="font-semibold">{{ formatPrice(recalculatedTotal) }}</span>
+              <span class="text-brand-600/70 dark:text-brand-400/70">
+                (было {{ formatPrice(booking.total) }})
+              </span>
             </p>
-          </div>
 
-          <!-- Notes -->
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-              Заметка
-            </label>
-            <textarea
-              v-model="form.notes"
-              rows="3"
-              placeholder="Заметка к брони (необязательно)"
-              :class="inputClass"
-              class="h-auto resize-y"
-            ></textarea>
-          </div>
-
-          <!-- Payments -->
-          <div v-if="!isContract" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <!-- Status -->
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Kaspi QR
+                Статус
               </label>
-              <input
-                v-model.number="form.paidKaspiQr"
-                type="number"
-                min="0"
-                :max="MAX_PAYMENT"
-                step="1"
-                inputmode="numeric"
-                :class="inputClass"
-              />
+              <select v-model="form.status" :class="inputClass" class="appearance-none pr-11">
+                <option
+                  v-if="!STATUS_OPTIONS.includes(form.status as BookingState)"
+                  :value="form.status"
+                >
+                  {{ stateLabel(form.status) }}
+                </option>
+                <option v-for="s in STATUS_OPTIONS" :key="s" :value="s">
+                  {{ BOOKING_STATE_LABEL[s] }}
+                </option>
+              </select>
             </div>
+
+            <!-- Discount: applied amount on the booking vs. the coupon (coupon amount can change later) -->
+            <div v-if="!isContract">
+              <p class="mb-1.5 text-sm font-medium text-gray-700 dark:text-gray-400">Скидка</p>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    for="booking-applied-discount"
+                    class="mb-1.5 block text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    Применено к брони
+                  </label>
+                  <input
+                    id="booking-applied-discount"
+                    :value="
+                      appliedDiscountAmount ? `− ${formatPrice(appliedDiscountAmount)}` : 'Нет'
+                    "
+                    type="text"
+                    readonly
+                    :class="inputClass"
+                    class="cursor-default bg-gray-50 dark:bg-white/[0.03]"
+                  />
+                </div>
+                <div>
+                  <label
+                    for="booking-discount-coupon"
+                    class="mb-1.5 block text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    Купон клиента
+                  </label>
+                  <select
+                    id="booking-discount-coupon"
+                    v-model="form.discountId"
+                    :class="inputClass"
+                    class="appearance-none pr-11"
+                  >
+                    <option value="">Без скидки</option>
+                    <option
+                      v-for="discount in discounts"
+                      :key="discount.id"
+                      :value="String(discount.id)"
+                    >
+                      {{ formatPrice(discount.discount_amount) }} · осталось
+                      {{ discountUsageLeft(discount) }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <p v-if="couponChanged" class="mt-2 text-xs text-brand-700 dark:text-brand-300">
+                После сохранения:
+                {{
+                  selectedDiscount
+                    ? `− ${formatPrice(selectedDiscount.discount_amount)}`
+                    : 'без скидки'
+                }}
+              </p>
+              <p
+                v-else-if="couponAmountOutdated && selectedDiscount"
+                class="mt-2 text-xs text-warning-700 dark:text-warning-400"
+              >
+                Сумма купона изменилась на {{ formatPrice(selectedDiscount.discount_amount) }}, но к
+                брони применено {{ formatPrice(appliedDiscountAmount) }}.
+              </p>
+            </div>
+
+            <!-- Notes -->
             <div>
               <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Наличные
+                Заметка
               </label>
-              <input
-                v-model.number="form.paidCash"
-                type="number"
-                min="0"
-                :max="MAX_PAYMENT"
-                step="1"
-                inputmode="numeric"
+              <textarea
+                v-model="form.notes"
+                rows="3"
+                placeholder="Заметка к брони (необязательно)"
                 :class="inputClass"
-              />
+                class="h-auto resize-y"
+              ></textarea>
             </div>
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                Аванс
-              </label>
-              <input
-                v-model.number="form.paidAvans"
-                type="number"
-                min="0"
-                :max="MAX_PAYMENT"
-                step="1"
-                inputmode="numeric"
-                :class="inputClass"
-              />
+
+            <!-- Payments -->
+            <div v-if="!isContract" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Kaspi QR
+                </label>
+                <input
+                  v-model.number="form.paidKaspiQr"
+                  type="number"
+                  min="0"
+                  :max="MAX_PAYMENT"
+                  step="1"
+                  inputmode="numeric"
+                  :class="inputClass"
+                />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Наличные
+                </label>
+                <input
+                  v-model.number="form.paidCash"
+                  type="number"
+                  min="0"
+                  :max="MAX_PAYMENT"
+                  step="1"
+                  inputmode="numeric"
+                  :class="inputClass"
+                />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                  Аванс
+                </label>
+                <input
+                  v-model.number="form.paidAvans"
+                  type="number"
+                  min="0"
+                  :max="MAX_PAYMENT"
+                  step="1"
+                  inputmode="numeric"
+                  :class="inputClass"
+                />
+              </div>
             </div>
-          </div>
 
-          <p v-if="error" class="text-sm text-error-600 dark:text-error-500">{{ error }}</p>
+            <p v-if="error" class="text-sm text-error-600 dark:text-error-500">{{ error }}</p>
 
-          <div class="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-              @click="close"
+            <div
+              class="sticky bottom-0 -mx-5 flex justify-end gap-3 border-t border-gray-100 bg-white px-5 pb-5 pt-3 dark:border-gray-800 dark:bg-gray-900 sm:-mx-6 sm:px-6 sm:pb-6"
             >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              :disabled="saving"
-              class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-success-700 disabled:opacity-60"
-            >
-              <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
-              Сохранить
-            </button>
-          </div>
-        </form>
+              <button
+                type="button"
+                class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+                @click="dismiss"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                :disabled="saving"
+                class="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-success-700 disabled:opacity-60"
+              >
+                <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
+                Сохранить
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </template>
   </Modal>

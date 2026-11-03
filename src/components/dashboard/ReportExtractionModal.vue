@@ -1,127 +1,152 @@
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-[99999] flex items-center justify-center overflow-y-auto bg-gray-900/45 px-4 py-6 backdrop-blur-sm"
-      @click.self="close"
+      class="fixed inset-0 z-[100000] overflow-hidden bg-gray-900/45 backdrop-blur-sm"
     >
       <div
-        class="w-full max-w-2xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900"
+        class="app-modal flex h-full items-center justify-center px-4 py-6"
+        @click.self="close"
       >
-        <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800">
-          <button
-            v-if="step === 'dates'"
-            type="button"
-            class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
-            aria-label="Назад"
-            @click="back"
+        <div
+          class="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900"
+        >
+          <div
+            class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800"
           >
-            <ArrowLeft class="h-5 w-5" aria-hidden="true" />
-          </button>
-          <div v-else class="h-9 w-9" />
+            <button
+              v-if="step === 'dates'"
+              type="button"
+              class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
+              aria-label="Назад"
+              @click="back"
+            >
+              <ArrowLeft class="h-5 w-5" aria-hidden="true" />
+            </button>
+            <div v-else class="h-9 w-9" />
 
-          <h2 class="text-base font-bold text-gray-900 dark:text-white">
-            {{ title }}
-          </h2>
+            <h2 class="text-base font-bold text-gray-900 dark:text-white">
+              {{ title }}
+            </h2>
 
-          <button
-            type="button"
-            class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
-            aria-label="Закрыть"
-            @click="close"
-          >
-            <X class="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
+            <button
+              type="button"
+              class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white"
+              aria-label="Закрыть"
+              @click="close"
+            >
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
 
-        <div class="relative min-h-[20rem] overflow-hidden">
-          <Transition :name="transitionName" mode="out-in">
-            <section v-if="step === 'type'" key="type" class="p-5 sm:p-6">
-              <div class="grid gap-3 sm:grid-cols-3">
-                <button
-                  v-for="option in reportOptions"
-                  :key="option.value"
-                  type="button"
-                  :disabled="!option.supported"
-                  class="group flex min-h-44 flex-col items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white p-5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success-500 dark:border-gray-800 dark:bg-gray-900"
-                  :class="
-                    option.supported
-                      ? 'hover:border-success-400 hover:bg-success-50 dark:hover:border-success-500/50 dark:hover:bg-success-500/10'
-                      : 'cursor-not-allowed opacity-50'
-                  "
-                  @click="selectType(option.value)"
-                >
-                  <div class="grid h-16 w-16 place-items-center rounded-xl bg-gray-100 text-gray-600 transition-colors group-hover:bg-success-600 group-hover:text-white dark:bg-gray-800 dark:text-gray-300">
-                    <component :is="option.icon" class="h-8 w-8" :stroke-width="1.75" />
+          <div class="relative min-h-[20rem] overflow-hidden">
+            <Transition :name="transitionName" mode="out-in">
+              <section v-if="step === 'type'" key="type" class="p-5 sm:p-6">
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <button
+                    v-for="option in reportOptions"
+                    :key="option.value"
+                    type="button"
+                    :disabled="!option.supported"
+                    class="group flex min-h-44 flex-col items-center justify-center gap-4 rounded-xl border border-gray-200 bg-white p-5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success-500 dark:border-gray-800 dark:bg-gray-900"
+                    :class="
+                      option.supported
+                        ? 'hover:border-success-400 hover:bg-success-50 dark:hover:border-success-500/50 dark:hover:bg-success-500/10'
+                        : 'cursor-not-allowed opacity-50'
+                    "
+                    @click="selectType(option.value)"
+                  >
+                    <div
+                      class="grid h-16 w-16 place-items-center rounded-xl bg-gray-100 text-gray-600 transition-colors group-hover:bg-success-600 group-hover:text-white dark:bg-gray-800 dark:text-gray-300"
+                    >
+                      <component :is="option.icon" class="h-8 w-8" :stroke-width="1.75" />
+                    </div>
+                    <span class="text-sm font-bold text-gray-900 dark:text-white">
+                      {{ option.label }}
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <section v-else-if="step === 'dates'" key="dates" class="p-5 sm:p-6">
+                <div class="mb-5 flex items-center gap-3">
+                  <div
+                    class="grid h-12 w-12 place-items-center rounded-xl bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400"
+                  >
+                    <component :is="selectedOption?.icon" class="h-6 w-6" :stroke-width="1.75" />
                   </div>
-                  <span class="text-sm font-bold text-gray-900 dark:text-white">
-                    {{ option.label }}
-                  </span>
-                </button>
-              </div>
-            </section>
-
-            <section v-else-if="step === 'dates'" key="dates" class="p-5 sm:p-6">
-              <div class="mb-5 flex items-center gap-3">
-                <div class="grid h-12 w-12 place-items-center rounded-xl bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400">
-                  <component :is="selectedOption?.icon" class="h-6 w-6" :stroke-width="1.75" />
+                  <div>
+                    <p class="text-sm font-bold text-gray-900 dark:text-white">
+                      {{ selectedOption?.label }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Отчёт в PDF</p>
+                  </div>
                 </div>
-                <div>
-                  <p class="text-sm font-bold text-gray-900 dark:text-white">{{ selectedOption?.label }}</p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">Отчёт в PDF</p>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span
+                      class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+                    >
+                      Дата начала
+                    </span>
+                    <input
+                      v-model="startDate"
+                      type="date"
+                      class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-success-500 focus:outline-none focus:ring-2 focus:ring-success-500/20 dark:border-gray-700 dark:text-white"
+                    />
+                  </label>
+                  <label class="block">
+                    <span
+                      class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+                    >
+                      Дата окончания
+                    </span>
+                    <input
+                      v-model="endDate"
+                      type="date"
+                      :min="startDate"
+                      class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-success-500 focus:outline-none focus:ring-2 focus:ring-success-500/20 dark:border-gray-700 dark:text-white"
+                    />
+                  </label>
                 </div>
-              </div>
 
-              <div class="grid gap-4 sm:grid-cols-2">
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Дата начала
-                  </span>
-                  <input
-                    v-model="startDate"
-                    type="date"
-                    class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-success-500 focus:outline-none focus:ring-2 focus:ring-success-500/20 dark:border-gray-700 dark:text-white"
-                  />
-                </label>
-                <label class="block">
-                  <span class="mb-1.5 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Дата окончания
-                  </span>
-                  <input
-                    v-model="endDate"
-                    type="date"
-                    :min="startDate"
-                    class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-success-500 focus:outline-none focus:ring-2 focus:ring-success-500/20 dark:border-gray-700 dark:text-white"
-                  />
-                </label>
-              </div>
-
-              <p v-if="error" class="mt-4 rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700 dark:bg-error-500/10 dark:text-error-300">
-                {{ error }}
-              </p>
-
-              <div class="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  :disabled="generating"
-                  class="inline-flex items-center justify-center gap-2 rounded-full bg-success-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                  @click="generate"
+                <p
+                  v-if="error"
+                  class="mt-4 rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700 dark:bg-error-500/10 dark:text-error-300"
                 >
-                  <Loader2 v-if="generating" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Сформировать
-                </button>
-              </div>
-            </section>
+                  {{ error }}
+                </p>
 
-            <section v-else key="ready" class="flex min-h-[20rem] flex-col items-center justify-center p-6 text-center">
-              <div class="grid h-16 w-16 place-items-center rounded-full bg-success-50 text-success-600 dark:bg-success-500/10">
-                <CheckCircle2 class="h-9 w-9" aria-hidden="true" />
-              </div>
-              <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white">Отчёт готов</h3>
-              <p class="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
-                Файл {{ readyFilename }} сформирован и скачан.
-              </p>
-            </section>
-          </Transition>
+                <div class="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    :disabled="generating"
+                    class="inline-flex items-center justify-center gap-2 rounded-full bg-success-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-success-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    @click="generate"
+                  >
+                    <Loader2 v-if="generating" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Сформировать
+                  </button>
+                </div>
+              </section>
+
+              <section
+                v-else
+                key="ready"
+                class="flex min-h-[20rem] flex-col items-center justify-center p-6 text-center"
+              >
+                <div
+                  class="grid h-16 w-16 place-items-center rounded-full bg-success-50 text-success-600 dark:bg-success-500/10"
+                >
+                  <CheckCircle2 class="h-9 w-9" aria-hidden="true" />
+                </div>
+                <h3 class="mt-4 text-lg font-bold text-gray-900 dark:text-white">Отчёт готов</h3>
+                <p class="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+                  Файл {{ readyFilename }} сформирован и скачан.
+                </p>
+              </section>
+            </Transition>
+          </div>
         </div>
       </div>
     </div>
@@ -157,13 +182,17 @@ const readyFilename = ref('')
 const direction = ref<'forward' | 'back'>('forward')
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
-const selectedOption = computed(() => reportOptions.find((option) => option.value === selectedType.value))
+const selectedOption = computed(() =>
+  reportOptions.find((option) => option.value === selectedType.value),
+)
 const title = computed(() => {
   if (step.value === 'type') return 'Сформировать отчёт'
   if (step.value === 'dates') return 'Выберите период'
   return 'Готово'
 })
-const transitionName = computed(() => (direction.value === 'forward' ? 'report-slide' : 'report-slide-back'))
+const transitionName = computed(() =>
+  direction.value === 'forward' ? 'report-slide' : 'report-slide-back',
+)
 
 function todayISO(): string {
   return toLocalISO(new Date())
