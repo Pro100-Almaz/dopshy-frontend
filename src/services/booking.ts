@@ -223,10 +223,7 @@ function basePricingType(min: number): PricingType {
 
 /** Тарифный тип для момента `min` (минуты от полуночи) в дату `dateISO`. */
 function pricingTypeAt(dateISO: string, min: number): PricingType {
-  if (
-    isWeekday(dateISO) &&
-    WEEKDAY_SPECIAL_WINDOWS.some(([from, to]) => min >= from && min < to)
-  ) {
+  if (isWeekday(dateISO) && WEEKDAY_SPECIAL_WINDOWS.some(([from, to]) => min >= from && min < to)) {
     return 'weekday_special'
   }
   return basePricingType(min)
@@ -440,9 +437,10 @@ export async function getManagerWeek(
       days[0].iso,
       days[days.length - 1].iso,
     )
-    // Слот занимают подтверждённые брони и черновики, ожидающие оплаты.
+    // Слот занимают подтверждённые брони и черновики, ожидающие согласия или оплаты.
     const allowed_states: string[] = [
       BOOKING_STATE_ENUMS.CONFIRMED,
+      BOOKING_STATE_ENUMS.AWAITING_CONSENT,
       BOOKING_STATE_ENUMS.AWAITING_PAYMENT,
     ]
     const bookings = week_bookings.filter((booking) => allowed_states.includes(booking.state))
@@ -547,10 +545,44 @@ export interface BookingBatchPayload {
   price_total?: number
   prepayment?: number
   reserved_until?: number
+  /** Admin/super-admin only: reserve for 24h without consent, ApiPay or avans. */
+  hold_without_payment?: boolean
   updated_by?: string
   discount_id?: number | null
   /** Токен предзаполнения из ссылки бота: бэкенд атрибутирует бронь боту и, если `phone` не задан, берёт номер из него. */
   prefill_token?: string
+  /**
+   * Согласие с офертой — только сайт (без него 400 CONSENT_REQUIRED). Брони админа
+   * его не передают: клиент подтверждает их сам в WhatsApp (state awaiting_consent).
+   */
+  consent?: BookingConsent
+  /** Номер для оплаты: на него выставляется счёт Kaspi. По умолчанию — `phone`. */
+  kaspi_phone?: string
+  /** Язык клиента (оферта / сообщения бота). */
+  lang?: 'ru' | 'kk'
+}
+
+export interface BookingConsent {
+  accepted: true
+  offer_version: string // редакция оферты, см. OFFER_VERSION
+  text_version: string // версия текста чекбокса, см. CONSENT_TEXT_VERSION
+  at: string // ISO datetime клика
+}
+
+/** Как клиенту оплатить аванс: счёт ушёл в Kaspi, или на номере нет Kaspi — оплата по ссылке. */
+export type BookingBatchPayment =
+  | { method: 'kaspi_invoice'; phone: string; amount: number }
+  | { method: 'link'; url: string; amount: number; reason: 'no_kaspi' | 'check_failed' }
+
+export interface BookingBatchResult {
+  ok: boolean
+  booking_ids: number[]
+  invoice: Record<string, unknown> | null
+  /** null — аванс не нужен, либо бронь админа (ждёт согласия клиента). */
+  payment: BookingBatchPayment | null
+  /** Только брони админа: клиенту ушёл запрос подтверждения в WhatsApp. */
+  consent?: { status: 'pending'; request_id: string | number }
+  hold_without_payment?: boolean
 }
 
 /**
@@ -558,7 +590,10 @@ export interface BookingBatchPayload {
  * не пройдена за это время, бэкенд автоматически отменяет бронь. Пока платёжной
  * логики нет — TTL держит слот занятым ограниченное время и затем освобождает.
  */
-export const RESERVATION_TTL_MINUTES = 20
+export const RESERVATION_TTL_MINUTES = 60
+
+/** Fixed duration of an administrative no-payment hold. */
+export const HOLD_WITHOUT_PAYMENT_TTL_MINUTES = 24 * 60
 
 /**
  * Аванс за одну разовую бронь, ₸. База расчёта для броней с лендинга; менеджер
@@ -576,8 +611,19 @@ export function computePrepayment(slots: BatchSlotIn[]): number {
 }
 
 /** Создаёт черновики броней пакетом. Пустые поля не отправляем — бэкенд подставит дефолты. */
-export function createBookingsBatch(payload: BookingBatchPayload): Promise<unknown> {
-  return apiFetch('/bookings/batch', {
+export function createBookingsBatch(payload: BookingBatchPayload): Promise<BookingBatchResult> {
+  return apiFetch<BookingBatchResult>('/bookings/batch', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Convert a 24-hour hold into the normal client confirmation/offer flow. */
+export function requestPaymentForHold(
+  id: number | string,
+  payload: { phone?: string; kaspi_phone?: string; lang?: 'ru' | 'kk' } = {},
+): Promise<{ ok: boolean; request_id: number; booking_ids: number[] }> {
+  return apiFetch(`/bookings/${id}/request-payment`, {
     method: 'POST',
     body: JSON.stringify(payload),
   })
@@ -922,6 +968,10 @@ function mapBooking(api: BookingApi): Booking {
     discountAmount: toMoney(api.discount_amount),
     priceBeforeDiscount:
       api.price_before_discount == null ? undefined : toMoney(api.price_before_discount),
+    kaspiPhone: api.kaspi_phone || undefined,
+    consentAt: api.consent_at || undefined,
+    consentChannel: api.consent_channel || undefined,
+    paymentMethod: api.payment_method || undefined,
   }
 }
 
@@ -1087,6 +1137,7 @@ export async function listBookingsInRange(
 
 export const BOOKING_STATE_ENUMS = {
   DRAFT: 'draft',
+  AWAITING_CONSENT: 'awaiting_consent',
   AWAITING_PAYMENT: 'awaiting_payment',
   CONFIRMED: 'confirmed',
   CANCELLED: 'cancelled',
@@ -1096,6 +1147,7 @@ export const BOOKING_STATE_ENUMS = {
 // Сырые статусы брони на бэкенде — порядок = порядок в выпадающем списке.
 export const BOOKING_STATE_LABEL: Record<BookingState, string> = {
   [BOOKING_STATE_ENUMS.DRAFT]: 'Черновик',
+  [BOOKING_STATE_ENUMS.AWAITING_CONSENT]: 'Ожидает согласия',
   [BOOKING_STATE_ENUMS.AWAITING_PAYMENT]: 'Ожидает оплаты',
   [BOOKING_STATE_ENUMS.CONFIRMED]: 'Подтверждено',
   [BOOKING_STATE_ENUMS.CANCELLED]: 'Отменено',
@@ -1109,10 +1161,13 @@ export function bookingStateLabel(state: string): string {
 }
 
 // Цвет бейджа статуса брони по сырому state с бэкенда. «Ожидает оплаты»
-// (awaiting_payment) — единственное состояние с предупреждающим цветом.
+// (awaiting_payment) — предупреждающий цвет; «Ожидает согласия» (awaiting_consent) —
+// информационный голубой: тоже держит слот, но ждёт ответа клиента, а не денег.
 const BOOKING_STATE_CLASS: Record<string, string> = {
   [BOOKING_STATE_ENUMS.DRAFT]:
     'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
+  [BOOKING_STATE_ENUMS.AWAITING_CONSENT]:
+    'bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-500',
   [BOOKING_STATE_ENUMS.AWAITING_PAYMENT]:
     'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400',
   [BOOKING_STATE_ENUMS.CONFIRMED]:

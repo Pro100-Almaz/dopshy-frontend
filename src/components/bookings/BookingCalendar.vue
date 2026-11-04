@@ -356,6 +356,10 @@ function stateClass(state: string): string {
   if (state === 'awaiting_payment') {
     return 'bg-warning-100 text-warning-800 dark:bg-warning-500/15 dark:text-warning-300'
   }
+  // Тоже держит слот, но ждёт подтверждения клиента в WhatsApp — отличаем голубым.
+  if (state === 'awaiting_consent') {
+    return 'bg-blue-light-100 text-blue-light-800 dark:bg-blue-light-500/15 dark:text-blue-light-300'
+  }
   return 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-200'
 }
 
@@ -662,6 +666,10 @@ onUnmounted(() => {
       <span class="flex items-center gap-1.5">
         <span class="h-3 w-3 rounded-sm bg-warning-400" aria-hidden="true" />
         Ожидает оплаты
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-sm bg-blue-light-400" aria-hidden="true" />
+        Ожидает согласия
       </span>
       <span class="flex items-center gap-1.5">
         <span class="h-3 w-3 rounded-sm bg-gray-400 dark:bg-gray-500" aria-hidden="true" />

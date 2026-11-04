@@ -2,10 +2,16 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeft, CalendarPlus, Check, CreditCard, Loader2 } from 'lucide-vue-next'
 import { ApiError } from '@/services/api'
-import { createBookingsBatch, RESERVATION_TTL_MINUTES } from '@/services/booking'
+import {
+  createBookingsBatch,
+  RESERVATION_TTL_MINUTES,
+  type BookingBatchPayment,
+} from '@/services/booking'
 import { useBookingStore } from '@/stores/booking'
 import { useBookingPrefillStore } from '@/stores/bookingPrefill'
 import { useLang, fmt, money } from '../i18n'
+import { PATHS } from '../routes'
+import { CONSENT_TEXT_VERSION, OFFER_VERSION } from '../data/offer'
 import Modal from './Modal.vue'
 
 const props = defineProps<{ open: boolean; fieldLabel: string; lines: string[] }>()
@@ -24,9 +30,18 @@ const team = ref('')
 const touched = ref(false)
 const sending = ref(false)
 const failed = ref(false)
-// Bot rejected the number (NO_KASPI); cleared as soon as the phone is edited.
+// Legacy fallback: older bot builds rejected a number without Kaspi (NO_KASPI) instead of
+// returning a payment link. Cleared as soon as either number is edited.
 const noKaspi = ref(false)
 watch(phone, () => (noKaspi.value = false))
+
+// No Kaspi invoice before the offer is accepted: the checkbox gates the request.
+const offerAccepted = ref(false)
+// Server answered CONSENT_REQUIRED; cleared once the box is ticked.
+const consentErr = ref(false)
+watch(offerAccepted, (v) => v && (consentErr.value = false))
+// How the avans is paid, from the success response (null: nothing to pay / no info).
+const payment = ref<BookingBatchPayment | null>(null)
 
 // The WhatsApp number stays server-side: while untouched we show its mask and send the token instead.
 const usingPrefillPhone = computed(() => !!prefill.tokenForSubmit && !prefill.phoneEdited)
@@ -36,6 +51,27 @@ const phoneShown = computed(() =>
 // Frozen at success: consume() drops the prefill, but the final screen still names the number.
 const sentPhone = ref('')
 const phoneInput = ref<HTMLInputElement>()
+
+// Payment number: prefilled with the contact phone. A masked WhatsApp number can't be copied,
+// so then it starts empty — empty always means "same as the contact number".
+const kaspiPhone = ref('')
+const kaspiEdited = ref(false)
+watch(kaspiPhone, () => (noKaspi.value = false))
+const kaspiShown = computed(() =>
+  kaspiEdited.value ? kaspiPhone.value : usingPrefillPhone.value ? '' : phone.value,
+)
+const kaspiDigits = computed(() => kaspiShown.value.replace(/\D/g, ''))
+const kaspiValid = computed(() => !kaspiDigits.value || phoneComplete(kaspiShown.value))
+/** The number the invoice goes to, as shown to the client. */
+const paymentPhone = computed(() => (kaspiDigits.value ? kaspiShown.value : phoneShown.value))
+function onKaspiInput(raw: string) {
+  kaspiEdited.value = true
+  kaspiPhone.value = formatPhone(raw)
+}
+const kaspiErr = computed(() =>
+  noKaspi.value ? c.value.noKaspi : kaspiValid.value ? '' : c.value.phoneInvalid,
+)
+const canConfirm = computed(() => offerAccepted.value && !sending.value && kaspiValid.value)
 function changePhone() {
   prefill.phoneEdited = true
   phone.value = ''
@@ -50,6 +86,11 @@ watch(
     touched.value = false
     failed.value = false
     noKaspi.value = false
+    offerAccepted.value = false
+    consentErr.value = false
+    payment.value = null
+    kaspiEdited.value = false
+    kaspiPhone.value = ''
     if (!name.value && prefill.data?.customer_name) name.value = prefill.data.customer_name
   },
 )
@@ -71,13 +112,11 @@ const phoneComplete = (v: string) => v.replace(/\D/g, '').length === 11
 
 const nameErr = computed(() => (touched.value && !name.value.trim() ? c.value.required : ''))
 const phoneErr = computed(() =>
-  noKaspi.value
-    ? c.value.noKaspi
-    : touched.value && !usingPrefillPhone.value && !phoneComplete(phone.value)
-      ? phone.value
-        ? c.value.phoneInvalid
-        : c.value.required
-      : '',
+  touched.value && !usingPrefillPhone.value && !phoneComplete(phone.value)
+    ? phone.value
+      ? c.value.phoneInvalid
+      : c.value.required
+    : '',
 )
 
 function toPayment() {
@@ -87,10 +126,13 @@ function toPayment() {
 }
 
 async function confirm() {
+  // Backend rejects it too, but never fire the request without the offer ticked.
+  if (!canConfirm.value) return
   sending.value = true
   failed.value = false
+  const contactDigits = usingPrefillPhone.value ? '' : phone.value.replace(/\D/g, '')
   try {
-    await createBookingsBatch({
+    const res = await createBookingsBatch({
       slots: store.batchSlots,
       customer: name.value.trim(),
       phone: usingPrefillPhone.value ? undefined : `+${phone.value.replace(/\D/g, '')}`,
@@ -100,18 +142,33 @@ async function confirm() {
       // 0 не отправляем — бэкенд подставит дефолт (как в CreateBookingModal).
       prepayment: store.prepaymentTotal || undefined,
       reserved_until: RESERVATION_TTL_MINUTES,
+      consent: {
+        accepted: true,
+        offer_version: OFFER_VERSION,
+        text_version: CONSENT_TEXT_VERSION,
+        at: new Date().toISOString(),
+      },
+      // Only when it differs from the contact number; otherwise the backend falls back to `phone`.
+      kaspi_phone:
+        kaspiDigits.value && kaspiDigits.value !== contactDigits
+          ? `+${kaspiDigits.value}`
+          : undefined,
+      lang: lang.value,
     })
-    sentPhone.value = phoneShown.value
+    payment.value = res?.payment ?? null
+    sentPhone.value = paymentPhone.value
     prefill.consume()
     step.value = 2
   } catch (e) {
     const code = e instanceof ApiError ? e.code : undefined
     // Nothing was created in either case (the bot batch is all-or-nothing), so retrying is safe.
     if (code === 'SLOT_TAKEN' || code === 'TIME_IN_PAST') emit('conflict')
-    else if (code === 'NO_KASPI') {
-      noKaspi.value = true
-      step.value = 0
-    } else failed.value = true
+    else if (code === 'CONSENT_REQUIRED') {
+      offerAccepted.value = false
+      consentErr.value = true
+    } else if (code === 'NO_KASPI') noKaspi.value = true
+    // PAYMENT_PROVIDER_ERROR and anything else: generic message, the client can retry.
+    else failed.value = true
   } finally {
     sending.value = false
   }
@@ -242,7 +299,7 @@ const btnPrimary =
               store.prepaymentTotal > 0
                 ? fmt(c.payText, {
                     sum: money(store.prepaymentTotal, lang),
-                    phone: phoneShown,
+                    phone: paymentPhone,
                     min: RESERVATION_TTL_MINUTES,
                   })
                 : c.noPrepay
@@ -250,6 +307,45 @@ const btnPrimary =
           </span>
         </span>
       </div>
+      <label class="mt-4 block">
+        <span class="mb-1.5 block text-sm font-medium text-fg-muted">{{ c.kaspiPhone }}</span>
+        <input
+          :value="kaspiShown"
+          :class="inputCls"
+          placeholder="+7 (7__) ___ __ __"
+          inputmode="tel"
+          autocomplete="tel"
+          :aria-invalid="!!kaspiErr"
+          aria-describedby="checkout-kaspi-hint"
+          @input="onKaspiInput(($event.target as HTMLInputElement).value)"
+        />
+        <span v-if="kaspiErr" role="alert" class="mt-1.5 block text-xs text-boxy-soft">
+          {{ kaspiErr }}
+        </span>
+        <span v-else id="checkout-kaspi-hint" class="mt-1.5 block text-xs text-fg-dim">
+          {{ c.kaspiHint }}
+        </span>
+      </label>
+      <label class="mt-4 flex cursor-pointer items-start gap-3 text-sm text-fg-muted">
+        <input
+          v-model="offerAccepted"
+          type="checkbox"
+          class="mt-0.5 size-5 shrink-0 accent-acid"
+          :aria-invalid="consentErr"
+        />
+        <span>
+          {{ c.offerPre }}<a
+            :href="PATHS.offer"
+            target="_blank"
+            rel="noopener"
+            class="text-acid underline"
+            @click.stop
+          >{{ c.offerLink }}</a>{{ c.offerRest }}
+        </span>
+      </label>
+      <p v-if="consentErr" role="alert" class="mt-1.5 text-xs text-boxy-soft">
+        {{ c.consentRequired }}
+      </p>
       <p v-if="failed" role="alert" class="mt-4 text-sm text-boxy-soft">{{ c.error }}</p>
       <div class="mt-6 flex gap-3">
         <button
@@ -264,7 +360,7 @@ const btnPrimary =
         <button
           type="button"
           :class="[btnPrimary, 'flex flex-1 items-center justify-center gap-2']"
-          :disabled="sending"
+          :disabled="!canConfirm"
           @click="confirm"
         >
           <Loader2 v-if="sending" class="size-5 animate-spin" aria-hidden="true" />
@@ -280,10 +376,33 @@ const btnPrimary =
         <Check class="size-10" :stroke-width="3" aria-hidden="true" />
       </span>
       <h3 class="mt-5 font-display text-4xl text-fg">{{ c.successTitle }}</h3>
-      <p class="mt-2 text-fg-muted">
+      <template v-if="payment?.method === 'link'">
+        <p class="mt-2 text-fg-muted">
+          {{
+            fmt(payment.reason === 'no_kaspi' ? c.linkNoKaspi : c.linkFailed, {
+              phone: sentPhone,
+              sum: money(payment.amount || store.prepaymentTotal, lang),
+            })
+          }}
+        </p>
+        <a
+          :href="payment.url"
+          target="_blank"
+          rel="noopener"
+          :class="[btnPrimary, 'mt-4 flex w-full items-center justify-center gap-2']"
+        >
+          <CreditCard class="size-5" aria-hidden="true" />
+          {{ c.linkPay }}
+        </a>
+        <p class="mt-3 text-sm text-fg-muted">{{ c.linkAfter }}</p>
+      </template>
+      <p v-else class="mt-2 text-fg-muted">
         {{
-          store.prepaymentTotal > 0
-            ? fmt(c.successText, { phone: sentPhone, min: RESERVATION_TTL_MINUTES })
+          payment?.method === 'kaspi_invoice' || store.prepaymentTotal > 0
+            ? fmt(c.successText, {
+                phone: sentPhone || payment?.phone || '',
+                min: RESERVATION_TTL_MINUTES,
+              })
             : c.successNoPrepay
         }}
       </p>

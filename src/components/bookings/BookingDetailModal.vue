@@ -15,12 +15,20 @@ import {
   Globe,
   UserRound,
   HelpCircle,
+  FileCheck2,
 } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
-import type { BookingDetailApi, SourceKind } from '@/types'
-import { getBookingDetail, formatPrice, formatDateTime, BOOKING_STATE_LABEL } from '@/services/booking'
+import type { BookingDetailApi, ConsentChannel, SourceKind } from '@/types'
+import {
+  getBookingDetail,
+  requestPaymentForHold,
+  formatPrice,
+  formatDateTime,
+  BOOKING_STATE_LABEL,
+} from '@/services/booking'
 import { parseSource, SOURCE_META } from '@/services/history'
+import { useAuthStore } from '@/stores/auth'
 
 // Иконка по типу источника; цвета/метки — в SOURCE_META сервиса.
 const SOURCE_ICON: Record<SourceKind, Component> = {
@@ -33,10 +41,12 @@ const SOURCE_ICON: Record<SourceKind, Component> = {
 
 const props = defineProps<{ id: number | string }>()
 defineEmits<{ close: [] }>()
+const auth = useAuthStore()
 
 const detail = ref<BookingDetailApi | null>(null)
 const loading = ref(true)
 const error = ref('')
+const requestingPayment = ref(false)
 
 async function load() {
   loading.value = true
@@ -89,8 +99,47 @@ const stateClass = computed(() => {
     return 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
   if (s === 'cancelled' || s === 'unpaid' || s === 'rejected')
     return 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500'
+  if (s === 'awaiting_consent')
+    return 'bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-500'
   return 'bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400'
 })
+
+const CONSENT_CHANNEL_LABEL: Record<Exclude<ConsentChannel, ''>, string> = {
+  bot: 'WhatsApp-бот',
+  site: 'Сайт',
+  admin_bot: 'WhatsApp (бронь админа)',
+}
+const consentChannelLabel = computed(() => {
+  const ch = detail.value?.consent_channel
+  return ch ? (CONSENT_CHANNEL_LABEL[ch] ?? ch) : ''
+})
+const paymentMethodLabel = computed(() => {
+  const m = detail.value?.payment_method
+  if (m === 'kaspi_invoice') return 'Счёт Kaspi'
+  if (m === 'link') return 'Ссылка на оплату — подтвердите по чеку'
+  if (m === 'hold_without_payment') return 'Удержание 24 часа без оплаты'
+  return ''
+})
+const canRequestHoldPayment = computed(
+  () =>
+    detail.value?.payment_method === 'hold_without_payment' &&
+    ['admin', 'super_admin'].includes(auth.role),
+)
+async function startPaymentFlow() {
+  if (!detail.value || requestingPayment.value) return
+  requestingPayment.value = true
+  error.value = ''
+  try {
+    await requestPaymentForHold(props.id, { phone: detail.value.phone || undefined })
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Не удалось запросить оплату'
+  } finally {
+    requestingPayment.value = false
+  }
+}
+// Номер для оплаты; бэкенд по умолчанию подставляет контактный.
+const kaspiPhone = computed(() => detail.value?.kaspi_phone || detail.value?.phone || '')
 
 const src = computed(() => parseSource(detail.value?.source ?? ''))
 
@@ -106,9 +155,7 @@ const payments = computed(() => {
 })
 
 const total = computed(() => num(detail.value?.price_total))
-const paidTotal = computed(() =>
-  payments.value.reduce((sum, r) => sum + r.value, 0),
-)
+const paidTotal = computed(() => payments.value.reduce((sum, r) => sum + r.value, 0))
 const remaining = computed(() => total.value - paidTotal.value)
 </script>
 
@@ -219,11 +266,7 @@ const remaining = computed(() => total.value - paidTotal.value)
           <!-- Payments -->
           <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
             <dl class="space-y-2.5 text-theme-sm">
-              <div
-                v-for="r in payments"
-                :key="r.label"
-                class="flex items-center justify-between"
-              >
+              <div v-for="r in payments" :key="r.label" class="flex items-center justify-between">
                 <dt class="text-gray-600 dark:text-gray-400">{{ r.label }}</dt>
                 <dd class="font-medium text-gray-800 dark:text-white/90">
                   {{ formatPrice(r.value) }}
@@ -248,6 +291,67 @@ const remaining = computed(() => total.value - paidTotal.value)
                 <dd class="font-medium text-gray-800 dark:text-white/90">
                   {{ formatPrice(total) }}
                 </dd>
+              </div>
+            </dl>
+            <button
+              v-if="canRequestHoldPayment"
+              type="button"
+              :disabled="requestingPayment"
+              class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              @click="startPaymentFlow"
+            >
+              <Loader2 v-if="requestingPayment" class="h-4 w-4 animate-spin" />
+              Запросить подтверждение и оплату
+            </button>
+          </div>
+
+          <!-- Offer consent + payment channel -->
+          <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+            <h4
+              class="mb-2.5 flex items-center gap-2 text-theme-sm font-semibold text-gray-700 dark:text-gray-300"
+            >
+              <FileCheck2 class="h-4 w-4 text-gray-400" />
+              Оферта и оплата
+            </h4>
+            <dl class="space-y-2 text-theme-sm">
+              <div class="flex items-start justify-between gap-4">
+                <dt class="text-gray-600 dark:text-gray-400">Офертамен келісті</dt>
+                <dd
+                  v-if="detail.consent_at"
+                  class="text-right font-medium text-gray-800 dark:text-white/90"
+                >
+                  {{ formatDateTime(detail.consent_at) }}
+                  <span
+                    v-if="consentChannelLabel"
+                    class="block text-theme-xs font-normal text-gray-500 dark:text-gray-400"
+                    >{{ consentChannelLabel }}</span
+                  >
+                </dd>
+                <dd v-else class="font-medium text-warning-600 dark:text-warning-400">
+                  Не дал согласия
+                </dd>
+              </div>
+              <div v-if="kaspiPhone" class="flex items-center justify-between gap-4">
+                <dt class="text-gray-600 dark:text-gray-400">Номер для оплаты</dt>
+                <dd class="font-medium text-gray-800 dark:text-white/90">
+                  {{ formatPhone(kaspiPhone) }}
+                </dd>
+              </div>
+              <div v-if="paymentMethodLabel" class="flex items-start justify-between gap-4">
+                <dt class="text-gray-600 dark:text-gray-400">Способ оплаты</dt>
+                <dd class="text-right font-medium text-gray-800 dark:text-white/90">
+                  {{ paymentMethodLabel }}
+                </dd>
+              </div>
+              <div v-if="detail.apipay_invoice_id" class="flex items-center justify-between gap-4">
+                <dt class="text-gray-600 dark:text-gray-400">Счёт ApiPay</dt>
+                <dd class="font-mono text-theme-xs text-gray-800 dark:text-white/90">
+                  {{ detail.apipay_invoice_id }}
+                </dd>
+              </div>
+              <div v-if="detail.offer_version" class="flex items-center justify-between gap-4">
+                <dt class="text-gray-600 dark:text-gray-400">Редакция оферты</dt>
+                <dd class="text-gray-800 dark:text-white/90">{{ detail.offer_version }}</dd>
               </div>
             </dl>
           </div>

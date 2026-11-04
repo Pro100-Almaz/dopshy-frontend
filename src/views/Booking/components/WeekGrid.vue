@@ -154,6 +154,7 @@ const gridStyle = computed(() => ({
 }))
 
 const BOOKING_STATE_LABEL: Record<string, string> = {
+  awaiting_consent: 'Ожидает согласия',
   awaiting_payment: 'Ожидает оплаты',
   pending: 'Ожидает',
   confirmed: 'Подтверждено',

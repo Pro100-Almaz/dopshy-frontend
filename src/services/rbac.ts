@@ -63,6 +63,7 @@ export function hasPermission(
     case 'botContent':
       return false
     case 'history':
+      return role === 'admin' || role === 'manager' || role === 'arena_manager'
     case 'workers':
     case 'reports':
     case 'settings':

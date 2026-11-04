@@ -156,7 +156,19 @@ export interface BookingConfirmation {
 }
 
 // Сырые статусы брони на бэкенде (значения enum) — используются при редактировании.
-export type BookingState = 'draft' | 'awaiting_payment' | 'confirmed' | 'cancelled' | 'unpaid'
+// awaiting_consent — бронь админа ждёт, пока клиент подтвердит её и примет оферту в WhatsApp.
+export type BookingState =
+  | 'draft'
+  | 'awaiting_consent'
+  | 'awaiting_payment'
+  | 'confirmed'
+  | 'cancelled'
+  | 'unpaid'
+
+/** Где клиент принял оферту; '' — согласия нет. */
+export type ConsentChannel = 'bot' | 'site' | 'admin_bot' | ''
+/** Как выставлен аванс: счёт Kaspi (ApiPay) или ссылка на оплату с подтверждением по чеку. */
+export type BookingPaymentMethod = 'kaspi_invoice' | 'link' | 'hold_without_payment' | ''
 
 export interface Booking {
   id: string
@@ -185,6 +197,10 @@ export interface Booking {
   discountAmount?: number // скидка, применённая к брони (API пока может не отдавать)
   discountId?: string
   priceBeforeDiscount?: number
+  kaspiPhone?: string // номер для оплаты (счёт Kaspi); по умолчанию = customerPhone
+  consentAt?: string // ISO datetime принятия оферты; undefined — согласия нет
+  consentChannel?: ConsentChannel
+  paymentMethod?: BookingPaymentMethod
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
@@ -233,6 +249,13 @@ export interface BookingApi {
   discount_id?: number | null
   discount_amount?: string | number | null
   price_before_discount?: string | number | null
+  // Оферта и оплата. Бэкенд может не отдавать их у старых броней — все опциональны.
+  kaspi_phone?: string | null // номер для оплаты; пусто → phone
+  consent_at?: string | null // ISO datetime или ""
+  consent_channel?: ConsentChannel | null
+  consent_text_version?: string | null
+  offer_version?: string | null
+  payment_method?: BookingPaymentMethod | null
 }
 
 export interface BookedSlotApi {
@@ -256,6 +279,8 @@ export interface BookingDetailApi extends BookingApi {
   reserved_until?: string | null // ISO datetime — до какого момента держится черновик
   group_transition?: string | null
   last_receipt_date?: string | null // 'yyyy-mm-dd'
+  apipay_invoice_id?: string | number | null
+  consent_step?: string | null
 }
 
 // ── Бот-ассистент: пауза для передачи диалога менеджеру ──────────────
