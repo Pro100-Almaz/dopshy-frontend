@@ -16,6 +16,7 @@ export type AppPermission =
   | 'sportSwitcher'
   | 'botHandoff'
   | 'globalBotSetting'
+  | 'bookingRefund'
 
 const ADMIN_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager'])
 const ARENA_ROLES = new Set<UserRole>(['super_admin', 'admin', 'manager', 'arena_manager'])
@@ -73,6 +74,9 @@ export function hasPermission(
     case 'globalBotSetting':
       // Глобальный выключатель бота (страница клиентов) — админы, менеджеры и менеджеры арены.
       return ARENA_ROLES.has(role)
+    case 'bookingRefund':
+      // Возвраты по броням — как REFUND_ROLES на бэкенде.
+      return role === 'admin' || role === 'arena_manager'
     case 'botHandoff':
       // /bot-status/{phone}/pause|resume — бэкенд пускает только admin и arena_manager.
       return role === 'admin' || role === 'arena_manager'

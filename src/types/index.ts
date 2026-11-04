@@ -201,6 +201,8 @@ export interface Booking {
   consentAt?: string // ISO datetime принятия оферты; undefined — согласия нет
   consentChannel?: ConsentChannel
   paymentMethod?: BookingPaymentMethod
+  firstPaidAt?: string // ISO datetime первой оплаты — от неё считаются 48 ч на возврат
+  refundedTotal: number // сумма уже оформленных возвратов, ₸
 }
 
 export type BookingPeriod = 'today' | 'week' | 'month' | 'all_time'
@@ -256,6 +258,56 @@ export interface BookingApi {
   consent_text_version?: string | null
   offer_version?: string | null
   payment_method?: BookingPaymentMethod | null
+  // Возвраты. Бэкенд может не отдавать их у старых версий — опциональны.
+  first_paid_at?: string | null // ISO datetime первой оплаты или ""
+  refunded_total?: string | number | null
+}
+
+// ── Возвраты: GET/POST /api/bookings/{id}/refunds ──
+// Возврат уходит через ApiPay на Kaspi, с которого была оплата. Итог асинхронный:
+// requested → processing → refunded | failed; checking — исход не подтверждён.
+export type BookingRefundState =
+  | 'requested'
+  | 'processing'
+  | 'checking'
+  | 'refunded'
+  | 'failed'
+  | 'recorded'
+
+export interface BookingRefundApi {
+  id: number
+  booking_id: number
+  amount: number
+  comment: string
+  within_window: boolean | null
+  created_by: string
+  created_at: string
+  method: 'apipay' | 'manual'
+  state: BookingRefundState
+  invoice_id: number | ''
+  apipay_refund_id: number | ''
+  error_code: string
+  error_message: string // текст для администратора по коду ApiPay
+}
+
+/** Почему вернуть сейчас нельзя: нет оплат через ApiPay / идёт возврат / всё уже возвращено. */
+export type RefundBlockedReason = 'no_apipay' | 'in_progress' | 'nothing_left' | null
+
+export interface BookingRefundSummaryApi {
+  price_total: number
+  paid_total: number // все фактически полученные деньги (справочно)
+  apipay_paid: number // из них — через Kaspi (ApiPay); только их можно вернуть
+  refunded_total: number // уже возвращено
+  pending_total: number // в обработке
+  refundable: number // можно вернуть прямо сейчас, целые ₸
+  blocked_reason: RefundBlockedReason
+  invoice_id: number | null // счёт ApiPay, по которому уйдёт возврат
+  refund_phone: string // номер Kaspi, оплативший этот счёт
+  first_paid_at: string // ISO или "" — время оплаты неизвестно
+  within_window: boolean | null // null — оплаты не было или время неизвестно
+  window_hours: number
+  refunds: BookingRefundApi[]
+  refund?: BookingRefundApi
 }
 
 export interface BookedSlotApi {
