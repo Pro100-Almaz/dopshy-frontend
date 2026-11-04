@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
-import { Loader2, CalendarX, Pencil, ChevronLeft, ChevronRight, Search, X } from 'lucide-vue-next'
+import {
+  Loader2,
+  CalendarX,
+  Pencil,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Save,
+  X,
+} from 'lucide-vue-next'
 
 import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
@@ -8,6 +17,8 @@ import BookingStats from '@/components/bookings/BookingStats.vue'
 import BookingCalendar from '@/components/bookings/BookingCalendar.vue'
 import BookingEditModal from '@/components/bookings/BookingEditModal.vue'
 import Modal from '@/components/ui/Modal.vue'
+import ModalBackButton from '@/components/ui/ModalBackButton.vue'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 
 import type { Booking, BookingPeriod, BookingState } from '@/types'
 import {
@@ -139,6 +150,19 @@ const groupedBookings = computed<BookingDateGroup[]>(() => {
     fields: [...fields.values()],
   }))
 })
+
+// «1 бронь», «2 брони», «5 броней».
+function bookingsCountLabel(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'бронь'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'брони'
+        : 'броней'
+  return `${n} ${word}`
+}
 
 function fullDateLabel(iso: string): string {
   const d = formatDayLabel(iso)
@@ -376,11 +400,64 @@ function openEdit(booking: Booking) {
   editing.value = booking
 }
 
+// ── Телефон: в строке только время и клиент, остальное — в модалке деталей ──
+// Модалки складываются стопкой: детали → редактирование / подтверждение.
+// «Назад» закрывает только верхнюю, X — все сразу.
+const isMobile = useMediaQuery('(max-width: 767px)')
+const detailBooking = ref<Booking | null>(null)
+
+function openDetails(booking: Booking) {
+  if (isMobile.value) detailBooking.value = booking
+}
+function closeAll() {
+  editing.value = null
+  confirmInlineEdits.value = false
+  detailBooking.value = null
+}
+watch(isMobile, (mobile) => {
+  if (!mobile) detailBooking.value = null
+})
+// Детали показывают свежие данные: список перечитывается после сохранений и опроса.
+watch(allBookings, (rows) => {
+  const open = detailBooking.value
+  if (open) detailBooking.value = rows.find((b) => b.id === open.id) ?? open
+})
+// Варианты статуса в деталях: служебный/неизвестный текущий статус тоже в списке, чтобы он отображался.
+const detailStatusOptions = computed<string[]>(() => {
+  const open = detailBooking.value
+  if (!open) return []
+  const current = String(inlineValue(open, 'state'))
+  const original = open.state
+  const extra = [original, current].filter(
+    (st, i, arr) => !STATUS_OPTIONS.includes(st as BookingState) && arr.indexOf(st) === i,
+  )
+  return [...extra, ...STATUS_OPTIONS]
+})
+
+const detailHasPendingEdit = computed(
+  () => !!detailBooking.value && !!inlineEdits.value[detailBooking.value.id],
+)
+
 // После сохранения обновляем сводки и текущее представление таблицы.
+// Если редактирование открыто из деталей, возвращаемся к ним (они обновятся сами).
 async function onSaved() {
   editing.value = null
   await loadAll()
   await goToPage(page.value)
+}
+
+function discardDetailEdit() {
+  const open = detailBooking.value
+  if (!open) return
+  const next = { ...inlineEdits.value }
+  delete next[open.id]
+  inlineEdits.value = next
+  inlineEditError.value = ''
+}
+
+async function onEditBack(changed: boolean) {
+  editing.value = null
+  if (changed) await onSaved()
 }
 
 // ── Живое обновление таблицы ────────────────────────
@@ -603,21 +680,26 @@ onUnmounted(() => {
             class="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
           >
             <div
-              class="flex flex-col gap-1 border-b border-gray-200 bg-success-500 px-4 py-3 dark:border-green-800 dark:bg-green/[0.02] sm:px-5"
+              class="flex flex-col gap-0.5 border-b border-success-700/20 bg-success-600 px-4 py-3 dark:border-success-500/20 dark:bg-success-500/15 sm:px-5"
             >
-              <h4 class="font-medium text-white text-theme-sm dark:text-white/90">
+              <h4 class="font-semibold text-white text-theme-sm">
                 {{ fullDateLabel(dateGroup.date) }}
               </h4>
-              <p class="text-theme-xs text-white dark:text-gray-400">
-                {{ dateGroup.fields.reduce((sum, field) => sum + field.bookings.length, 0) }}
-                броней
+              <p class="text-theme-xs text-white/85 dark:text-success-200">
+                {{
+                  bookingsCountLabel(
+                    dateGroup.fields.reduce((sum, field) => sum + field.bookings.length, 0),
+                  )
+                }}
               </p>
             </div>
 
             <div class="divide-y divide-gray-200 dark:divide-gray-800">
               <section v-for="fieldGroup in dateGroup.fields" :key="fieldGroup.key">
-                <div class="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5 bg-green-200">
-                  <span class="font-medium text-gray-700 text-theme-sm dark:text-gray-300">
+                <div
+                  class="flex flex-wrap items-center gap-2 bg-success-50 px-4 py-3 dark:bg-white/[0.04] sm:px-5"
+                >
+                  <span class="font-medium text-success-800 text-theme-sm dark:text-gray-200">
                     {{ fieldGroup.fieldName }}
                   </span>
                   <span
@@ -629,12 +711,12 @@ onUnmounted(() => {
                 </div>
 
                 <div class="max-w-full overflow-x-auto overflow-y-hidden custom-scrollbar">
-                  <table class="min-w-[76rem] w-full">
+                  <table class="w-full table-fixed md:min-w-[76rem] md:table-auto">
                     <thead>
                       <tr
                         class="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.02]"
                       >
-                        <th class="w-28 px-4 py-2.5 text-left sm:px-5">
+                        <th class="w-24 px-4 py-2.5 text-left sm:px-5 md:w-28">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Время
                           </p>
@@ -644,49 +726,50 @@ onUnmounted(() => {
                             Клиент
                           </p>
                         </th>
-                        <th class="w-28 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-28 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Договор
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Сумма
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Скидка
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Удалённо
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Наличные
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             QR
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Предоплата
                           </p>
                         </th>
-                        <th class="w-32 px-4 py-2.5 text-left sm:px-5">
+                        <th class="hidden w-32 px-4 py-2.5 text-left sm:px-5 md:table-cell">
                           <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                             Статус
                           </p>
                         </th>
-                        <th class="w-16 px-4 py-2.5 text-right sm:px-5">
+                        <th class="hidden w-16 px-4 py-2.5 text-right sm:px-5 md:table-cell">
                           <span class="sr-only">Действия</span>
                         </th>
+                        <th class="w-10 md:hidden"><span class="sr-only">Подробнее</span></th>
                       </tr>
                     </thead>
 
@@ -694,7 +777,18 @@ onUnmounted(() => {
                       <tr
                         v-for="b in fieldGroup.bookings"
                         :key="b.id"
-                        class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                        class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02] max-md:cursor-pointer max-md:active:bg-gray-100 dark:max-md:active:bg-white/5"
+                        :class="
+                          inlineEdits[b.id] && 'max-md:bg-warning-50 dark:max-md:bg-warning-500/10'
+                        "
+                        :tabindex="isMobile ? 0 : undefined"
+                        :aria-label="
+                          isMobile
+                            ? `${b.start}–${b.end}, ${b.customerName} — подробнее`
+                            : undefined
+                        "
+                        @click="openDetails(b)"
+                        @keydown.enter="openDetails(b)"
                       >
                         <td class="whitespace-nowrap px-4 py-4 align-top sm:px-5">
                           <span
@@ -708,21 +802,23 @@ onUnmounted(() => {
                         </td>
 
                         <td class="px-4 py-4 align-top sm:px-5">
-                          <div class="flex items-center gap-3">
+                          <div class="flex min-w-0 items-center gap-3">
                             <div class="min-w-0">
                               <span
-                                class="block max-w-[15rem] truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                                class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90 md:max-w-[15rem]"
                               >
                                 {{ b.customerName }}
                               </span>
-                              <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
+                              <span
+                                class="hidden text-gray-500 text-theme-xs dark:text-gray-400 md:block"
+                              >
                                 {{ b.customerPhone }}
                               </span>
                             </div>
                           </div>
                         </td>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
+                        <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                           <span
                             class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
                             :class="
@@ -740,13 +836,13 @@ onUnmounted(() => {
                           <td
                             v-for="n in 6"
                             :key="n"
-                            class="px-4 py-4 align-top text-gray-400 sm:px-5"
+                            class="hidden px-4 py-4 align-top text-gray-400 sm:px-5 md:table-cell"
                           >
                             —
                           </td>
                         </template>
                         <template v-else>
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <span
                               class="font-medium text-gray-800 text-theme-sm dark:text-white/90"
                             >
@@ -754,7 +850,7 @@ onUnmounted(() => {
                             </span>
                           </td>
 
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <span
                               v-if="b.discountAmount"
                               class="font-medium text-success-700 text-theme-sm"
@@ -763,7 +859,7 @@ onUnmounted(() => {
                             <span v-else class="text-gray-400">—</span>
                           </td>
 
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <span
                               class="font-medium text-gray-700 text-theme-sm dark:text-gray-300"
                             >
@@ -771,7 +867,7 @@ onUnmounted(() => {
                             </span>
                           </td>
 
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <input
                               type="number"
                               min="0"
@@ -790,7 +886,7 @@ onUnmounted(() => {
                             />
                           </td>
 
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <input
                               type="number"
                               min="0"
@@ -809,7 +905,7 @@ onUnmounted(() => {
                             />
                           </td>
 
-                          <td class="px-4 py-4 align-top sm:px-5">
+                          <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                             <input
                               type="number"
                               min="0"
@@ -829,7 +925,7 @@ onUnmounted(() => {
                           </td>
                         </template>
 
-                        <td class="px-4 py-4 align-top sm:px-5">
+                        <td class="hidden px-4 py-4 align-top sm:px-5 md:table-cell">
                           <select
                             class="h-9 w-36 rounded-lg border border-transparent px-2.5 text-theme-xs font-medium shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
                             :class="inlineStatusClass(b)"
@@ -839,6 +935,7 @@ onUnmounted(() => {
                             "
                           >
                             <option
+                              class="bg-white text-gray-800 dark:bg-gray-900 dark:text-white/90"
                               v-if="
                                 !STATUS_OPTIONS.includes(
                                   String(inlineValue(b, 'state')) as BookingState,
@@ -848,13 +945,18 @@ onUnmounted(() => {
                             >
                               {{ bookingStateLabel(String(inlineValue(b, 'state'))) }}
                             </option>
-                            <option v-for="status in STATUS_OPTIONS" :key="status" :value="status">
+                            <option
+                              v-for="status in STATUS_OPTIONS"
+                              :key="status"
+                              :value="status"
+                              class="bg-white text-gray-800 dark:bg-gray-900 dark:text-white/90"
+                            >
                               {{ BOOKING_STATE_LABEL[status] }}
                             </option>
                           </select>
                         </td>
 
-                        <td class="px-4 py-4 text-right align-top sm:px-5">
+                        <td class="hidden px-4 py-4 text-right align-top sm:px-5 md:table-cell">
                           <button
                             type="button"
                             class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-white/90"
@@ -863,6 +965,9 @@ onUnmounted(() => {
                           >
                             <Pencil class="h-4 w-4" />
                           </button>
+                        </td>
+                        <td class="py-4 pr-3 text-right align-top md:hidden">
+                          <ChevronRight class="ml-auto h-5 w-5 text-gray-400" aria-hidden="true" />
                         </td>
                       </tr>
                     </tbody>
@@ -906,30 +1011,273 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <BookingEditModal v-if="editing" :booking="editing" @close="editing = null" @saved="onSaved" />
+    <!-- Телефон: детали брони (в строке только время и клиент). Поверх неё открываются
+         редактирование и подтверждение — со стрелкой «Назад». -->
+    <Modal v-if="detailBooking" :fullScreenBackdrop="true" @close="closeAll">
+      <template #body>
+        <div
+          class="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="`Бронь ${detailBooking.ref}`"
+        >
+          <div
+            class="shrink-0 border-b border-gray-100 px-5 pb-3 pt-5 dark:border-gray-800 flex items-start justify-between gap-3"
+          >
+            <div class="min-w-0">
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">
+                {{ detailBooking.start }}–{{ detailBooking.end }}
+              </h2>
+              <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                {{ fullDateLabel(detailBooking.date) }} · {{ detailBooking.fieldName }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/5"
+              aria-label="Закрыть"
+              @click="closeAll"
+            >
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+            <div class="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+              <p class="truncate font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                {{ detailBooking.customerName }}
+              </p>
+              <a
+                v-if="detailBooking.customerPhone"
+                :href="`tel:${detailBooking.customerPhone}`"
+                class="text-theme-xs text-success-600 dark:text-success-500"
+              >
+                {{ detailBooking.customerPhone }}
+              </a>
+              <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ detailBooking.ref }}</p>
+            </div>
+
+            <dl class="mt-4 divide-y divide-gray-100 text-theme-sm dark:divide-gray-800">
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Договор</dt>
+                <dd>
+                  <span
+                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                    :class="
+                      detailBooking.hasContract
+                        ? 'bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500'
+                        : 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'
+                    "
+                  >
+                    {{ detailBooking.hasContract ? 'Да' : 'Нет' }}
+                  </span>
+                </dd>
+              </div>
+              <template v-if="!detailBooking.hasContract">
+                <div class="flex items-center justify-between gap-4 py-2.5">
+                  <dt class="text-gray-500 dark:text-gray-400">Сумма</dt>
+                  <dd class="font-semibold text-gray-800 dark:text-white/90">
+                    {{ formatPrice(detailBooking.total) }}
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4 py-2.5">
+                  <dt class="text-gray-500 dark:text-gray-400">Скидка</dt>
+                  <dd
+                    :class="
+                      detailBooking.discountAmount
+                        ? 'font-medium text-success-700'
+                        : 'text-gray-400'
+                    "
+                  >
+                    {{
+                      detailBooking.discountAmount
+                        ? `− ${formatPrice(detailBooking.discountAmount)}`
+                        : '—'
+                    }}
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4 py-2.5">
+                  <dt class="text-gray-500 dark:text-gray-400">Удалённо</dt>
+                  <dd class="text-gray-800 dark:text-white/90">
+                    {{ formatPrice(detailBooking.paidBot) }}
+                  </dd>
+                </div>
+              </template>
+            </dl>
+            <p
+              v-if="detailBooking.hasContract"
+              class="mt-1 text-theme-xs text-gray-500 dark:text-gray-400"
+            >
+              Оплата этой брони ведётся по договору.
+            </p>
+
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <template v-if="!detailBooking.hasContract">
+                <label class="grid gap-1.5">
+                  <span class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    >Наличные</span
+                  >
+                  <input
+                    type="number"
+                    min="0"
+                    :max="MAX_PAYMENT"
+                    step="1"
+                    inputmode="numeric"
+                    class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    :value="inlineValue(detailBooking, 'paidCash')"
+                    @input="
+                      setInlineValue(
+                        detailBooking!,
+                        'paidCash',
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                  />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">QR</span>
+                  <input
+                    type="number"
+                    min="0"
+                    :max="MAX_PAYMENT"
+                    step="1"
+                    inputmode="numeric"
+                    class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    :value="inlineValue(detailBooking, 'paidKaspiQr')"
+                    @input="
+                      setInlineValue(
+                        detailBooking!,
+                        'paidKaspiQr',
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                  />
+                </label>
+                <label class="grid gap-1.5">
+                  <span class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    >Предоплата</span
+                  >
+                  <input
+                    type="number"
+                    min="0"
+                    :max="MAX_PAYMENT"
+                    step="1"
+                    inputmode="numeric"
+                    class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                    :value="inlineValue(detailBooking, 'paidAvans')"
+                    @input="
+                      setInlineValue(
+                        detailBooking!,
+                        'paidAvans',
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                  />
+                </label>
+              </template>
+              <label class="grid gap-1.5" :class="detailBooking.hasContract && 'col-span-2'">
+                <span class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  >Статус</span
+                >
+                <select
+                  class="h-11 w-full rounded-lg border border-transparent px-3 font-medium shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10"
+                  :class="inlineStatusClass(detailBooking)"
+                  :value="inlineValue(detailBooking, 'state')"
+                  @change="
+                    setInlineValue(
+                      detailBooking!,
+                      'state',
+                      ($event.target as HTMLSelectElement).value,
+                    )
+                  "
+                >
+                  <option
+                    v-for="status in detailStatusOptions"
+                    :key="status"
+                    :value="status"
+                    class="bg-white text-gray-800 dark:bg-gray-900 dark:text-white/90"
+                  >
+                    {{ bookingStateLabel(status) }}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <p v-if="inlineEditError" class="mt-3 text-theme-xs text-error-600 dark:text-error-500">
+              {{ inlineEditError }}
+            </p>
+          </div>
+          <div class="shrink-0 border-t border-gray-100 px-5 py-4 dark:border-gray-800 grid gap-2">
+            <div v-if="detailHasPendingEdit" class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-lg border border-gray-200 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                @click="discardDetailEdit"
+              >
+                Сбросить
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-success-600 px-4 text-sm font-semibold text-white hover:bg-success-700"
+                @click="openInlineConfirm"
+              >
+                <Save class="h-4 w-4" aria-hidden="true" />
+                Сохранить
+              </button>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+              @click="openEdit(detailBooking)"
+            >
+              <Pencil class="h-4 w-4" aria-hidden="true" />
+              Редактировать
+            </button>
+          </div>
+        </div>
+      </template>
+    </Modal>
+
+    <BookingEditModal
+      v-if="editing"
+      :booking="editing"
+      :stacked="!!detailBooking"
+      @close="closeAll"
+      @saved="onSaved"
+      @back="onEditBack"
+    />
 
     <Modal v-if="confirmInlineEdits" :fullScreenBackdrop="true" @close="confirmInlineEdits = false">
       <template #body>
         <div
-          class="relative w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+          class="relative flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
         >
           <button
-            class="absolute right-5 top-5 text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-white/90"
+            type="button"
+            class="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-white/90"
             aria-label="Закрыть"
             :disabled="savingInlineEdits"
-            @click="confirmInlineEdits = false"
+            @click="closeAll"
           >
             <X class="h-5 w-5" />
           </button>
 
-          <h3 class="mb-1 text-lg font-semibold text-gray-800 dark:text-white/90">
-            Подтвердить изменения
-          </h3>
+          <div class="mb-1 flex items-center gap-1 pr-8">
+            <ModalBackButton
+              v-if="detailBooking"
+              :disabled="savingInlineEdits"
+              @back="confirmInlineEdits = false"
+            />
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Подтвердить изменения
+            </h3>
+          </div>
           <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
             Вы уверены, что хотите изменить следующие данные?
           </p>
 
-          <div class="max-h-[50vh] space-y-4 overflow-y-auto pr-1 custom-scrollbar">
+          <div
+            class="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1 custom-scrollbar"
+          >
             <section
               v-for="item in inlineEditChanges"
               :key="item.edit.id"

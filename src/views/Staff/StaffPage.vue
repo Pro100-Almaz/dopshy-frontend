@@ -331,7 +331,7 @@ async function confirmDelete() {
     <Modal v-if="formOpen" :fullScreenBackdrop="true" @close="closeForm">
       <template #body>
         <form
-          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:my-8 sm:p-6"
+          class="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
           novalidate
           @submit.prevent="saveForm"
         >
@@ -421,7 +421,7 @@ async function confirmDelete() {
 
     <Modal v-if="deleting" :fullScreenBackdrop="true" @close="closeDelete">
       <template #body>
-        <div class="relative z-10 mx-4 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6">
+        <div class="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6">
           <h2 class="text-lg font-bold text-gray-900 dark:text-white">Отключить сотрудника?</h2>
           <p class="mt-2 text-theme-sm text-gray-600 dark:text-gray-400">
             {{ deleting.username }} больше не сможет войти.

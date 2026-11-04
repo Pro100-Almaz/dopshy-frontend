@@ -515,10 +515,10 @@ onUnmounted(() => {
 <template>
   <dialog
     ref="dialog"
-    class="contract-dialog m-auto w-[min(72rem,96vw)] max-h-[92vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
+    class="contract-dialog m-auto w-[min(72rem,96vw)] max-h-[calc(100dvh-1.5rem)] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
     @close="onClose"
   >
-    <div class="flex max-h-[92vh] flex-col">
+    <div class="flex max-h-[calc(100dvh-1.5rem)] flex-col">
       <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
         <div>
           <h2 class="text-lg font-bold text-gray-900">Новый контракт</h2>
@@ -539,7 +539,7 @@ onUnmounted(() => {
           <li v-for="s in STEPS" :key="s.step">
             <button
               type="button"
-              class="w-full truncate rounded-lg px-3 py-2 text-left font-medium"
+              class="w-full truncate rounded-lg px-2 py-2 text-center font-medium sm:px-3 sm:text-left"
               :class="
                 step === s.step
                   ? 'bg-success-50 text-success-700'
@@ -550,7 +550,8 @@ onUnmounted(() => {
               :aria-current="step === s.step ? 'step' : undefined"
               @click="goTo(s.step)"
             >
-              {{ s.step }}. {{ s.label }}
+              <span class="sm:hidden" :aria-label="s.label">{{ s.step }}</span>
+              <span class="hidden sm:inline">{{ s.step }}. {{ s.label }}</span>
             </button>
           </li>
         </ol>
@@ -604,7 +605,7 @@ onUnmounted(() => {
         <!-- 4. Время -->
         <div
           v-else-if="step === 4"
-          class="grid min-h-[34rem] gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]"
+          class="grid gap-4 lg:min-h-[34rem] lg:grid-cols-[16rem_minmax(0,1fr)]"
         >
           <aside class="space-y-4">
             <label class="grid gap-1.5 text-sm font-medium text-gray-700">

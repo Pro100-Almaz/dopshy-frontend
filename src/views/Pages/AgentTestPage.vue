@@ -554,7 +554,7 @@ onMounted(loadSessions)
     <Modal v-if="confirmDelete" :fullScreenBackdrop="true" @close="confirmDelete = null">
       <template #body>
         <div
-          class="relative z-10 mx-4 my-8 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
+          class="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
         >
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">Удалить диалог?</h3>
           <p class="mt-2 text-theme-sm text-gray-600 dark:text-gray-400">

@@ -59,7 +59,10 @@ const occurrenceCount = computed(() => {
 })
 
 // Позиция поповера: рядом с курсором, но в пределах вьюпорта.
+// На телефоне (< 640px) — нижняя шторка на всю ширину, без привязки к курсору.
+const isSheet = computed(() => typeof window !== 'undefined' && window.innerWidth < 640)
 const style = computed(() => {
+  if (isSheet.value) return {}
   const W = 300
   const H = 360
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
@@ -110,10 +113,20 @@ async function confirm() {
   <Teleport to="body">
     <template v-if="open && interval">
       <!-- Клик вне поповера закрывает его -->
-      <div class="fixed inset-0 z-[998]" @click="emit('close')" @contextmenu.prevent="emit('close')" />
+      <div
+        class="fixed inset-0 z-[998]"
+        :class="isSheet ? 'bg-gray-900/40' : ''"
+        @click="emit('close')"
+        @contextmenu.prevent="emit('close')"
+      />
 
       <div
-        class="fixed z-[999] w-[300px] rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+        class="fixed z-[999] max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+        :class="
+          isSheet
+            ? 'app-modal-sheet inset-x-2 bottom-2 pb-[max(1rem,env(safe-area-inset-bottom))]'
+            : 'w-[300px]'
+        "
         :style="style"
         @click.stop
         @contextmenu.prevent.stop
@@ -137,7 +150,9 @@ async function confirm() {
               :key="c.date + c.booking.id"
               class="flex items-center justify-between gap-2 rounded-lg bg-error-50 px-2.5 py-1.5 text-xs dark:bg-error-500/10"
             >
-              <span class="font-medium text-gray-800 dark:text-gray-200">{{ dayFullLabel(c.date) }}</span>
+              <span class="font-medium text-gray-800 dark:text-gray-200">{{
+                dayFullLabel(c.date)
+              }}</span>
               <span class="truncate text-gray-500">{{ c.booking.start }}–{{ c.booking.end }}</span>
             </li>
           </ul>

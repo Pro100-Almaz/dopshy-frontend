@@ -233,6 +233,43 @@ layer(base);
   body {
     @apply relative overflow-x-hidden font-normal font-rubik z-1 bg-gray-50;
   }
+
+  /* ── Modals on phones ─────────────────────────────────────────────── */
+  /* Freeze the page behind any open modal (ui/Modal or a native <dialog>). */
+  html:has(.app-modal),
+  html:has(.app-modal-sheet),
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+  /* ui/Modal: the frame is fixed; the panel is capped to the visible screen and scrolls inside itself.
+     A panel that pins its own header/footer overrides overflow with a utility (utilities beat this base rule). */
+  .app-modal > :not(.app-modal-backdrop) {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Native dialogs: never taller or wider than the *visible* viewport (dvh tracks iOS toolbars; vh does not). */
+  dialog[open] {
+    max-height: calc(100dvh - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+    overscroll-behavior: contain;
+  }
+  /* iOS zooms the page when a field under 16px is focused, which pushes the modal off-screen. */
+  @media (max-width: 639px) {
+    .app-modal :is(input, select, textarea),
+    .app-modal-sheet :is(input, select, textarea),
+    dialog :is(input, select, textarea) {
+      font-size: 16px;
+    }
+  }
+}
+
+/* Phone held sideways: the screen is short, so give the modal panel almost all of it.
+   Unlayered on purpose — it must beat the frame's p-4 / sm:p-6 utilities. */
+@media (max-height: 500px) {
+  .app-modal {
+    padding: 0.5rem;
+  }
 }
 
 /* Поля форм договоров (страница, мастер создания, платежи). */

@@ -320,7 +320,7 @@ onMounted(load)
     <Modal v-if="showCreate" :fullScreenBackdrop="true" @close="showCreate = false"
       ><template #body
         ><form
-          class="relative z-10 mx-4 max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900"
+          class="relative z-10 max-h-full w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl dark:bg-gray-900"
           @submit.prevent="createDiscount"
         >
           <div class="mb-5 flex items-center gap-3">
@@ -397,7 +397,7 @@ onMounted(load)
     <Modal v-if="editing" :fullScreenBackdrop="true" @close="editing = null"
       ><template #body
         ><form
-          class="relative z-10 mx-4 max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900"
+          class="relative z-10 max-h-full w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl dark:bg-gray-900"
           @submit.prevent="saveDiscount"
         >
           <h3 class="mb-5 text-lg font-semibold text-gray-900 dark:text-white">

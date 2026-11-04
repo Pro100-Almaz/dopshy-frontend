@@ -14,6 +14,7 @@ import {
 
 import PlanScheduleFields from './PlanScheduleFields.vue'
 import PlanPayerFields from './PlanPayerFields.vue'
+import ModalBackButton from '@/components/ui/ModalBackButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import type {
   ContractListRow,
@@ -47,12 +48,21 @@ const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
   contract: ContractListRow | null
+  // Открыт поверх модалки с деталями контракта: показываем «Назад».
+  stacked?: boolean
 }>()
 
 const emit = defineEmits<{
   // План/статус оплаты изменился — список договоров стоит перечитать.
   changed: []
+  // «Назад»: закрыть только этот диалог и вернуться к деталям (X закрывает всё).
+  back: []
 }>()
+
+function goBack() {
+  emit('back')
+  open.value = false
+}
 
 const auth = useAuthStore()
 
@@ -336,13 +346,14 @@ onUnmounted(stopPolling)
 <template>
   <dialog
     ref="dialog"
-    class="contract-dialog m-auto w-[min(64rem,96vw)] max-h-[92vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
+    class="contract-dialog m-auto w-[min(64rem,96vw)] max-h-[calc(100dvh-1.5rem)] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
     @close="onClose"
   >
-    <div class="flex max-h-[92vh] flex-col">
+    <div class="flex max-h-[calc(100dvh-1.5rem)] flex-col">
       <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-        <div class="min-w-0">
-          <h2 class="flex items-center gap-2 text-lg font-bold text-gray-900">
+        <ModalBackButton v-if="stacked" class="-mr-2" @back="goBack" />
+        <div class="min-w-0 flex-1">
+          <h2 class="flex flex-wrap items-center gap-2 text-lg font-bold text-gray-900">
             Платежи по контракту #{{ contract?.id }}
             <span
               v-if="plan"

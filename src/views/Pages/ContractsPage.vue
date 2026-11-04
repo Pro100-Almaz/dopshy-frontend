@@ -20,6 +20,9 @@ import AdminLayout from '@/components/layout/AdminLayout.vue'
 import PageBreadcrumb from '@/components/common/PageBreadcrumb.vue'
 import ContractCreateDialog from '@/components/contracts/ContractCreateDialog.vue'
 import ContractPaymentsDialog from '@/components/contracts/ContractPaymentsDialog.vue'
+import Modal from '@/components/ui/Modal.vue'
+import ModalBackButton from '@/components/ui/ModalBackButton.vue'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingStore } from '@/stores/booking'
 import type { ContractListRow, ContractStatus, CreateContractResult } from '@/services/contracts'
@@ -80,6 +83,33 @@ function toggleActions(id: number, event: MouseEvent) {
   actionOpen.value = id
 }
 
+// На телефоне в строке только «Контракт» и «Клиент»; остальное и действия — в модалке по нажатию.
+const isMobile = useMediaQuery('(max-width: 767px)')
+const detailContract = ref<ContractListRow | null>(null)
+
+function openDetails(contract: ContractListRow) {
+  if (isMobile.value) detailContract.value = contract
+}
+watch(isMobile, (mobile) => {
+  if (!mobile) detailContract.value = null
+})
+
+// Платежи и редактирование открываются поверх деталей. «Назад» (и «Отмена»,
+// и успешное сохранение) возвращают к деталям; X / Escape закрывают всё.
+let returningToDetails = false
+function backToDetails() {
+  returningToDetails = true
+}
+// «Отмена» в редактировании: из деталей — шаг назад, иначе просто закрыть.
+function cancelEdit() {
+  if (detailContract.value) backToDetails()
+  editOpen.value = false
+}
+function onStackedChildClosed() {
+  if (!returningToDetails) detailContract.value = null
+  returningToDetails = false
+}
+
 const hasPrev = computed(() => page.value > 1)
 const hasNext = computed(() => contracts.value.length >= PAGE_SIZE && !atEnd.value)
 
@@ -104,6 +134,9 @@ async function goToPage(target: number) {
     }
     contracts.value = rows
     page.value = target
+    // Открытые детали — на свежие данные строки.
+    const open = detailContract.value
+    if (open) detailContract.value = rows.find((row) => row.id === open.id) ?? open
     atEnd.value = false
   } catch (e) {
     errorMessage.value = contractErrorMessage(e, 'Не удалось загрузить контракты')
@@ -160,6 +193,7 @@ function onPaymentsChanged() {
   paymentsChanged = true
 }
 watch(paymentsOpen, (isOpen) => {
+  if (!isOpen) onStackedChildClosed()
   if (isOpen || !paymentsChanged) return
   paymentsChanged = false
   goToPage(page.value)
@@ -173,6 +207,7 @@ function openEdit(contract: ContractListRow) {
 
 async function onDelete(contract: ContractListRow) {
   actionOpen.value = null
+  detailContract.value = null
   const ok = window.confirm(`Отменить контракт #${contract.id} и активные связанные брони?`)
   if (!ok) return
   deletingId.value = contract.id
@@ -285,6 +320,7 @@ async function submitEdit() {
   editError.value = ''
   try {
     await updateContract(editing.value.id, contractPayload())
+    backToDetails()
     editOpen.value = false
     editing.value = null
     await goToPage(page.value)
@@ -302,6 +338,7 @@ watch(editOpen, (isOpen) => {
     editDialog.value?.showModal()
   } else {
     editDialog.value?.close()
+    onStackedChildClosed()
   }
 })
 
@@ -387,42 +424,51 @@ function onEditClose() {
       </div>
 
       <div v-else class="max-w-full overflow-x-auto custom-scrollbar">
-        <table class="min-w-full">
+        <table class="w-full table-fixed md:min-w-full md:table-auto">
           <thead>
             <tr class="border-b border-gray-200 dark:border-gray-700">
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="w-28 px-4 py-3 text-left sm:px-6 md:w-auto">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Контракт</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="px-4 py-3 text-left sm:px-6">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Клиент</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Период</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Брони</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Сумма</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Статус</p>
               </th>
-              <th class="px-5 py-3 text-left sm:px-6">
+              <th class="hidden px-5 py-3 text-left sm:px-6 md:table-cell">
                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Оплата</p>
               </th>
-              <th class="px-5 py-3 text-right sm:px-6">
+              <th class="hidden px-5 py-3 text-right sm:px-6 md:table-cell">
                 <span class="sr-only">Действия</span>
               </th>
+              <th class="w-10 md:hidden"><span class="sr-only">Подробнее</span></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             <tr
               v-for="contract in contracts"
               :key="contract.id"
-              class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+              class="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02] max-md:cursor-pointer max-md:active:bg-gray-100 dark:max-md:active:bg-white/5"
+              :tabindex="isMobile ? 0 : undefined"
+              :aria-label="
+                isMobile
+                  ? `Контракт #${contract.id}, ${contract.customer_name} — подробнее`
+                  : undefined
+              "
+              @click="openDetails(contract)"
+              @keydown.enter="openDetails(contract)"
             >
-              <td class="px-5 py-4 sm:px-6">
+              <td class="px-4 py-4 sm:px-6">
                 <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
                   #{{ contract.id }}
                 </span>
@@ -430,23 +476,25 @@ function onEditClose() {
                   {{ formatDateTime(contract.created_at) }}
                 </span>
               </td>
-              <td class="px-5 py-4 sm:px-6">
-                <div class="flex items-center gap-3">
+              <td class="px-4 py-4 sm:px-6 min-w-0">
+                <div class="flex min-w-0 items-center gap-3">
                   <div
-                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
+                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full md:h-10 md:w-10 bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
                   >
                     {{ initials(contract.customer_name) }}
                   </div>
-                  <div>
-                    <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                  <div class="min-w-0">
+                    <span
+                      class="block truncate font-medium text-gray-800 text-theme-sm dark:text-white/90"
+                    >
                       {{ contract.customer_name }}
                     </span>
-                    <span class="block text-gray-500 text-theme-xs dark:text-gray-400">
+                    <span class="block truncate text-gray-500 text-theme-xs dark:text-gray-400">
                       {{ contract.phone || 'Телефон не указан' }}
                     </span>
                     <span
                       v-if="contract.notes"
-                      class="mt-0.5 block max-w-[18rem] truncate text-theme-xs italic text-gray-400"
+                      class="mt-0.5 hidden max-w-[18rem] truncate text-theme-xs italic text-gray-400 md:block"
                       :title="contract.notes"
                     >
                       {{ contract.notes }}
@@ -454,22 +502,22 @@ function onEditClose() {
                   </div>
                 </div>
               </td>
-              <td class="px-5 py-4 sm:px-6">
+              <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                 <span class="text-gray-700 text-theme-sm dark:text-gray-300">
                   {{ contract.start_date }} - {{ contract.end_date }}
                 </span>
               </td>
-              <td class="px-5 py-4 sm:px-6">
+              <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                 <span class="text-gray-700 text-theme-sm dark:text-gray-300">
                   {{ contract.bookings_count }}
                 </span>
               </td>
-              <td class="px-5 py-4 sm:px-6">
+              <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                 <span class="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                   {{ formatPrice(contract.price) }}
                 </span>
               </td>
-              <td class="px-5 py-4 sm:px-6">
+              <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                 <span
                   class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
                   :class="contractStatusClass(contract.status)"
@@ -477,7 +525,7 @@ function onEditClose() {
                   {{ contractStatusLabel(contract.status) }}
                 </span>
               </td>
-              <td class="px-5 py-4 sm:px-6">
+              <td class="hidden px-5 py-4 sm:px-6 md:table-cell">
                 <button
                   type="button"
                   class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium hover:opacity-80"
@@ -487,7 +535,7 @@ function onEditClose() {
                   {{ paymentStatusLabel(contract.payment_status) }}
                 </button>
               </td>
-              <td class="px-5 py-4 text-right sm:px-6">
+              <td class="hidden px-5 py-4 text-right sm:px-6 md:table-cell">
                 <div class="relative inline-flex">
                   <button
                     type="button"
@@ -543,6 +591,9 @@ function onEditClose() {
                   </Teleport>
                 </div>
               </td>
+              <td class="py-4 pr-3 text-right md:hidden">
+                <ChevronRight class="ml-auto h-5 w-5 text-gray-400" aria-hidden="true" />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -575,22 +626,165 @@ function onEditClose() {
       </div>
     </div>
 
+    <!-- Телефон: подробности контракта и действия (в строке только контракт и клиент) -->
+    <Modal v-if="detailContract" :fullScreenBackdrop="true" @close="detailContract = null">
+      <template #body>
+        <div
+          class="relative flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-theme-xl dark:bg-gray-900"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="`Контракт #${detailContract.id}`"
+        >
+          <div
+            class="shrink-0 border-b border-gray-100 px-5 pb-3 pt-5 dark:border-gray-800 flex items-start justify-between gap-3"
+          >
+            <div>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">
+                Контракт #{{ detailContract.id }}
+              </h2>
+              <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                {{ formatDateTime(detailContract.created_at) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/5"
+              aria-label="Закрыть"
+              @click="detailContract = null"
+            >
+              <X class="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+            <div
+              class="mt-4 flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"
+            >
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-theme-xs font-semibold text-success-700 dark:bg-success-500/15 dark:text-success-500"
+              >
+                {{ initials(detailContract.customer_name) }}
+              </div>
+              <div class="min-w-0">
+                <p class="truncate font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                  {{ detailContract.customer_name }}
+                </p>
+                <a
+                  v-if="detailContract.phone"
+                  :href="`tel:${detailContract.phone}`"
+                  class="text-theme-xs text-success-600 dark:text-success-500"
+                >
+                  {{ detailContract.phone }}
+                </a>
+                <p v-else class="text-theme-xs text-gray-500 dark:text-gray-400">
+                  Телефон не указан
+                </p>
+              </div>
+            </div>
+
+            <dl class="mt-4 divide-y divide-gray-100 text-theme-sm dark:divide-gray-800">
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Период</dt>
+                <dd class="text-right text-gray-800 dark:text-white/90">
+                  {{ detailContract.start_date }} – {{ detailContract.end_date }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Брони</dt>
+                <dd class="text-gray-800 dark:text-white/90">
+                  {{ detailContract.bookings_count }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Сумма</dt>
+                <dd class="font-semibold text-gray-800 dark:text-white/90">
+                  {{ formatPrice(detailContract.price) }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Статус</dt>
+                <dd>
+                  <span
+                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                    :class="contractStatusClass(detailContract.status)"
+                  >
+                    {{ contractStatusLabel(detailContract.status) }}
+                  </span>
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-2.5">
+                <dt class="text-gray-500 dark:text-gray-400">Оплата</dt>
+                <dd>
+                  <span
+                    class="inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                    :class="paymentStatusClass(detailContract.payment_status)"
+                  >
+                    {{ paymentStatusLabel(detailContract.payment_status) }}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+
+            <p
+              v-if="detailContract.notes"
+              class="mt-3 whitespace-pre-line break-words rounded-xl bg-gray-50 p-3 text-theme-sm italic text-gray-600 dark:bg-white/[0.03] dark:text-gray-300"
+            >
+              {{ detailContract.notes }}
+            </p>
+          </div>
+          <div class="shrink-0 border-t border-gray-100 px-5 py-4 dark:border-gray-800 grid gap-2">
+            <button
+              type="button"
+              class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-success-600 px-4 text-sm font-semibold text-white hover:bg-success-700"
+              @click="openPayments(detailContract)"
+            >
+              <Wallet class="h-4 w-4" aria-hidden="true" />
+              Платежи
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                @click="openEdit(detailContract)"
+              >
+                <Edit3 class="h-4 w-4" aria-hidden="true" />
+                Изменить
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-error-200 px-4 text-sm font-semibold text-error-600 hover:bg-error-50 disabled:opacity-50 dark:border-error-500/30 dark:hover:bg-error-500/10"
+                :disabled="deletingId === detailContract.id"
+                @click="onDelete(detailContract)"
+              >
+                <Trash2 class="h-4 w-4" aria-hidden="true" />
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </Modal>
+
     <ContractCreateDialog v-model:open="createOpen" :fields="fields" @created="onCreated" />
 
     <ContractPaymentsDialog
       v-model:open="paymentsOpen"
       :contract="paymentsContract"
+      :stacked="!!detailContract"
       @changed="onPaymentsChanged"
+      @back="backToDetails"
     />
 
     <dialog
       ref="editDialog"
-      class="contract-dialog m-auto w-[min(38rem,94vw)] max-h-[90vh] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
+      class="contract-dialog m-auto w-[min(38rem,94vw)] max-h-[calc(100dvh-1.5rem)] rounded-2xl border border-gray-200 bg-white p-0 text-gray-800 shadow-xl"
       @close="onEditClose"
     >
-      <div class="flex max-h-[90vh] flex-col">
+      <div class="flex max-h-[calc(100dvh-1.5rem)] flex-col">
         <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-          <h2 class="text-lg font-bold text-gray-900">Изменить контракт</h2>
+          <div class="flex min-w-0 items-center gap-1">
+            <ModalBackButton v-if="detailContract" @back="cancelEdit" />
+            <h2 class="text-lg font-bold text-gray-900">Изменить контракт</h2>
+          </div>
           <button
             type="button"
             class="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900"
@@ -600,7 +794,7 @@ function onEditClose() {
             <X class="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
-        <div class="flex-1 overflow-auto px-5 py-4">
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-5">
           <div class="grid gap-4">
             <label class="grid gap-1.5 text-sm font-medium text-gray-700">
               Клиент или компания
@@ -650,7 +844,7 @@ function onEditClose() {
           <button
             type="button"
             class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            @click="editOpen = false"
+            @click="cancelEdit"
           >
             Отмена
           </button>

@@ -926,7 +926,7 @@ const tabClass = (active: boolean) =>
     <Modal v-if="createOpen" :fullScreenBackdrop="true" @close="closeCreate">
       <template #body>
         <form
-          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:my-8 sm:p-6"
+          class="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
           novalidate
           @submit.prevent="saveCreate"
         >
@@ -1076,7 +1076,7 @@ const tabClass = (active: boolean) =>
     <Modal v-if="editingStudent" :fullScreenBackdrop="true" @close="closeEdit">
       <template #body>
         <form
-          class="relative z-10 mx-4 my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:my-8 sm:p-6"
+          class="relative z-10 max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
           novalidate
           @submit.prevent="saveEdit"
         >
@@ -1220,7 +1220,7 @@ const tabClass = (active: boolean) =>
     <Modal v-if="assigningStudent" :fullScreenBackdrop="true" @close="closeGroupAssign">
       <template #body>
         <form
-          class="relative z-10 mx-4 my-8 w-full max-w-xl rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
+          class="relative z-10 w-full max-w-xl rounded-2xl bg-white p-5 shadow-theme-xl dark:bg-gray-900 sm:p-6"
           @submit.prevent="assignToGroup"
         >
           <div class="mb-5 flex items-start justify-between gap-3">
@@ -1350,7 +1350,7 @@ const tabClass = (active: boolean) =>
     <Modal v-if="actionsStudent" :fullScreenBackdrop="true" @close="closeActions">
       <template #body>
         <div
-          class="relative z-10 mx-4 mb-4 w-full max-w-sm rounded-2xl bg-white p-4 shadow-theme-xl dark:bg-gray-900 sm:mx-auto sm:my-8"
+          class="relative z-10 w-full max-w-sm rounded-2xl bg-white p-4 shadow-theme-xl dark:bg-gray-900"
         >
           <div class="mb-3 flex items-start justify-between gap-3">
             <div class="min-w-0">
