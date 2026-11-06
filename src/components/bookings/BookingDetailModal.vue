@@ -16,10 +16,13 @@ import {
   UserRound,
   HelpCircle,
   FileCheck2,
+  Hourglass,
+  Send,
 } from 'lucide-vue-next'
 
 import Modal from '@/components/ui/Modal.vue'
 import type { BookingDetailApi, ConsentChannel, SourceKind } from '@/types'
+import type { BookingBatchPayment } from '@/services/booking'
 import {
   getBookingDetail,
   requestPaymentForHold,
@@ -47,6 +50,8 @@ const detail = ref<BookingDetailApi | null>(null)
 const loading = ref(true)
 const error = ref('')
 const requestingPayment = ref(false)
+// Итог «Отправить счёт»: куда ушёл счёт или что отправлена ссылка на оплату.
+const sentPayment = ref<BookingBatchPayment | null>(null)
 
 async function load() {
   loading.value = true
@@ -62,7 +67,14 @@ async function load() {
 }
 
 // Перезагружаем при смене id (модалка переиспользуется между строками).
-watch(() => props.id, load, { immediate: true })
+watch(
+  () => props.id,
+  () => {
+    sentPayment.value = null
+    load()
+  },
+  { immediate: true },
+)
 
 const num = (v: string | number | null | undefined): number => {
   if (v == null) return 0
@@ -107,6 +119,7 @@ const stateClass = computed(() => {
 const CONSENT_CHANNEL_LABEL: Record<Exclude<ConsentChannel, ''>, string> = {
   bot: 'WhatsApp-бот',
   site: 'Сайт',
+  admin: 'Бронь админа',
   admin_bot: 'WhatsApp (бронь админа)',
 }
 const consentChannelLabel = computed(() => {
@@ -120,20 +133,31 @@ const paymentMethodLabel = computed(() => {
   if (m === 'hold_without_payment') return 'Удержание 24 часа без оплаты'
   return ''
 })
-const canRequestHoldPayment = computed(
+// 24-часовое удержание без оплаты, ещё не отправленное на оплату. Админ может
+// править его как обычную бронь (например, клиент платит наличными после игры)
+// или отправить клиенту счёт кнопкой ниже.
+const isHold = computed(
   () =>
     detail.value?.payment_method === 'hold_without_payment' &&
-    ['admin', 'super_admin'].includes(auth.role),
+    detail.value?.state === 'awaiting_payment',
 )
-async function startPaymentFlow() {
+const canRequestHoldPayment = computed(
+  () => isHold.value && ['admin', 'super_admin'].includes(auth.role),
+)
+const holdUntil = computed(() =>
+  detail.value?.reserved_until ? formatDateTime(detail.value.reserved_until) : '',
+)
+const holdError = ref('')
+async function sendHoldInvoice() {
   if (!detail.value || requestingPayment.value) return
   requestingPayment.value = true
-  error.value = ''
+  holdError.value = ''
   try {
-    await requestPaymentForHold(props.id, { phone: detail.value.phone || undefined })
+    const res = await requestPaymentForHold(props.id, { phone: detail.value.phone || undefined })
     await load()
+    sentPayment.value = res?.payment ?? null
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось запросить оплату'
+    holdError.value = e instanceof Error ? e.message : 'Не удалось отправить счёт'
   } finally {
     requestingPayment.value = false
   }
@@ -200,6 +224,50 @@ const remaining = computed(() => total.value - paidTotal.value)
 
         <!-- Content -->
         <div v-else-if="detail" class="space-y-5">
+          <!-- 24h hold: needs payment -->
+          <div
+            v-if="isHold"
+            class="rounded-xl border border-warning-300 bg-warning-50 p-4 text-theme-sm text-warning-800 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-300"
+          >
+            <div class="flex items-start gap-3">
+              <Hourglass class="mt-0.5 h-5 w-5 shrink-0" />
+              <div class="space-y-1">
+                <p class="font-semibold">Бронь на удержании и ещё не оплачена</p>
+                <p>
+                  Слот держится без оплаты<template v-if="holdUntil"> до {{ holdUntil }}</template>.
+                  Нажмите «Отправить счёт на оплату», чтобы клиенту ушёл счёт Kaspi на аванс. Если
+                  клиент платит на месте — просто измените статус и оплату брони.
+                </p>
+              </div>
+            </div>
+            <button
+              v-if="canRequestHoldPayment"
+              type="button"
+              :disabled="requestingPayment"
+              class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              @click="sendHoldInvoice"
+            >
+              <Loader2 v-if="requestingPayment" class="h-4 w-4 animate-spin" />
+              <Send v-else class="h-4 w-4" />
+              Отправить счёт на оплату
+            </button>
+            <p v-if="holdError" class="mt-2 text-error-600 dark:text-error-500">{{ holdError }}</p>
+          </div>
+
+          <!-- Result of «Отправить счёт на оплату» -->
+          <div
+            v-if="sentPayment"
+            class="rounded-xl border border-success-200 bg-success-50 p-4 text-theme-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
+          >
+            <p v-if="sentPayment.method === 'kaspi_invoice'">
+              Счёт на аванс {{ formatPrice(sentPayment.amount) }} отправлен в Kaspi на номер
+              {{ formatPhone(sentPayment.phone) }}. Клиенту отправлено сообщение в WhatsApp.
+            </p>
+            <p v-else>
+              На номере клиента не удалось выставить счёт Kaspi — в WhatsApp отправлена ссылка на
+              оплату {{ formatPrice(sentPayment.amount) }}. Подтвердите бронь по чеку клиента.
+            </p>
+          </div>
           <!-- Status + source -->
           <div class="flex flex-wrap items-center gap-2">
             <span
@@ -293,16 +361,6 @@ const remaining = computed(() => total.value - paidTotal.value)
                 </dd>
               </div>
             </dl>
-            <button
-              v-if="canRequestHoldPayment"
-              type="button"
-              :disabled="requestingPayment"
-              class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              @click="startPaymentFlow"
-            >
-              <Loader2 v-if="requestingPayment" class="h-4 w-4 animate-spin" />
-              Запросить подтверждение и оплату
-            </button>
           </div>
 
           <!-- Offer consent + payment channel -->

@@ -554,7 +554,8 @@ export interface BookingBatchPayload {
   prefill_token?: string
   /**
    * Согласие с офертой — только сайт (без него 400 CONSENT_REQUIRED). Брони админа
-   * его не передают: клиент подтверждает их сам в WhatsApp (state awaiting_consent).
+   * его не передают: оферта считается принятой, счёт Kaspi уходит сразу, клиенту —
+   * информационное сообщение в WhatsApp.
    */
   consent?: BookingConsent
   /** Номер для оплаты: на него выставляется счёт Kaspi. По умолчанию — `phone`. */
@@ -579,10 +580,8 @@ export interface BookingBatchResult {
   ok: boolean
   booking_ids: number[]
   invoice: Record<string, unknown> | null
-  /** null — аванс не нужен, либо бронь админа (ждёт согласия клиента). */
+  /** null — аванс не нужен (повторяющиеся брони, удержание без оплаты). */
   payment: BookingBatchPayment | null
-  /** Только брони админа: клиенту ушёл запрос подтверждения в WhatsApp. */
-  consent?: { status: 'pending'; request_id: string | number }
   hold_without_payment?: boolean
 }
 
@@ -619,11 +618,15 @@ export function createBookingsBatch(payload: BookingBatchPayload): Promise<Booki
   })
 }
 
-/** Convert a 24-hour hold into the normal client confirmation/offer flow. */
+/**
+ * Отправить счёт на оплату по 24-часовому удержанию. Без диалога в WhatsApp: счёт
+ * Kaspi уходит сразу (нет Kaspi на номере — ссылка на оплату), клиенту приходит
+ * сообщение «Бронь создана» с офертой.
+ */
 export function requestPaymentForHold(
   id: number | string,
   payload: { phone?: string; kaspi_phone?: string; lang?: 'ru' | 'kk' } = {},
-): Promise<{ ok: boolean; request_id: number; booking_ids: number[] }> {
+): Promise<{ ok: boolean; booking_ids: number[]; payment: BookingBatchPayment | null }> {
   return apiFetch(`/bookings/${id}/request-payment`, {
     method: 'POST',
     body: JSON.stringify(payload),
