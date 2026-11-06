@@ -551,7 +551,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Календарь (грузит брони видимого периода самостоятельно) -->
-    <BookingCalendar v-if="viewMode === 'calendar'" />
+    <BookingCalendar v-if="viewMode === 'calendar'" @edit="openEdit" />
 
     <!-- Список -->
     <div v-else class="space-y-6">

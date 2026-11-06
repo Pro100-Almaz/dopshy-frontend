@@ -156,7 +156,7 @@ export interface BookingConfirmation {
 }
 
 // Сырые статусы брони на бэкенде (значения enum) — используются при редактировании.
-// awaiting_consent — бронь админа ждёт, пока клиент подтвердит её и примет оферту в WhatsApp.
+// awaiting_consent — бронь из WhatsApp-бота ждёт, пока клиент примет оферту.
 export type BookingState =
   | 'draft'
   | 'awaiting_consent'
@@ -166,7 +166,8 @@ export type BookingState =
   | 'unpaid'
 
 /** Где клиент принял оферту; '' — согласия нет. */
-export type ConsentChannel = 'bot' | 'site' | 'admin_bot' | ''
+/** admin — бронь создал/отправил на оплату админ: оферта считается принятой. admin_bot — старые брони. */
+export type ConsentChannel = 'bot' | 'site' | 'admin' | 'admin_bot' | ''
 /** Как выставлен аванс: счёт Kaspi (ApiPay) или ссылка на оплату с подтверждением по чеку. */
 export type BookingPaymentMethod = 'kaspi_invoice' | 'link' | 'hold_without_payment' | ''
 

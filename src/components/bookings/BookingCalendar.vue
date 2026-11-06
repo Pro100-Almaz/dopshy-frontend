@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { Loader2, CalendarX, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Loader2, CalendarX, ChevronLeft, ChevronRight, FileText } from 'lucide-vue-next'
 
 import type { Booking, Field } from '@/types'
 import {
@@ -13,6 +13,8 @@ import {
   FIELD_TYPE_LABEL,
   BOOKING_STATE_LABEL,
 } from '@/services/booking'
+
+const emit = defineEmits<{ edit: [booking: Booking] }>()
 
 const bookings = ref<Booking[]>([])
 const loading = ref(false)
@@ -382,6 +384,12 @@ function hideTip() {
   hover.value = null
 }
 
+// Клик по брони — открываем ту же модалку редактирования, что и в списке.
+function openEdit(b: Booking) {
+  hideTip()
+  emit('edit', b)
+}
+
 // Позиция тултипа: по умолчанию справа-снизу от курсора, но у краёв экрана
 // разворачиваем влево/вверх, чтобы карточка не уезжала за пределы окна.
 const tipEl = ref<HTMLElement | null>(null)
@@ -675,6 +683,10 @@ onUnmounted(() => {
         <span class="h-3 w-3 rounded-sm bg-gray-400 dark:bg-gray-500" aria-hidden="true" />
         Черновик
       </span>
+      <span class="flex items-center gap-1.5">
+        <FileText class="h-3.5 w-3.5" aria-hidden="true" />
+        По договору
+      </span>
     </div>
 
     <!-- Недельная сетка -->
@@ -730,16 +742,27 @@ onUnmounted(() => {
             :class="[
               cellInfo(d.iso, ri).p ? stateClass(cellInfo(d.iso, ri).p!.booking.state) : '',
               cellInfo(d.iso, ri).borderBottom ? 'border-b border-gray-100 dark:border-gray-800' : '',
-              cellInfo(d.iso, ri).p ? 'cursor-help' : '',
+              cellInfo(d.iso, ri).p ? 'cursor-pointer' : '',
               cellInfo(d.iso, ri).p && cellInfo(d.iso, ri).isStart ? 'rounded-t-md' : '',
               cellInfo(d.iso, ri).p && cellInfo(d.iso, ri).borderBottom ? 'rounded-b-md' : '',
             ]"
             @mouseenter="cellInfo(d.iso, ri).p && showTip(cellInfo(d.iso, ri).p!.booking, $event)"
             @mousemove="cellInfo(d.iso, ri).p && moveTip($event)"
             @mouseleave="hideTip"
+            @click="cellInfo(d.iso, ri).p && openEdit(cellInfo(d.iso, ri).p!.booking)"
           >
-            <span v-if="cellInfo(d.iso, ri).isMiddle" class="truncate text-sm font-semibold">
-              {{ cellInfo(d.iso, ri).p!.booking.customerName || cellInfo(d.iso, ri).p!.booking.customerPhone }}
+            <span
+              v-if="cellInfo(d.iso, ri).isMiddle"
+              class="flex min-w-0 items-center gap-1 text-sm font-semibold"
+            >
+              <FileText
+                v-if="cellInfo(d.iso, ri).p!.booking.hasContract"
+                class="h-3.5 w-3.5 shrink-0"
+                aria-label="Бронь по договору"
+              />
+              <span class="truncate">
+                {{ cellInfo(d.iso, ri).p!.booking.customerName || cellInfo(d.iso, ri).p!.booking.customerPhone }}
+              </span>
             </span>
           </div>
         </template>
@@ -785,12 +808,18 @@ onUnmounted(() => {
             <div
               v-for="b in c.bookings.slice(0, 4)"
               :key="b.id"
-              class="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium"
+              class="block w-full cursor-pointer truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium"
               :class="stateClass(b.state)"
               @mouseenter="showTip(b, $event)"
               @mousemove="moveTip($event)"
               @mouseleave="hideTip"
+              @click.stop="openEdit(b)"
             >
+              <FileText
+                v-if="b.hasContract"
+                class="mr-0.5 inline h-3 w-3 align-[-2px]"
+                aria-label="Бронь по договору"
+              />
               {{ b.customerName || b.customerPhone }}
             </div>
             <div
@@ -861,6 +890,13 @@ onUnmounted(() => {
         {{ hover.customerName }}
       </p>
       <p class="text-xs text-gray-500">{{ hover.customerPhone }}</p>
+      <span
+        v-if="hover.hasContract"
+        class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+      >
+        <FileText class="h-3 w-3" aria-hidden="true" />
+        Бронь по договору
+      </span>
 
       <dl class="mt-2 space-y-1 text-xs">
         <div class="flex justify-between gap-4">

@@ -17,6 +17,7 @@ import {
   HOLD_WITHOUT_PAYMENT_TTL_MINUTES,
   PREPAYMENT_PER_SLOT,
   RESERVATION_TTL_MINUTES,
+  type BookingBatchPayment,
 } from '@/services/booking'
 import {
   createDiscount as createDiscountRequest,
@@ -47,8 +48,8 @@ const dialog = ref<HTMLDialogElement | null>(null),
 const form = reactive({ phone: '', notes: '', prepayment: '', kaspiPhone: '' })
 const holdWithoutPayment = ref(false)
 const holdCreated = ref(false)
-// Бронь админа ждёт подтверждения клиента в WhatsApp (state awaiting_consent).
-const consentPending = ref(false)
+// Как клиент платит аванс: счёт ушёл в Kaspi или ссылка на оплату (нет Kaspi на номере).
+const payment = ref<BookingBatchPayment | null>(null)
 const customer = ref<Customer | null>(null),
   checked = ref(false),
   customerModal = ref(false),
@@ -115,7 +116,7 @@ function reset() {
   form.notes = ''
   form.prepayment = ''
   form.kaspiPhone = ''
-  consentPending.value = false
+  payment.value = null
   holdWithoutPayment.value = false
   holdCreated.value = false
   customer.value = null
@@ -244,7 +245,7 @@ async function submit() {
       hold_without_payment: holdWithoutPayment.value,
       kaspi_phone: holdWithoutPayment.value ? undefined : `+${kaspiDigits.value}`,
     })
-    consentPending.value = res?.consent?.status === 'pending'
+    payment.value = res?.payment ?? null
     holdCreated.value = res?.hold_without_payment === true
     step.value = 3
     emit('created')
@@ -503,14 +504,19 @@ watch(
           </p>
           <p v-else class="text-sm text-gray-500">Предоплата {{ formatPrice(prepayment) }}</p>
           <div
-            v-if="consentPending"
+            v-if="payment"
             class="mx-auto mt-5 flex max-w-sm items-start gap-3 rounded-xl border border-blue-light-200 bg-blue-light-50 p-4 text-left text-sm text-blue-light-700"
           >
             <MessageCircle class="mt-0.5 h-5 w-5 shrink-0" />
-            <p>
-              Клиенту отправлено сообщение в WhatsApp: он должен подтвердить бронь и принять оферту.
-              Счёт на аванс уйдёт только после согласия. Без ответа в течение 30 минут бронь
-              отменится автоматически.
+            <p v-if="payment.method === 'kaspi_invoice'">
+              Счёт на аванс {{ formatPrice(payment.amount) }} отправлен в Kaspi на номер
+              {{ payment.phone }}. Клиенту отправлено сообщение о брони в WhatsApp. Без оплаты
+              бронь отменится автоматически.
+            </p>
+            <p v-else>
+              Счёт Kaspi выставить не удалось — клиенту в WhatsApp отправлена ссылка на оплату
+              {{ formatPrice(payment.amount) }}. Подтвердите бронь вручную, когда клиент пришлёт
+              чек.
             </p>
           </div>
         </section>
