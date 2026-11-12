@@ -619,6 +619,28 @@ export function createBookingsBatch(payload: BookingBatchPayload): Promise<Booki
   })
 }
 
+/** Ответ проверки номера в Kaspi. `has_kaspi: false` — номер не зарегистрирован. */
+export interface KaspiCheckResult {
+  ok: boolean
+  has_kaspi: boolean
+  /** false — проверка на сервере отключена, проверять нечего. */
+  checked: boolean
+  phone: string
+  client_name: string | null
+}
+
+/**
+ * Узнаёт у Kaspi (через ApiPay), есть ли на номере Kaspi. Админская бронь без
+ * подтверждённого номера не создаётся: оплата по ссылке держит слот на чеке,
+ * который бот может не прочитать. Сбой проверки (ApiError 502) ≠ «номера нет».
+ */
+export function checkKaspiPhone(phone: string): Promise<KaspiCheckResult> {
+  return apiFetch<KaspiCheckResult>('/bookings/kaspi-check', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  })
+}
+
 /** Convert a 24-hour hold into the normal client confirmation/offer flow. */
 export function requestPaymentForHold(
   id: number | string,
