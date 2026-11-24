@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgePercent,
+  BadgeCheck,
   CheckCircle2,
   Loader2,
   MessageCircle,
@@ -12,6 +13,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
+  checkKaspiPhone,
   createBookingsBatch,
   formatPrice,
   HOLD_WITHOUT_PAYMENT_TTL_MINUTES,
@@ -97,6 +99,49 @@ const discountTotal = computed(() =>
 const finalTotal = computed(() => Math.max(0, store.projectedTotal - discountTotal.value))
 const kaspiDigits = computed(() => form.kaspiPhone.replace(/\D/g, ''))
 const kaspiValid = computed(() => kaspiDigits.value.length === 11)
+// Номер для оплаты должен быть подтверждён в Kaspi до создания брони: без счёта
+// оплата идёт по ссылке, а слот держится на чеке, который бот может не прочитать.
+type KaspiState = 'idle' | 'checking' | 'valid' | 'invalid' | 'error'
+const kaspiState = ref<KaspiState>('idle')
+const kaspiCheckedDigits = ref('')
+const kaspiName = ref('')
+const kaspiMessage = ref('')
+/** Проверен именно тот номер, что сейчас в поле — любая правка сбрасывает проверку. */
+const kaspiVerified = computed(
+  () => kaspiState.value === 'valid' && kaspiCheckedDigits.value === kaspiDigits.value,
+)
+function resetKaspiCheck() {
+  kaspiState.value = 'idle'
+  kaspiCheckedDigits.value = ''
+  kaspiName.value = ''
+  kaspiMessage.value = ''
+}
+async function checkKaspi() {
+  if (!kaspiValid.value || kaspiState.value === 'checking') return
+  const digits = kaspiDigits.value
+  kaspiState.value = 'checking'
+  kaspiCheckedDigits.value = digits
+  kaspiName.value = ''
+  kaspiMessage.value = ''
+  try {
+    const res = await checkKaspiPhone(`+${digits}`)
+    if (digits !== kaspiDigits.value) return // номер уже изменили — ответ устарел
+    if (res.has_kaspi) {
+      kaspiState.value = 'valid'
+      kaspiName.value = res.client_name ?? ''
+    } else {
+      kaspiState.value = 'invalid'
+      kaspiMessage.value = 'На этом номере нет Kaspi. Укажите другой номер.'
+    }
+  } catch (e) {
+    if (digits !== kaspiDigits.value) return
+    kaspiState.value = 'error'
+    kaspiMessage.value = e instanceof Error ? e.message : 'Не удалось проверить номер'
+  }
+}
+watch(kaspiDigits, (digits) => {
+  if (digits !== kaspiCheckedDigits.value) resetKaspiCheck()
+})
 /** '77015551212' → '+7 701 555 12 12'. */
 function formatKzPhone(raw: string) {
   const d = raw.replace(/\D/g, '')
@@ -115,6 +160,7 @@ function reset() {
   form.notes = ''
   form.prepayment = ''
   form.kaspiPhone = ''
+  resetKaspiCheck()
   consentPending.value = false
   holdWithoutPayment.value = false
   holdCreated.value = false
@@ -178,6 +224,8 @@ function goNext() {
   form.prepayment = String(Math.min(PREPAYMENT_PER_SLOT, finalTotal.value))
   // Номер для оплаты по умолчанию — контактный; менеджер может заменить.
   if (customer.value && !form.kaspiPhone) form.kaspiPhone = formatKzPhone(customer.value.phone)
+  // Подставленный номер тоже нужно подтвердить — проверяем сразу.
+  if (kaspiValid.value && !kaspiVerified.value) void checkKaspi()
 }
 function discountAvailable(d: Discount, i: number) {
   const assignedElsewhere = selected.value.reduce<number>((count, id, index) => {
@@ -223,7 +271,11 @@ function openDiscountModal() {
   discountModal.value = true
 }
 async function submit() {
-  if (!customerReady.value || !customer.value || (!holdWithoutPayment.value && !kaspiValid.value))
+  if (
+    !customerReady.value ||
+    !customer.value ||
+    (!holdWithoutPayment.value && !kaspiVerified.value)
+  )
     return
   busy.value = true
   error.value = ''
@@ -271,6 +323,13 @@ async function submit() {
       customer.value = null
       checked.value = false
       discounts.value = []
+    }
+    if (e instanceof ApiError && e.code === 'NO_KASPI') {
+      kaspiState.value = 'invalid'
+      kaspiMessage.value = 'На этом номере нет Kaspi. Укажите другой номер.'
+    } else if (e instanceof ApiError && e.code === 'KASPI_CHECK_FAILED') {
+      kaspiState.value = 'error'
+      kaspiMessage.value = 'Не удалось проверить номер в Kaspi. Проверьте номер ещё раз.'
     }
     error.value = e instanceof Error ? e.message : 'Не удалось создать бронь'
   } finally {
@@ -460,18 +519,44 @@ watch(
               >По умолчанию: до {{ formatPrice(PREPAYMENT_PER_SLOT) }}</small
             ></label
           >
-          <label v-if="!holdWithoutPayment" class="block text-sm font-medium"
-            >Номер для оплаты (Kaspi)<input
-              v-model="form.kaspiPhone"
-              type="tel"
-              placeholder="+7 701 555 12 12"
-              class="mt-1 h-11 w-full rounded-lg border px-4"
-            /><small v-if="form.kaspiPhone && !kaspiValid" class="text-error-600"
+          <div v-if="!holdWithoutPayment" class="text-sm font-medium">
+            <label for="kaspi-phone">Номер для оплаты (Kaspi)</label>
+            <div class="mt-1 flex gap-2">
+              <input
+                id="kaspi-phone"
+                v-model="form.kaspiPhone"
+                type="tel"
+                placeholder="+7 701 555 12 12"
+                class="h-11 w-full rounded-lg border px-4"
+                @keydown.enter.prevent="checkKaspi"
+              />
+              <button
+                type="button"
+                :disabled="!kaspiValid || kaspiState === 'checking' || kaspiVerified"
+                class="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg border border-success-600 px-4 text-success-700 disabled:border-gray-200 disabled:text-gray-400"
+                @click="checkKaspi"
+              >
+                <Loader2 v-if="kaspiState === 'checking'" class="h-4 w-4 animate-spin" />
+                <BadgeCheck v-else class="h-4 w-4" />Проверить
+              </button>
+            </div>
+            <small v-if="form.kaspiPhone && !kaspiValid" class="text-error-600"
               >Введите номер полностью: +7 XXX XXX XX XX</small
-            ><small v-else class="text-gray-500"
-              >На этот номер уйдёт счёт Kaspi на аванс. По умолчанию — номер клиента.</small
-            ></label
-          >
+            >
+            <small v-else-if="kaspiVerified" class="font-medium text-success-700"
+              >Kaspi найден<template v-if="kaspiName"> — {{ kaspiName }}</template
+              >. Счёт уйдёт на этот номер.</small
+            >
+            <small
+              v-else-if="kaspiState === 'invalid' || kaspiState === 'error'"
+              class="text-error-600"
+              >{{ kaspiMessage }}</small
+            >
+            <small v-else class="text-gray-500"
+              >Проверьте номер: пока Kaspi не подтверждён, бронь создать нельзя. На него уйдёт счёт
+              на аванс.</small
+            >
+          </div>
           <label class="block text-sm font-medium"
             >Заметка<textarea
               v-model="form.notes"
@@ -528,7 +613,7 @@ watch(
           Далее<ArrowRight class="h-4 w-4" /></button
         ><button
           v-else-if="step === 2"
-          :disabled="busy || (!holdWithoutPayment && !kaspiValid)"
+          :disabled="busy || (!holdWithoutPayment && !kaspiVerified)"
           class="inline-flex items-center gap-2 rounded-full bg-success-600 px-6 py-3 font-semibold text-white disabled:opacity-50"
           @click="submit"
         >
